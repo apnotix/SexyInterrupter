@@ -9,8 +9,7 @@ function SI:UpdateUI()
 	for i = 1, SI.numInterrupters do
 		if (not _G["SexyInterrupterRow" .. i]) then	
 			local interrupter = SI.interrupters[i];
-		
-			
+
 			local f = CreateFrame("Frame", "SexyInterrupterRow" .. i, SexyInterrupterAnchor)
 			
 			f:SetSize(20, 20)
@@ -58,23 +57,19 @@ function SI:UpdateInterrupterStatus()
 	for i = 1, SI.numInterrupters do
 		local interrupter = SI.interrupters[i];
 		local row = _G["SexyInterrupterRow" .. i];
-		
-		
-			
+
 		SendChatMessage('SexyInterrupter UpdateUI start ' .. i .. ' - ' .. row, 'party')
 		
 		if (row) then	
 			if interrupter.offline then
 				row:Hide();
 			elseif interrupter.dead then
-				row.text:SetText('(DEAD) ' .. interrupter.name);
 				row.text:SetTextColor(1, 0, 0, 1);
 			elseif interrupter.afk then
-				row.text:SetText('(AFK) ' .. interrupter.name);
 				row.text:SetTextColor(1, 1, 0, 1);
-			else 
-				row.text:SetText(interrupter.name);
 			end
+			
+			row.text:SetText(interrupter.name);
 		end
 	end
 end
@@ -136,7 +131,10 @@ end
 
 function SI_GROUP_ROSTER_UPDATE()
 	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SI_GROUP_ROSTER_UPDATE');
-	--SI:UpdateInterrupterStatus();
+	
+	if IsInGroup() then
+		--SI:UpdateInterrupterStatus();
+	end
 end
 
 function SI_OnEvent(self, event, ...)
