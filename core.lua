@@ -88,7 +88,7 @@ function SI:UpdateInterrupters()
 		
 		local name, realm = UnitName(unit);
 		
-		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
+		--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
 		
 		interrupter.pos = i;
 		interrupter.ready = true;
@@ -142,7 +142,7 @@ function SI_UNIT_FLAGS()
 end
 
 function SI_GROUP_ROSTER_UPDATE()
-	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SI_GROUP_ROSTER_UPDATE');
+	--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SI_GROUP_ROSTER_UPDATE');
 	
 	if IsInGroup() then
 		SI:UpdateInterrupters();

@@ -8,6 +8,9 @@
 ## SavedVariables: SI_Globals
 ## SavedVariablesPerCharacter: SI_Data
 
+## OptionalDeps: Ace3
+
+embeds.xml
 core.lua
 settings.lua
 SexyInterrupter.xml
