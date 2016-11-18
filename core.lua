@@ -95,7 +95,7 @@ function SI:UpdateInterrupters()
 		interrupter.name = name;
 		interrupter.realm = realm;
 		
-		interrupter.role = UnitGroupRolesAssigned(Unit);
+		interrupter.role = UnitGroupRolesAssigned(unit);
 		
 		if interrupter.role == 'HEALER' then
 			interrupter.prio = 3;
