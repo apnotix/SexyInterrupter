@@ -11,6 +11,8 @@
 ## OptionalDeps: Ace3
 
 embeds.xml
+
 core.lua
+
 settings.lua
 SexyInterrupter.xml

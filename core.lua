@@ -1,14 +1,52 @@
 SexyInterrupter = {}
 local SI = SexyInterrupter
-SI.interrupters = {};
-SI.numInterrupters = 0;
+
+function SI:InitializeSavedVariables()
+	if (not SI_Globals) then
+		SI_Globals = {}
+	end
+
+	if (not SI_Data) then
+		SI_Data = {
+			interrupters = {},
+			ui = {
+				lock = true,
+				anchorPosition = {
+					point = 'CENTER',
+					region = nil,
+					relativePoint = 'CENTER',
+					x = 0,
+					y = -300
+				},
+				background = {
+					r = 0,
+					g = 0,
+					b = 0,
+					a = 0.4
+				},
+				texture = 'BantoBar',
+				font = 'Accidental Presidency',
+				fontsize = 13,
+				fontcolor = {
+					r = 0.3,
+					g = 0.3, 
+					b = 0.3,
+					a = 0.6
+				}
+			}
+		}
+	end
+
+	SI_Globals.interrupters = {};
+	SI_Globals.numInterrupters = 0;
+end
 
 function SI:GetVersion() return '1.0.0' end
 
 function SI:UpdateUI() 
-	for i = 1, SI.numInterrupters do
+	for i = 1, 5 do
 		if (not _G["SexyInterrupterRow" .. i]) then	
-			local interrupter = SI.interrupters[i];
+			local interrupter = SI_Globals.interrupters[i];
 			local f = CreateFrame("Frame", "SexyInterrupterRow" .. i, SexyInterrupterAnchor)
 			
 			f:SetSize(20, 20)
@@ -44,19 +82,26 @@ function SI:UpdateUI()
             f.text:SetSize(180 - 5, 20)
             f.text:SetJustifyH("LEFT")
 			f.text:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
-            f.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
-            f.text:SetText(interrupter.name)
+            f.text:SetText('Dummy')
+
+			 _G["SexyInterrupterRow" .. i]:Hide();
 		end
 	end
-	
-	SI:UpdateInterrupterStatus();
 end
 
 function SI:UpdateInterrupterStatus()
-	for i = 1, SI.numInterrupters do
-		local interrupter = SI.interrupters[i];
+	for i = 1, 5 do 
+		if _G["SexyInterrupterRow" .. i] then
+			_G["SexyInterrupterRow" .. i]:Hide();
+		end
+	end
+
+	for i = 1, SI_Globals.numInterrupters do
+		local interrupter = SI_Globals.interrupters[i];
 		local row = _G["SexyInterrupterStatusBar" .. i];
 		local rowParent = _G["SexyInterrupterRow" .. i];
+
+		rowParent:Show();
 
 		if row then	
 			if interrupter.offline then
@@ -65,22 +110,25 @@ function SI:UpdateInterrupterStatus()
 				row.text:SetTextColor(1, 0, 0, 1);
 			elseif interrupter.afk then
 				row.text:SetTextColor(1, 1, 0, 1);
+			else 			
+            	row.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
 			end
 			
-			row.text:SetText(interrupter.name .. ' - ' .. interrupter.role);
+			row.text:SetText(interrupter.name .. '-' .. interrupter.role);
 		end
 	end
 end
 
 function SI:UpdateInterrupters()
-	SI.interrupters = {};
-	SI.numInterrupters = GetNumGroupMembers();
+	SI_Globals.interrupters = {};
+	SI_Globals.numInterrupters = GetNumGroupMembers();
 
 	for i = 1,GetNumGroupMembers() do
 		local unit = "party" .. i
 		
-		SI.interrupters[i] = {}
-		local interrupter = SI.interrupters[i];
+		SI_Globals.interrupters[i] = {}
+
+		local interrupter = SI_Globals.interrupters[i];
 		
 		if not UnitExists(unit) then	
 			unit = 'player'
@@ -144,10 +192,8 @@ end
 function SI_GROUP_ROSTER_UPDATE()
 	--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SI_GROUP_ROSTER_UPDATE');
 	
-	if IsInGroup() then
-		SI:UpdateInterrupters();
-		SI:UpdateInterrupterStatus();
-	end
+	SI:UpdateInterrupters();
+	SI:UpdateInterrupterStatus();
 end
 
 function SI_OnEvent(self, event, ...)
@@ -168,18 +214,40 @@ local SIframe = CreateFrame("Frame");
 SIframe:SetScript("OnEvent", SI_OnEvent);
 SIframe:RegisterEvent("ADDON_LOADED");
 
+function SI:SaveAnchorPosition()
+	SexyInterrupterAnchor:StopMovingOrSizing();
+
+	local a = SI_Data.ui.anchorPosition;
+
+    a.point, a.region, a.relativePoint, a.x, a.y = SexyInterrupterAnchor:GetPoint();
+end
+
 function SI:OnLoad()
-	if IsInGroup() then
-		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: in Group');
-		SI:UpdateInterrupters();
-	end
-	
-	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: ' .. SI.numInterrupters);
-	
-	local f = CreateFrame("Frame", "SexyInterrupterAnchor", UIParent)
+	SI:InitializeSavedVariables();
+
+	local f = CreateFrame("Frame", "SexyInterrupterAnchor", UIParent);
 	
     f:SetSize(200, 100)
-    f:SetPoint('CENTER', nil, 'CENTER', 0, -300)
+    f:SetPoint(SI_Data.ui.anchorPosition.point, SI_Data.ui.anchorPosition.region, SI_Data.ui.anchorPosition.relativePoint, SI_Data.ui.anchorPosition.x, SI_Data.ui.anchorPosition.y)
+	f:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 16,
+        insets = {
+			left = 5,
+			right = 5,
+			top = 5,
+			bottom = 5
+		}
+    })
+
+	if not SI_Data.ui.lock then
+		f:SetMovable(true)
+        f:SetScript("OnMouseDown", function() SexyInterrupterAnchor:StartMoving() end)
+		f:SetScript("OnMouseUp", SI.SaveAnchorPosition)
+	end
 	
     local t = f:CreateTexture()
     t:SetTexture(0, 0, 0, 0.2)
@@ -188,6 +256,8 @@ function SI:OnLoad()
 	SI:UpdateUI();
 	
 	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. SI:GetVersion() .. ' loaded', 1, 0.5, 0);
+
+	SI:InitOptions();
 	
 	SIframe:UnregisterEvent("ADDON_LOADED");
 	SIframe:RegisterEvent("UNIT_FLAGS");

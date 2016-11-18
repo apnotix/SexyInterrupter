@@ -2,128 +2,132 @@ local SI = SexyInterrupter;
 
 local LSM = LibStub("LibSharedMedia-3.0")
 
-SI.optionsTable = {
-  type = "group",
-  args = {
-    spellassignment = {
-      name = "Zauberzuweisung",
-      type = "group",
-      args = {
-        partymember1_group = {
-            name = "Member 1",
-            type = "group",
-            args = {
-                partymember1_name = {
-                    name = "Name",
-                    type = "input",
-                    disabled = true,
-                    width = "full"
-                },
-                partymember1_prio = {
-                    name = "Priorität",
-                    desc = "Überschreibt die vordefinierte Priorität (1-3)",
-                    type = "input",
-                    width = "full"
-                }
-            }
-        },             
-        partymember2_group = {
-            name = "Member 2",
-            type = "group",
-            args = {
-                partymember2_name = {
-                    name = "Name",
-                    type = "input",
-                    disabled = true
-                }
-            }
-        }, 
-        partymember3_group = {
-            name = "Member 3",
-            type = "group",
-            args = {    
-                partymember3_name = {
-                    name = "Name",
-                    type = "input",
-                    disabled = true
-                }
-            }
-        }, 
-        partymember4_group = {
-            name = "Member 4",
-            type = "group",
-            args = {
-                partymember4_name = {
-                    name = "Name",
-                    type = "input",
-                    disabled = true
-                }
-            }
-        }, 
-        partymember5_group = {
-            name = "Member 5",
-            type = "group",
-            args = {
-                partymember5_name = {
-                    name = "Name",
-                    type = "input",
-                    disabled = true
-                }
-            }
-        }        
-      }
-    },
-    ui = {
-        name = "Aussehen",
+function SI:InitOptions() 
+    SI.optionsTable = {
         type = "group",
         args = {
-            lock = {
-                type = "toggle",
-                name = "Lock",
-                desc = "Lock this bar to prevent resizing or moving",
-                order = 2
+            spellassignment = {
+                name = "Zauberzuweisung",
+                type = "group",
+                args = {
+                    
+                }        
             },
-            texture = {
-                type = "select",
-                name = "Statusbar",
-                dialogControl = 'LSM30_Statusbar',
-                values = LSM:HashTable("statusbar"),
-                order = 1
-            },
-            background = {
-                type = "color",
-                name = "Hintergrund",
-                hasAlpha = true,
-                order = 1
-            },
-            font = {
-                type = "select",
-                name = "Font",
-                dialogControl = 'LSM30_Font',
-                values = LSM:HashTable("font"),
-                order = 121,
-                width = "full"
-            },
-            fontsize = {
-                type = "range",
-                name = "Font size",
-                min = 4,
-                max = 30,
-                step = 1,
-                bigStep = 1,
-                order = 123,
-                width = "full"
-            },
-            fontColor = {
-                type = "color",
-                name = "Font color",
-                hasAlpha = true,
-                order = 123
+            ui = {
+                name = "Aussehen",
+                type = "group",
+                args = {
+                    lock = {
+                        type = "toggle",
+                        name = "Lock",
+                        desc = "Lock this bar to prevent resizing or moving",
+                        order = 2,
+                        get = function() return SI_Data.ui.lock end,
+                        set = function() SI_Data.ui.lock = not SI_Data.ui.lock end
+                    },
+                    texture = {
+                        type = "select",
+                        name = "Statusbar",
+                        dialogControl = 'LSM30_Statusbar',
+                        values = LSM:HashTable("statusbar"),
+                        order = 1,
+                        get = function() return SI_Data.ui.texture end,
+                        set = function(self, opt) SI_Data.ui.texture = opt end
+                    },
+                    background = {
+                        type = "color",
+                        name = "Hintergrund",
+                        hasAlpha = true,
+                        order = 1,
+                        get = function() return SI_Data.ui.background end,
+                        set = function(self, r, g, b, a) 
+                            SI_Data.ui.background.r = r;
+                            SI_Data.ui.background.g = g;
+                            SI_Data.ui.background.b = b;
+                            SI_Data.ui.background.a = a;
+                        end
+                    },
+                    font = {
+                        type = "select",
+                        name = "Font",
+                        dialogControl = 'LSM30_Font',
+                        values = LSM:HashTable("font"),
+                        order = 121,
+                        width = "full",
+                        get = function() return SI_Data.ui.font end,
+                        set = function(self, opt) SI_Data.ui.font = opt end
+                    },
+                    fontsize = {
+                        type = "range",
+                        name = "Font size",
+                        min = 4,
+                        max = 30,
+                        step = 1,
+                        bigStep = 1,
+                        order = 123,
+                        width = "full",
+                        get = function() return SI_Data.ui.fontsize end,
+                        set = function(self, val) SI_Data.ui.fontsize = val end
+                    },
+                    fontColor = {
+                        type = "color",
+                        name = "Font color",
+                        hasAlpha = true,
+                        order = 123,
+                        get = function() return SI_Data.ui.fontcolor end,
+                        set = function(self, r, g, b, a) 
+                            SI_Data.ui.fontcolor.r = r;
+                            SI_Data.ui.fontcolor.g = g;
+                            SI_Data.ui.fontcolor.b = b;
+                            SI_Data.ui.fontcolor.a = a;
+                        end
+                    }
+                }
             }
         }
     }
-  }
-}
 
-LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("SexyInterrupter", SI.optionsTable, true);
-SI.optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("SexyInterrupter", "SexyInterrupter");
+    for i = 1,GetNumGroupMembers() do
+        SI.optionsTable.args.spellassignment.args['partymember_header' .. i] = {
+            name = "Spieler " .. i,
+            type = "header",
+            order = 100 * i,
+            width = "full"
+        }
+
+        SI.optionsTable.args.spellassignment.args['partymember_name' .. i] = {
+            name = "Name",
+            type = "input",
+            order = 101 * i,
+            width = "full",
+            disabled = true,
+            get = function() return SI_Globals.interrupters[i].name end
+        }
+        
+        SI.optionsTable.args.spellassignment.args['partymember_prio' .. i] = {
+            name = "Priorität",
+            desc = "Überschreibt die vordefinierte Priorität (1-3)",
+            type = "range",
+            min = 1,
+            max = 3,
+            step = 1,
+            width = "full",
+            order = 101 * i,
+            get = function() return SI_Data.interrupters[SI_Globals.interrupters[i].name].prio end,
+            set = function(self, val) SI_Data.interrupters[SI_Globals.interrupters[i].name].prio = val end
+        }
+
+        SI.optionsTable.args.spellassignment.args['partymember_spells' .. i] = {
+            name = "Zauber",
+            desc = "Gibt an welche Zauber von diesem Spieler gekickt werden sollen",
+            type = "input",
+            width = "full",
+            order = 102 * i,
+            --get = function() return SI_Globals.interrupters[i].prio end,
+            --set = function(self, val) SI_Globals.interrupters[i].prio = val end
+        }
+    end
+
+    LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("SexyInterrupter", SI.optionsTable, true);
+    SI.optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("SexyInterrupter", "SexyInterrupter");
+end
