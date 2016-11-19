@@ -84,6 +84,13 @@ function SI:UpdateUI()
 			f.text:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
             f.text:SetText('Dummy')
 
+			f.cooldownText = f:CreateFontString("SexyInterrupterStatusBarCooldownText" .. i, nil, "GameFontNormal")
+            f.cooldownText:SetSize(12*3, 12)
+            f.cooldownText:SetJustifyH("LEFT")
+            f.cooldownText:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. i, "RIGHT", 3, 0)
+            f.cooldownText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+            f.cooldownText:SetTextColor(1, 1, 1, 1)
+
 			 _G["SexyInterrupterRow" .. i]:Hide();
 		end
 	end
@@ -95,6 +102,8 @@ function SI:UpdateInterrupterStatus()
 			_G["SexyInterrupterRow" .. i]:Hide();
 		end
 	end
+
+	table.sort(SI_Globals.interrupters, function(a,b) return a.prio < b.prio end)
 
 	for i = 1, SI_Globals.numInterrupters do
 		local interrupter = SI_Globals.interrupters[i];
@@ -113,8 +122,13 @@ function SI:UpdateInterrupterStatus()
 			else 			
             	row.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
 			end
+
+			if interrupter.cooldown > 0 then
+				row.cooldownText:SetText(interrupter.cooldown);
+				row.cooldownText:Hide();
+			end
 			
-			row.text:SetText(interrupter.name .. '-' .. interrupter.role);
+			row.text:SetText(interrupter.name);
 		end
 	end
 end
@@ -158,6 +172,7 @@ function SI:UpdateInterrupters()
 		
 		interrupter.class = class;
 		interrupter.classColor = color;
+		interrupter.cooldown = 0;
 		
 		if not UnitIsConnected(unit) then
 			interrupter.offline = true;
@@ -185,6 +200,17 @@ function SI:UpdateInterrupters()
 	end
 end
 
+function SI:InterruptUsed(name, cooldown)
+	for i = 1,GetNumGroupMembers() do
+		local interrupter = SI_Globals.interrupters[i];
+
+		if interrupter.name == name then
+			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. name, 1, 0.5, 0);
+			interrupter.cooldown = cooldown;
+		end
+	end
+end
+
 function SI_UNIT_FLAGS() 
 	SI_GROUP_ROSTER_UPDATE();
 end
@@ -204,10 +230,63 @@ function SI_OnEvent(self, event, ...)
     end
 end
 
+function SI_COMBAT_LOG_EVENT_UNFILTERED(...)
+	local event = select(2, ...)
+    local sourceGUID = select(4, ...)
+    local sourceName = select(5, ...)
+    local spellId = select(12, ...)
+    local spellName = select(13, ...)
+	local spells = { 132409, 119911, 116705, 147362, 96231, 106839, 78675, 47528, 2139, 1766, 57994, 119910, 6552, 15487 };
+    
+    if (event == "SPELL_CAST_SUCCESS") then
+        if (tContains(spells, spellId)) then
+            -- If an interrupt spell was cast
+            --IM:InterruptUsed(sourceName, spellId)
+
+			local cooldown = GetSpellBaseCooldown(spellId);
+
+			SI:InterruptUsed(sourceName, cooldown);
+
+			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. sourceName .. ' - ' .. spellId .. ' - ' .. cooldown / 1000, 1, 0.5, 0);
+            
+            -- Announce my interrupt
+            --if (sourceGUID == UnitGUID("player") and IMDB.announce) then
+            --    IM:AnnounceMyInterrupt(spellName)
+            --end
+        end
+    --elseif (event == "SPELL_INTERRUPT") then
+    --    if (tContains(spells, spellId)) then
+    --        IM:UnitInterrupted(sourceName, spellId)
+	--		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_INTERRUPT' .. sourceName .. ' - ' .. spellId, 1, 0.5, 0);
+    --    end
+    end
+end
+
 function SI_ADDON_LOADED(...)
     local addonName = ...
 
     SI:OnLoad()
+end
+
+function SI_UNIT_SPELLCAST_START(...)
+	local unit = ...
+	
+	if (unit == "target" and SI_Globals.numInterrupters > 0) then
+        local startTime, endTime, _, _, interruptImmune = select(5, UnitCastingInfo("target"));
+
+		if not interruptImmune then
+			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: Interrupt that shit ' .. startTime .. ' - ' .. endTime, 1, 0.5, 0);
+		end
+	end
+end
+
+function SI_UNIT_SPELLCAST_STOP(...)
+    local unit = ...
+    
+    --if (unit == "target" and IMDB.targetWarn and InterruptManagerText.text == "Interrupt now! (target)") then
+    --    InterruptManagerText:SetTimeVisible(0)
+
+	--end
 end
 
 local SIframe = CreateFrame("Frame");
@@ -262,4 +341,7 @@ function SI:OnLoad()
 	SIframe:UnregisterEvent("ADDON_LOADED");
 	SIframe:RegisterEvent("UNIT_FLAGS");
 	SIframe:RegisterEvent("GROUP_ROSTER_UPDATE");
+	SIframe:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
+    SIframe:RegisterEvent("UNIT_SPELLCAST_START");
+    SIframe:RegisterEvent("UNIT_SPELLCAST_STOP");
 end
