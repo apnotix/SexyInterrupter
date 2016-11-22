@@ -103,7 +103,34 @@ function SI:UpdateInterrupterStatus()
 		end
 	end
 
-	table.sort(SI_Globals.interrupters, function(a,b) return a.prio < b.prio end)
+	
+--retVal = false;
+--if
+--	a.tod
+--	a.offline
+--	a.hasCd && a.prio < b.prio
+--	a.cd > b.cd
+--	a.cd = b.cd && a.prio > b.prio
+--else if
+--	a.cd < b.cd
+--		retVal = true;
+--return retVal;
+	
+	table.sort(SI_Globals.interrupters, function(a,b) 
+			local retVal = false;
+			
+			if a.dead or 
+				a.offline or 
+				(a.cooldown > 0 and a.prio < b.prio) or 
+				a.cooldown > b.cooldown or 
+				(a.cooldown = b.cooldown and a.prio > b.prio) then
+				retVal = false;
+			else
+				retVal = true;
+			end
+			
+			return retVal;
+		end)
 
 	for i = 1, SI_Globals.numInterrupters do
 		local interrupter = SI_Globals.interrupters[i];
