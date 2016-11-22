@@ -21,7 +21,7 @@ function SI:InitOptions()
                         type = "toggle",
                         name = "Lock",
                         desc = "Lock this bar to prevent resizing or moving",
-                        order = 2,
+                        order = 1,
                         get = function() return SI_Data.ui.lock end,
                         set = function() SI_Data.ui.lock = not SI_Data.ui.lock end
                     },
@@ -30,15 +30,36 @@ function SI:InitOptions()
                         name = "Statusbar",
                         dialogControl = 'LSM30_Statusbar',
                         values = LSM:HashTable("statusbar"),
-                        order = 1,
+                        order = 1.1,
                         get = function() return SI_Data.ui.texture end,
                         set = function(self, opt) SI_Data.ui.texture = opt end
                     },
-                    background = {
-                        type = "color",
+                    border = {
+                        type = 'select',
+				        dialogControl = 'LSM30_Border',
+                        values = LSM:HashTable("border"),
+                        order = 1.1,
+                        get = function() return SI_Data.ui.border end,
+                        set = function(self, key) 
+                            SI_Data.ui.border = key;
+                        end
+                    },
+                    backgroundtexture = {
+                        type = "select",
                         name = "Hintergrund",
+                        dialogControl = "LSM30_Background",
+                        values = LSM:HashTable("background"),
+                        order = 1.1,
+                        get = function() return SI_Data.ui.backgroundtexture end,
+                        set = function(self, key) 
+                            SI_Data.ui.backgroundtexture = key;
+                        end
+                    },
+                    backgroundcolor = {
+                        type = "color",
+                        name = "Hintergrundfarbe",
                         hasAlpha = true,
-                        order = 1,
+                        order = 1.1,
                         get = function() return SI_Data.ui.background end,
                         set = function(self, r, g, b, a) 
                             SI_Data.ui.background.r = r;
@@ -52,7 +73,7 @@ function SI:InitOptions()
                         name = "Font",
                         dialogControl = 'LSM30_Font',
                         values = LSM:HashTable("font"),
-                        order = 121,
+                        order = 2.1,
                         width = "full",
                         get = function() return SI_Data.ui.font end,
                         set = function(self, opt) SI_Data.ui.font = opt end
@@ -64,16 +85,16 @@ function SI:InitOptions()
                         max = 30,
                         step = 1,
                         bigStep = 1,
-                        order = 123,
+                        order = 2.2,
                         width = "full",
                         get = function() return SI_Data.ui.fontsize end,
                         set = function(self, val) SI_Data.ui.fontsize = val end
                     },
-                    fontColor = {
+                    fontcolor = {
                         type = "color",
                         name = "Font color",
                         hasAlpha = true,
-                        order = 123,
+                        order = 2.3,
                         get = function() return SI_Data.ui.fontcolor end,
                         set = function(self, r, g, b, a) 
                             SI_Data.ui.fontcolor.r = r;
