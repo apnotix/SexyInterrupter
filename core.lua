@@ -46,9 +46,9 @@ function SI:GetVersion() return '1.0.0' end
 function SI:GetInterrupter(name, realm)
 	local retVal = nil;
 
-	for cx in SI_Globals.interrupters do
-		if SI_Globals.interrupters[cx].name == name and SI_Globals.interrupters[cx].realm == realm then
-			retVal = SI_Globals.interrupters[cx];
+	for cx, value in SI_Globals.interrupters do
+		if value.name == name and value.realm == realm then
+			retVal = value;
 			break;
 		end
 	end
