@@ -47,7 +47,7 @@ function SI:GetInterrupter(name, realm)
 	local retVal = nil;
 
 	for cx, value in pairs(SI_Globals.interrupters) do
-		if value.name == name and (realm == nil or value.realm == realm) then
+		if value.fullname == name then
 			retVal = value;
 			break;
 		end
@@ -192,7 +192,13 @@ function SI:UpdateInterrupters()
 		end;	
 		
 		local name, realm = UnitName(unit);
-		local interrupter = SI:GetInterrupter(name, realm);
+		local fullname = name;
+
+		if realm ~= nil then
+			fullname = name .. '-' .. realm;
+		end
+
+		local interrupter = SI:GetInterrupter(fullname, realm);
 
 		if interrupter == nil then
 			local class, classFileName = UnitClass(unit);
@@ -201,7 +207,8 @@ function SI:UpdateInterrupters()
 			interrupter = {};
 			
 			interrupter.name = name;
-			interrupter.realm = realm;			
+			interrupter.realm = realm;
+			interrupter.fullname = fullname;
 			interrupter.class = class;
 			interrupter.classColor = color;
 			interrupter.cooldown = 0;
@@ -209,7 +216,7 @@ function SI:UpdateInterrupters()
 			tinsert(SI_Globals.interrupters, interrupter);
 		end
 
-		interrupter = SI:GetInterrupter(name, realm);
+		interrupter = SI:GetInterrupter(fullname, realm);
 
 		interrupter.pos = i;
 		interrupter.ready = true;
@@ -249,9 +256,10 @@ function SI:UpdateInterrupters()
 	end
 end
 
-function SI:InterruptUsed(name, realm, cooldown)
+function SI:InterruptUsed(name, cooldown)
+	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. name, 1, 0.5, 0);
 	for i = 1,GetNumGroupMembers() do
-		local interrupter = SI:GetInterrupter(name, realm);
+		local interrupter = SI:GetInterrupter(name);
 
 		if interrupter ~= nil then
 			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. name, 1, 0.5, 0);
@@ -284,7 +292,6 @@ function SI_COMBAT_LOG_EVENT_UNFILTERED(...)
 	local event = select(2, ...)
     local sourceGUID = select(4, ...)
     local sourceName = select(5, ...)
-	local realmName = select(6, ...)
     local spellId = select(12, ...)
     local spellName = select(13, ...)
 	local spells = { 132409, 119911, 116705, 147362, 96231, 106839, 78675, 47528, 2139, 1766, 57994, 119910, 6552, 15487 };
@@ -292,11 +299,11 @@ function SI_COMBAT_LOG_EVENT_UNFILTERED(...)
     if (event == "SPELL_CAST_SUCCESS") then
         if (tContains(spells, spellId)) then
             -- If an interrupt spell was cast
-            --IM:InterruptUsed(sourceName, spellId)
+            --IM:InterruptUsed(sourceName, nil, spellId)
 
 			local cooldown = GetSpellBaseCooldown(spellId);
 
-			SI:InterruptUsed(sourceName, cooldown);
+			SI:InterruptUsed(sourceName, nil, cooldown);
 
 			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. sourceName .. ' - ' .. spellId .. ' - ' .. cooldown, 1, 0.5, 0);
             
