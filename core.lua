@@ -57,17 +57,19 @@ function SI:GetInterrupter(name, realm)
 end
 
 function SI:UpdateUI() 
-	for i = 1, 5 do
-		if (not _G["SexyInterrupterRow" .. i]) then	
-			local interrupter = SI_Globals.interrupters[i];
-			local f = CreateFrame("Frame", "SexyInterrupterRow" .. i, SexyInterrupterAnchor)
+	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UpdateUi A', 1, 0.5, 0);
+	for cx, value in pairs(SI_Globals.interrupters) do
+		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UpdateUi B', 1, 0.5, 0);
+		if (not _G["SexyInterrupterRow" .. cx]) then	
+			local interrupter = value;
+			local f = CreateFrame("Frame", "SexyInterrupterRow" .. cx, SexyInterrupterAnchor)
 			
 			f:SetSize(20, 20)
 			
-			if (i == 1) then
-                f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 0, -(i-1) * 20)
+			if (cx == 1) then
+                f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 0, -(cx-1) * 20)
             else
-                f:SetPoint("TOP", _G["SexyInterrupterRow" .. i-1], "BOTTOM")
+                f:SetPoint("TOP", _G["SexyInterrupterRow" .. cx-1], "BOTTOM")
             end
 			
 			local t = f:CreateTexture()
@@ -75,14 +77,14 @@ function SI:UpdateUI()
             t:SetTexture(0, 0, 0, 0.4)
             
             t = f:CreateFontString()
-            t:SetPoint("CENTER", "SexyInterrupterRow" .. i, "CENTER")
+            t:SetPoint("CENTER", "SexyInterrupterRow" .. cx, "CENTER")
 			t:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
-            t:SetText(i)
+            t:SetText(cx)
             t:SetTextColor(1, 1, 1, 1)
         
-            f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. i, _G["SexyInterrupterRow" .. i])
+            f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
             f:SetSize(180, 20)
-            f:SetPoint("LEFT", "SexyInterrupterRow" .. i, "RIGHT")
+            f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "RIGHT")
             f:SetOrientation("HORIZONTAL")
             f:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
             f:SetStatusBarColor(0, 1, 0, 1)
@@ -90,29 +92,31 @@ function SI:UpdateUI()
             f:SetMinMaxValues(0, 1)
             f:SetValue(0)
             
-            f.text = f:CreateFontString("SexyInterrupterStatusBarText" .. i, nil, "GameFontNormal")
-            f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. i, "LEFT", 5, 0)
+            f.text = f:CreateFontString("SexyInterrupterStatusBarText" .. cx, nil, "GameFontNormal")
+            f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", 5, 0)
             f.text:SetSize(180 - 5, 20)
             f.text:SetJustifyH("LEFT")
 			f.text:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
             f.text:SetText('Dummy')
 
-			f.cooldownText = f:CreateFontString("SexyInterrupterStatusBarCooldownText" .. i, nil, "GameFontNormal")
+			f.cooldownText = f:CreateFontString("SexyInterrupterStatusBarCooldownText" .. cx, nil, "GameFontNormal")
             f.cooldownText:SetSize(12*3, 12)
             f.cooldownText:SetJustifyH("LEFT")
-            f.cooldownText:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. i, "RIGHT", 3, 0)
+            f.cooldownText:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", 3, 0)
             f.cooldownText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
             f.cooldownText:SetTextColor(1, 1, 1, 1)
 
-			 _G["SexyInterrupterRow" .. i]:Hide();
+			 _G["SexyInterrupterRow" .. cx]:Hide();
 		end
 	end
 end
 
 function SI:UpdateInterrupterStatus()
-	for i = 1, 5 do 
-		if _G["SexyInterrupterRow" .. i] then
-			_G["SexyInterrupterRow" .. i]:Hide();
+DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UpdateInterrupterStatus A', 1, 0.5, 0);
+	for cx, value in pairs(SI_Globals.interrupters) do 
+		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UpdateInterrupterStatus B', 1, 0.5, 0);
+		if _G["SexyInterrupterRow" .. cx] then
+			_G["SexyInterrupterRow" .. cx]:Hide();
 		end
 	end
 	
@@ -143,15 +147,18 @@ function SI:UpdateInterrupterStatus()
 
 		return retVal;
 	end)
+	
+	for cx, value in pairs(SI_Globals.interrupters) do
+		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: ' .. value.name, 1, 0.5, 0);
+		local interrupter = value;
+		local row = _G["SexyInterrupterStatusBar" .. cx];
+		local rowParent = _G["SexyInterrupterRow" .. cx];
 
-	for i = 1, SI_Globals.numInterrupters do
-		local interrupter = SI_Globals.interrupters[i];
-		local row = _G["SexyInterrupterStatusBar" .. i];
-		local rowParent = _G["SexyInterrupterRow" .. i];
+		if rowParent then
+			rowParent:Show();
+		end
 
-		rowParent:Show();
-
-		if row then	
+		if row and rowParent then	
 			if interrupter.offline then
 				rowParent:Hide();
 			elseif interrupter.dead then
@@ -185,60 +192,57 @@ function SI:UpdateInterrupters()
 		end;	
 		
 		local name, realm = UnitName(unit);
+		local interrupter = SI:GetInterrupter(name, realm);
 
-		for cx, value in pairs(SI_Globals.interrupters) do
-			if SI:GetInterrupter(value.name, value.realm) == nil then
-				local interrupter = {};
-				--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
-				
-				interrupter.pos = i;
-				interrupter.ready = true;
-				interrupter.name = value.name;
-				interrupter.realm = value.realm;
-				interrupter.role = UnitGroupRolesAssigned(unit);
-				
-				if interrupter.role == 'HEALER' then
-					interrupter.prio = 3;
-				elseif interrupter.role == 'DAMAGER' then
-					interrupter.prio = 2;
-				elseif interrupter.role == 'TANK' then
-					interrupter.prio = 1;
-				end
-				
-				local class, classFileName = UnitClass(unit)
-				local color = RAID_CLASS_COLORS[classFileName]
-				
-				interrupter.class = class;
-				interrupter.classColor = color;
-				interrupter.cooldown = 0;
-				
-				if not UnitIsConnected(unit) then
-					interrupter.offline = true;
-				else 
-					interrupter.offline = false;
-				end
-				
-				if UnitIsAFK(unit) then
-					interrupter.afk = true;
-				else
-					interrupter.afk = false;
-				end
-				
-				if UnitIsDeadOrGhost(unit) then
-					interrupter.dead = true;
-				else
-					interrupter.dead = false;
-				end
-				
-				if UnitInRange(unit) then
-					interrupter.inrange = true;
-				else
-					interrupter.inrange = false;
-				end
+		if interrupter == nil then
+			local class, classFileName = UnitClass(unit);
+			local color = RAID_CLASS_COLORS[classFileName];
 
-				SI_Globals.interrupters.insert(interrupter)
-				break;
-			end
+			interrupter = {};
+			
+			interrupter.name = name;
+			interrupter.realm = realm;			
+			interrupter.class = class;
+			interrupter.classColor = color;
+			interrupter.cooldown = 0;
+
+			tinsert(SI_Globals.interrupters, interrupter);
+		end
+
+		interrupter.pos = i;
+		interrupter.ready = true;
+		interrupter.role = UnitGroupRolesAssigned(unit);
+		
+		if interrupter.role == 'HEALER' then
+			interrupter.prio = 3;
+		elseif interrupter.role == 'DAMAGER' then
+			interrupter.prio = 2;
+		elseif interrupter.role == 'TANK' then
+			interrupter.prio = 1;
+		end
+		
+		if not UnitIsConnected(unit) then
+			interrupter.offline = true;
+		else 
+			interrupter.offline = false;
+		end
+		
+		if UnitIsAFK(unit) then
+			interrupter.afk = true;
+		else
+			interrupter.afk = false;
+		end
+		
+		if UnitIsDeadOrGhost(unit) then
+			interrupter.dead = true;
+		else
+			interrupter.dead = false;
+		end
+		
+		if UnitInRange(unit) then
+			interrupter.inrange = true;
+		else
+			interrupter.inrange = false;
 		end
 	end
 end
