@@ -47,7 +47,7 @@ function SI:GetInterrupter(name, realm)
 	local retVal = nil;
 
 	for cx, value in pairs(SI_Globals.interrupters) do
-		if value.name == name and value.realm == realm then
+		if value.name == name and (realm == nil or value.realm == realm) then
 			retVal = value;
 			break;
 		end
@@ -131,7 +131,7 @@ DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UpdateInterrupterStatus A', 1, 0
 			else
 				if a.cooldown > 0 then
 					if a.cooldown == b.cooldown then
-						retVal = a.prio > b.prio;
+						retVal = a.prio < b.prio;
 					else
 						retVal = a.cooldown < b.cooldown;
 					end
@@ -139,7 +139,7 @@ DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UpdateInterrupterStatus A', 1, 0
 					if b.cooldown > 0 then
 						retVal = true;
 					else
-						retVal = a.prio > b.prio;
+						retVal = a.prio < b.prio;
 					end
 				end
 			end
@@ -147,7 +147,7 @@ DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UpdateInterrupterStatus A', 1, 0
 
 		return retVal;
 	end)
-	
+
 	for cx, value in pairs(SI_Globals.interrupters) do
 		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: ' .. value.name, 1, 0.5, 0);
 		local interrupter = value;
@@ -209,6 +209,8 @@ function SI:UpdateInterrupters()
 			tinsert(SI_Globals.interrupters, interrupter);
 		end
 
+		interrupter = SI:GetInterrupter(name, realm);
+
 		interrupter.pos = i;
 		interrupter.ready = true;
 		interrupter.role = UnitGroupRolesAssigned(unit);
@@ -266,6 +268,7 @@ function SI_GROUP_ROSTER_UPDATE()
 	--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SI_GROUP_ROSTER_UPDATE');
 	
 	SI:UpdateInterrupters();
+	SI:UpdateUI();
 	SI:UpdateInterrupterStatus();
 end
 
@@ -289,11 +292,11 @@ function SI_COMBAT_LOG_EVENT_UNFILTERED(...)
     if (event == "SPELL_CAST_SUCCESS") then
         if (tContains(spells, spellId)) then
             -- If an interrupt spell was cast
-            --IM:InterruptUsed(sourceName, realmName, spellId)
+            --IM:InterruptUsed(sourceName, spellId)
 
 			local cooldown = GetSpellBaseCooldown(spellId);
 
-			SI:InterruptUsed(sourceName, realmName, cooldown);
+			SI:InterruptUsed(sourceName, cooldown);
 
 			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. sourceName .. ' - ' .. spellId .. ' - ' .. cooldown, 1, 0.5, 0);
             
