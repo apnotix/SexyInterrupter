@@ -46,7 +46,7 @@ function SI:GetVersion() return '1.0.0' end
 function SI:GetInterrupter(name, realm)
 	local retVal = nil;
 
-	for cx, value in SI_Globals.interrupters do
+	for cx, value in pairs(SI_Globals.interrupters) do
 		if value.name == name and value.realm == realm then
 			retVal = value;
 			break;
@@ -186,7 +186,7 @@ function SI:UpdateInterrupters()
 		
 		local name, realm = UnitName(unit);
 
-		for cx, value in SI_Globals.interrupters do
+		for cx, value in pairs(SI_Globals.interrupters) do
 			if SI:GetInterrupter(value.name, value.realm) == nil then
 				local interrupter = {};
 				--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
