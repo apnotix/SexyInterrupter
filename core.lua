@@ -176,7 +176,7 @@ end
 
 function SI:UpdateInterrupters()
 	SI_Globals.numInterrupters = GetNumGroupMembers();
-	
+
 	for i = 1,GetNumGroupMembers() do
 		local unit = "party" .. i		
 		
@@ -187,7 +187,7 @@ function SI:UpdateInterrupters()
 		local name, realm = UnitName(unit);
 
 		for cx, value in SI_Globals.interrupters do
-			if SI:GetInterrupter(value.name, value.realm) ~= nil then
+			if SI:GetInterrupter(value.name, value.realm) == nil then
 				local interrupter = {};
 				DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
 				
