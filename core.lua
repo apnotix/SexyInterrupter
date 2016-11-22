@@ -8,7 +8,7 @@ function SI:InitializeSavedVariables()
 
 	if (not SI_Data) then
 		SI_Data = {
-			interrupters = [],
+			interrupters = {},
 			ui = {
 				lock = true,
 				anchorPosition = {
@@ -37,7 +37,7 @@ function SI:InitializeSavedVariables()
 		}
 	end
 
-	SI_Globals.interrupters = [];
+	SI_Globals.interrupters = {};
 	SI_Globals.numInterrupters = 0;
 end
 
@@ -175,11 +175,8 @@ function SI:UpdateInterrupterStatus()
 end
 
 function SI:UpdateInterrupters()
-	SI_Globals.interrupters = {};
 	SI_Globals.numInterrupters = GetNumGroupMembers();
-
-	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: Adding members ', 1, 0.5, 0);
-
+	
 	for i = 1,GetNumGroupMembers() do
 		local unit = "party" .. i		
 		
@@ -189,8 +186,8 @@ function SI:UpdateInterrupters()
 		
 		local name, realm = UnitName(unit);
 
-		for cx in SI_Globals.interrupters do
-			if SI:GetInterrupter(name, realm) ~= nil then
+		for cx, value in SI_Globals.interrupters do
+			if SI:GetInterrupter(value.name, value.realm) ~= nil then
 				local interrupter = {};
 				DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
 				
