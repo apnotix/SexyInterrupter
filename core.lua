@@ -189,12 +189,12 @@ function SI:UpdateInterrupters()
 		for cx, value in SI_Globals.interrupters do
 			if SI:GetInterrupter(value.name, value.realm) == nil then
 				local interrupter = {};
-				DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
+				--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
 				
 				interrupter.pos = i;
 				interrupter.ready = true;
-				interrupter.name = name;
-				interrupter.realm = realm;
+				interrupter.name = value.name;
+				interrupter.realm = value.realm;
 				interrupter.role = UnitGroupRolesAssigned(unit);
 				
 				if interrupter.role == 'HEALER' then
