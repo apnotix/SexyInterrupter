@@ -102,35 +102,34 @@ function SI:UpdateInterrupterStatus()
 			_G["SexyInterrupterRow" .. i]:Hide();
 		end
 	end
-
-	
---retVal = false;
---if
---	a.tod
---	a.offline
---	a.hasCd && a.prio < b.prio
---	a.cd > b.cd
---	a.cd = b.cd && a.prio > b.prio
---else if
---	a.cd < b.cd
---		retVal = true;
---return retVal;
 	
 	table.sort(SI_Globals.interrupters, function(a,b) 
-			local retVal = false;
-			
-			if a.dead or 
-				a.offline or 
-				(a.cooldown > 0 and a.prio < b.prio) or 
-				a.cooldown > b.cooldown or 
-				(a.cooldown = b.cooldown and a.prio > b.prio) then
-				retVal = false;
-			else
+		local retVal = false;
+
+		if a.dead or a.offline then
+			retVal = false;
+		else
+			if b.dead or b.offline then
 				retVal = true;
+			else
+				if a.cooldown > 0 then
+					if a.cooldown == b.cooldown then
+						retVal = a.prio > b.prio;
+					else
+						retVal = a.cooldown < b.cooldown;
+					end
+				else
+					if b.cooldown > 0 then
+						retVal = true;
+					else
+						retVal = a.prio > b.prio;
+					end
+				end
 			end
-			
-			return retVal;
-		end)
+		end
+
+		return retVal;
+	end)
 
 	for i = 1, SI_Globals.numInterrupters do
 		local interrupter = SI_Globals.interrupters[i];
