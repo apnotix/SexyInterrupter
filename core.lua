@@ -8,7 +8,7 @@ function SI:InitializeSavedVariables()
 
 	if (not SI_Data) then
 		SI_Data = {
-			interrupters = {},
+			interrupters = [],
 			ui = {
 				lock = true,
 				anchorPosition = {
@@ -37,11 +37,24 @@ function SI:InitializeSavedVariables()
 		}
 	end
 
-	SI_Globals.interrupters = {};
+	SI_Globals.interrupters = [];
 	SI_Globals.numInterrupters = 0;
 end
 
 function SI:GetVersion() return '1.0.0' end
+
+function SI:GetInterrupter(name, realm)
+	local retVal = nil;
+
+	for cx in SI_Globals.interrupters do
+		if SI_Globals.interrupters[cx].name == name and SI_Globals.interrupters[cx].realm == realm then
+			retVal = SI_Globals.interrupters[cx];
+			break;
+		end
+	end
+
+	return retVal;
+end
 
 function SI:UpdateUI() 
 	for i = 1, 5 do
@@ -165,74 +178,79 @@ function SI:UpdateInterrupters()
 	SI_Globals.interrupters = {};
 	SI_Globals.numInterrupters = GetNumGroupMembers();
 
-	for i = 1,GetNumGroupMembers() do
-		local unit = "party" .. i
-		
-		SI_Globals.interrupters[i] = {}
+	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: Adding members ', 1, 0.5, 0);
 
-		local interrupter = SI_Globals.interrupters[i];
+	for i = 1,GetNumGroupMembers() do
+		local unit = "party" .. i		
 		
 		if not UnitExists(unit) then	
 			unit = 'player'
 		end;	
 		
 		local name, realm = UnitName(unit);
-		
-		--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
-		
-		interrupter.pos = i;
-		interrupter.ready = true;
-		interrupter.name = name;
-		interrupter.realm = realm;
-		
-		interrupter.role = UnitGroupRolesAssigned(unit);
-		
-		if interrupter.role == 'HEALER' then
-			interrupter.prio = 3;
-		elseif interrupter.role == 'DAMAGER' then
-			interrupter.prio = 2;
-		elseif interrupter.role == 'TANK' then
-			interrupter.prio = 1;
-		end
-		
-		local class, classFileName = UnitClass(unit)
-		local color = RAID_CLASS_COLORS[classFileName]
-		
-		interrupter.class = class;
-		interrupter.classColor = color;
-		interrupter.cooldown = 0;
-		
-		if not UnitIsConnected(unit) then
-			interrupter.offline = true;
-		else 
-			interrupter.offline = false;
-		end
-		
-		if UnitIsAFK(unit) then
-			interrupter.afk = true;
-		else
-			interrupter.afk = false;
-		end
-		
-		if UnitIsDeadOrGhost(unit) then
-			interrupter.dead = true;
-		else
-			interrupter.dead = false;
-		end
-		
-		if UnitInRange(unit) then
-			interrupter.inrange = true;
-		else
-			interrupter.inrange = false;
+
+		for cx in SI_Globals.interrupters do
+			if SI:GetInterrupter(name, realm) ~= nil then
+				local interrupter = {};
+				DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: UnitExists name: ' .. name, 1, 0.5, 0);
+				
+				interrupter.pos = i;
+				interrupter.ready = true;
+				interrupter.name = name;
+				interrupter.realm = realm;
+				interrupter.role = UnitGroupRolesAssigned(unit);
+				
+				if interrupter.role == 'HEALER' then
+					interrupter.prio = 3;
+				elseif interrupter.role == 'DAMAGER' then
+					interrupter.prio = 2;
+				elseif interrupter.role == 'TANK' then
+					interrupter.prio = 1;
+				end
+				
+				local class, classFileName = UnitClass(unit)
+				local color = RAID_CLASS_COLORS[classFileName]
+				
+				interrupter.class = class;
+				interrupter.classColor = color;
+				interrupter.cooldown = 0;
+				
+				if not UnitIsConnected(unit) then
+					interrupter.offline = true;
+				else 
+					interrupter.offline = false;
+				end
+				
+				if UnitIsAFK(unit) then
+					interrupter.afk = true;
+				else
+					interrupter.afk = false;
+				end
+				
+				if UnitIsDeadOrGhost(unit) then
+					interrupter.dead = true;
+				else
+					interrupter.dead = false;
+				end
+				
+				if UnitInRange(unit) then
+					interrupter.inrange = true;
+				else
+					interrupter.inrange = false;
+				end
+
+				SI_Globals.interrupters.insert(interrupter)
+				break;
+			end
 		end
 	end
 end
 
-function SI:InterruptUsed(name, cooldown)
+function SI:InterruptUsed(name, realm, cooldown)
 	for i = 1,GetNumGroupMembers() do
-		local interrupter = SI_Globals.interrupters[i];
+		local interrupter = SI:GetInterrupter(name, realm);
 
-		if interrupter.name == name then
+		if interrupter ~= nil then
 			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. name, 1, 0.5, 0);
 			interrupter.cooldown = cooldown;
 		end
@@ -262,6 +280,7 @@ function SI_COMBAT_LOG_EVENT_UNFILTERED(...)
 	local event = select(2, ...)
     local sourceGUID = select(4, ...)
     local sourceName = select(5, ...)
+	local realmName = select(6, ...)
     local spellId = select(12, ...)
     local spellName = select(13, ...)
 	local spells = { 132409, 119911, 116705, 147362, 96231, 106839, 78675, 47528, 2139, 1766, 57994, 119910, 6552, 15487 };
@@ -269,11 +288,11 @@ function SI_COMBAT_LOG_EVENT_UNFILTERED(...)
     if (event == "SPELL_CAST_SUCCESS") then
         if (tContains(spells, spellId)) then
             -- If an interrupt spell was cast
-            --IM:InterruptUsed(sourceName, spellId)
+            --IM:InterruptUsed(sourceName, realmName, spellId)
 
 			local cooldown = GetSpellBaseCooldown(spellId);
 
-			SI:InterruptUsed(sourceName, cooldown);
+			SI:InterruptUsed(sourceName, realmName, cooldown);
 
 			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. sourceName .. ' - ' .. spellId .. ' - ' .. cooldown, 1, 0.5, 0);
             
