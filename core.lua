@@ -150,7 +150,9 @@ function SI:UpdateInterrupterStatus()
 			end
 
 			if interrupter.cooldown > 0 then
-				row.cooldownText:SetText(interrupter.cooldown);
+				row.cooldownText:SetText(string.format('%.1f', interrupter.cooldown));
+				row.cooldownText:Show();
+			else 
 				row.cooldownText:Hide();
 			end
 			
@@ -273,7 +275,7 @@ function SI_COMBAT_LOG_EVENT_UNFILTERED(...)
 
 			SI:InterruptUsed(sourceName, cooldown);
 
-			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. sourceName .. ' - ' .. spellId .. ' - ' .. cooldown / 1000, 1, 0.5, 0);
+			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. sourceName .. ' - ' .. spellId .. ' - ' .. cooldown, 1, 0.5, 0);
             
             -- Announce my interrupt
             --if (sourceGUID == UnitGUID("player") and IMDB.announce) then
