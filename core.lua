@@ -2,49 +2,59 @@ SexyInterrupter = {}
 local SI = SexyInterrupter
 
 function SI:InitializeSavedVariables()
-	if (not SI_Globals) then
+	if not SI_Globals then
 		SI_Globals = {
 			interrupters = {};
 			numInterrupters = 0;
 		}
 	end
 
-	if (not SI_Data) then
+	if not SI_Data then
 		SI_Data = {
 			interrupters = {},
 			ui = {
-				lock = true,
-				anchorPosition = {
-					point = 'CENTER',
-					region = nil,
-					relativePoint = 'CENTER',
-					x = 0,
-					y = -300
-				},
-				barcolor = {
-					r = 0,
-					g = 0,
-					b = 0,
-					a = 0.4
-				},
-				background = {
-					r = 0,
-					g = 0,
-					b = 0,
-					a = 0.4
-				},
-				texture = 'BantoBar',
-				font = 'Accidental Presidency',
-				fontsize = 13,
-				fontcolor = {
-					r = 0.3,
-					g = 0.3, 
-					b = 0.3,
-					a = 0.6
-				}
 			}
 		}
 	end
+
+	SI_Data.ui.lock = SI_Data.ui.lock or true;
+
+	SI_Data.ui.anchorPosition = SI_Data.ui.anchorPosition or {
+		point = 'CENTER',
+		region = nil,
+		relativePoint = 'CENTER',
+		x = 0,
+		y = -300
+	};
+
+	SI_Data.ui.barheight = SI_Data.ui.barheight or 25;
+
+	SI_Data.ui.barcolor = SI_Data.ui.barcolor or {
+		r = 0,
+		g = 0,
+		b = 0,
+		a = 0.4
+	};
+
+	SI_Data.ui.background = SI_Data.ui.background or {
+		r = 0,
+		g = 0,
+		b = 0,
+		a = 0.4
+	};
+
+	SI_Data.ui.texture = SI_Data.ui.texture or 'BantoBar';
+
+	SI_Data.ui.font = SI_Data.ui.font or 'Accidental Presidency';
+
+	SI_Data.ui.fontsize = SI_Data.ui.fontsize or 13;
+
+	SI_Data.ui.fontcolor = SI_Data.ui.fontcolor or {
+		r = 0.3,
+		g = 0.3, 
+		b = 0.3,
+		a = 0.6
+	};
 end
 
 function SI:GetVersion() return '1.0.0' end
@@ -117,10 +127,10 @@ function SI:UpdateUI()
 		if not _G["SexyInterrupterRow" .. cx] then	
 			local f = CreateFrame("Frame", "SexyInterrupterRow" .. cx, SexyInterrupterAnchor);
 			
-			f:SetSize(20, 20)
+			f:SetSize(20, SI_Data.ui.barheight);
 			
 			if (cx == 1) then
-				f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 0, -(cx - 1) * 20)
+				f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 5, -(cx - 1) * SI_Data.ui.barheight - 5)
 			else
 				f:SetPoint("TOP", _G["SexyInterrupterRow" .. (cx - 1)], "BOTTOM")
 			end
@@ -159,6 +169,13 @@ function SI:UpdateUI()
 			f.cooldownText:SetFont(SI_Data.ui.font, SI_Data.ui.fontsize, "OUTLINE")
 			f.cooldownText:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a)
 		end
+	end
+
+	if SI_Globals.numInterrupters > 0 then
+		SexyInterrupterAnchor:Show();
+		SexyInterrupterAnchor:SetSize(200, SI_Data.ui.barheight * SI_Globals.numInterrupters + 10);
+	else 
+		SexyInterrupterAnchor:Hide();
 	end
 end
 
@@ -418,10 +435,10 @@ function SI:OnLoad()
         tileSize = 16,
         edgeSize = 16,
         insets = {
-			left = 5,
-			right = 5,
-			top = 5,
-			bottom = 5
+			left = 1,
+			right = 1,
+			top = 1,
+			bottom = 1
 		}
     });
 
