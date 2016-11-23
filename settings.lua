@@ -2,6 +2,26 @@ local SI = SexyInterrupter;
 
 local LSM = LibStub("LibSharedMedia-3.0")
 
+function SI:LockFrame()
+    SI_Data.ui.lock = not SI_Data.ui.lock;
+
+    if SI_Data.ui.lock then
+        DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Frame locked.", 1, 0.5, 0);
+
+        SexyInterrupterAnchor:SetMovable(false);
+        SexyInterrupterAnchor:EnableMouse(false);
+        SexyInterrupterAnchor:SetScript("OnMouseDown", nil);
+        SexyInterrupterAnchor:SetScript("OnMouseUp", nil);
+    else 
+        DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Frame unlocked.", 1, 0.5, 0);
+
+        SexyInterrupterAnchor:SetMovable(true);
+        SexyInterrupterAnchor:EnableMouse(true);
+        SexyInterrupterAnchor:SetScript("OnMouseDown", function() SexyInterrupterAnchor:StartMoving() end);
+        SexyInterrupterAnchor:SetScript("OnMouseUp", SI.SaveAnchorPosition);
+    end
+end
+
 function SI:InitOptions() 
     SI.optionsTable = {
         type = "group",
@@ -23,7 +43,9 @@ function SI:InitOptions()
                         desc = "Lock this bar to prevent resizing or moving",
                         order = 1,
                         get = function() return SI_Data.ui.lock end,
-                        set = function() SI_Data.ui.lock = not SI_Data.ui.lock end
+                        set = function() 
+                            SI:LockFrame();
+                        end
                     },
                     texture = {
                         type = "select",
@@ -62,6 +84,7 @@ function SI:InitOptions()
                         order = 1.1,
                         get = function() return SI_Data.ui.background end,
                         set = function(self, r, g, b, a) 
+                            print(r, g,b,a);
                             SI_Data.ui.background.r = r;
                             SI_Data.ui.background.g = g;
                             SI_Data.ui.background.b = b;
