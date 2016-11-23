@@ -21,6 +21,12 @@ function SI:InitializeSavedVariables()
 					x = 0,
 					y = -300
 				},
+				barcolor = {
+					r = 0,
+					g = 0,
+					b = 0,
+					a = 0.4
+				},
 				background = {
 					r = 0,
 					g = 0,
@@ -57,78 +63,15 @@ function SI:GetInterrupter(name, realm)
 end
 
 function SI:GetCurrentInterrupters() 
-	local retVal = {};
+	local interrupters = {};
 
 	for cx, value in pairs(SI_Globals.interrupters) do
 		value.pos = cx;
 
 		if value.active then
-			tinsert(retVal, value);	
+			tinsert(interrupters, value);	
 		end
 	end
-
-	return retVal;
-end
-
-function SI:UpdateUI() 
-	for cx, value in pairs(SI:GetCurrentInterrupters()) do
-		if (not _G["SexyInterrupterRow" .. value.pos]) then	
-			local interrupter = value;
-			local f = CreateFrame("Frame", "SexyInterrupterRow" .. value.pos, SexyInterrupterAnchor)
-			
-			f:SetSize(20, 20)
-			
-			if (cx == 1) then
-                f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 0, -(cx - 1) * 20)
-            else
-                f:SetPoint("TOP", _G["SexyInterrupterRow" .. (value.pos - 1)], "BOTTOM")
-            end
-			
-			local t = f:CreateTexture()
-            t:SetAllPoints(f)
-            t:SetTexture(0, 0, 0, 0.4)
-            
-            t = f:CreateFontString()
-            t:SetPoint("CENTER", "SexyInterrupterRow" .. value.pos, "CENTER")
-			t:SetFont("Fonts\\FRIZQT__.TTF", SI_Data.ui.fontsize, "OUTLINE")
-            t:SetText(cx);
-            t:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a)
-        
-            f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. value.pos, _G["SexyInterrupterRow" .. value.pos])
-            f:SetSize(180, 20)
-            f:SetPoint("LEFT", "SexyInterrupterRow" .. value.pos, "RIGHT")
-            f:SetOrientation("HORIZONTAL")
-            f:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-            f:SetStatusBarColor(0, 1, 0, 1)
-            f:SetFrameLevel(3)
-            f:SetMinMaxValues(0, 1)
-            f:SetValue(0)
-            
-            f.text = f:CreateFontString("SexyInterrupterStatusBarText" .. value.pos, nil, "GameFontNormal")
-            f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. value.pos, "LEFT", 5, 0)
-            f.text:SetSize(180 - 5, 20)
-            f.text:SetJustifyH("LEFT")
-			f.text:SetFont(SI_Data.ui.font, SI_Data.ui.fontsize, "OUTLINE")
-            f.text:SetText('Dummy')
-
-			f.cooldownText = f:CreateFontString("SexyInterrupterStatusBarCooldownText" .. value.pos, nil, "GameFontNormal")
-            f.cooldownText:SetSize(12*3, 12)
-            f.cooldownText:SetJustifyH("LEFT")
-            f.cooldownText:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. value.pos, "RIGHT", 3, 0)
-            f.cooldownText:SetFont(SI_Data.ui.font, SI_Data.ui.fontsize, "OUTLINE")
-            f.cooldownText:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a)
-		end
-	end
-end
-
-function SI:UpdateInterrupterStatus()
-	for cx, value in pairs(SI_Globals.interrupters) do 
-		if _G["SexyInterrupterRow" .. value.pos] then
-			_G["SexyInterrupterRow" .. value.pos]:Hide();
-		end
-	end
-
-	local interrupters = SI:GetCurrentInterrupters();
 
 	table.sort(interrupters, function(a,b) 
 		local retVal = false;
@@ -166,11 +109,73 @@ function SI:UpdateInterrupterStatus()
 		return retVal;
 	end)
 
+	return interrupters;
+end
+
+function SI:UpdateUI() 
+	for cx, value in pairs(SI:GetCurrentInterrupters()) do
+		if not _G["SexyInterrupterRow" .. cx] then	
+			local f = CreateFrame("Frame", "SexyInterrupterRow" .. cx, SexyInterrupterAnchor);
+			
+			f:SetSize(20, 20)
+			
+			if (cx == 1) then
+				f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 0, -(cx - 1) * 20)
+			else
+				f:SetPoint("TOP", _G["SexyInterrupterRow" .. (cx - 1)], "BOTTOM")
+			end
+			
+			local t = f:CreateTexture()
+			t:SetAllPoints(f)
+			t:SetTexture(0, 0, 0, 0.4)
+			
+			t = f:CreateFontString()
+			t:SetPoint("CENTER", "SexyInterrupterRow" .. cx, "CENTER")
+			t:SetFont("Fonts\\FRIZQT__.TTF", SI_Data.ui.fontsize, "OUTLINE")
+			t:SetText(cx);
+			t:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a)
+		
+			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
+			f:SetSize(180, 20)
+			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "RIGHT")
+			f:SetOrientation("HORIZONTAL")
+			f:SetStatusBarTexture(SI_Data.ui.texture)
+			f:SetStatusBarColor(SI_Data.ui.barcolor.r, SI_Data.ui.barcolor.g, SI_Data.ui.barcolor.b, SI_Data.ui.barcolor.a)
+			f:SetFrameLevel(3)
+			f:SetMinMaxValues(0, 1)
+			f:SetValue(0)
+			
+			f.text = f:CreateFontString("SexyInterrupterStatusBarText" .. cx, nil, "GameFontNormal")
+			f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", 5, 0)
+			f.text:SetSize(180 - 5, 20)
+			f.text:SetJustifyH("LEFT")
+			f.text:SetFont(SI_Data.ui.font, SI_Data.ui.fontsize, "OUTLINE")
+			f.text:SetText('Dummy')
+
+			f.cooldownText = f:CreateFontString("SexyInterrupterStatusBarCooldownText" .. cx, nil, "GameFontNormal")
+			f.cooldownText:SetSize(12*3, 12)
+			f.cooldownText:SetJustifyH("LEFT")
+			f.cooldownText:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", 3, 0)
+			f.cooldownText:SetFont(SI_Data.ui.font, SI_Data.ui.fontsize, "OUTLINE")
+			f.cooldownText:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a)
+		end
+	end
+end
+
+function SI:UpdateInterrupterStatus()
+	for cx, value in pairs(SI_Globals.interrupters) do 
+		if _G["SexyInterrupterRow" .. cx] then
+			_G["SexyInterrupterRow" .. cx]:Hide();
+		end
+	end
+
+	local interrupters = SI:GetCurrentInterrupters();
+
 	for cx, value in pairs(interrupters) do
 		--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: ' .. value.name, 1, 0.5, 0);
 		local interrupter = value;
-		local row = _G["SexyInterrupterStatusBar" .. value.pos];
-		local rowParent = _G["SexyInterrupterRow" .. value.pos];
+		local row = _G["SexyInterrupterStatusBar" .. cx];
+		local rowParent = _G["SexyInterrupterRow" .. cx];
 
 		if rowParent then
 			rowParent:Show();
@@ -188,10 +193,8 @@ function SI:UpdateInterrupterStatus()
 			end
 
 			if interrupter.cooldown > 0 then
-				row.cooldownText:SetText(string.format('%.1f', interrupter.cooldown));
-				row.cooldownText:Show();
-
 				row:SetMinMaxValues(0, interrupter.cooldown);
+				row.cooldownText:Show();
 			else 
 				row.cooldownText:Hide();
 			end
@@ -286,28 +289,28 @@ function SI:InterruptUsed(name, cooldown)
 	local interrupter = SI:GetInterrupter(name);
 
 	if interrupter then
-		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. name .. ' cooldown: ' .. cooldown, 1, 0.5, 0);
-
 		interrupter.cooldown = cooldown;
 		interrupter.readyTime = GetTime() + cooldown;
+
+		SI:UpdateInterrupterStatus();
 	end
 end
 
 function SI:OnUpdate()
-	for k,v in pairs(SI:GetCurrentInterrupters()) do
-        if v.readyTime > 0 then
-			local bar = _G["InterruptManagerStatusBar" .. v.pos];
+	for cx, value in pairs(SI:GetCurrentInterrupters()) do
+        if value.readyTime > 0 then
+			local bar = _G["SexyInterrupterStatusBar" .. cx];
 
 			if bar then			
-				if (v.readyTime - GetTime() <= 0) then
-					bar.cooldownText:SetText();
+				if (value.readyTime - GetTime() <= 0) then
+					bar.cooldownText:SetText('');
+					value.readyTime = 0;
 
 					return;
 				end
 
-				bar:SetValue(v.readyTime - GetTime());
-				bar.cooldownText:SetText(roundString(v.readyTime - GetTime(),1));
-
+				bar:SetValue(value.readyTime - GetTime());
+				bar.cooldownText:SetText(string.format('%.1f', value.readyTime - GetTime()));
 			end
 		end
 	end

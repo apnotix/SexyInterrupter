@@ -56,16 +56,30 @@ function SI:InitOptions()
                         get = function() return SI_Data.ui.texture end,
                         set = function(self, opt) SI_Data.ui.texture = opt end
                     },
-                    border = {
-                        type = 'select',
-				        dialogControl = 'LSM30_Border',
-                        values = LSM:HashTable("border"),
-                        order = 1.1,
-                        get = function() return SI_Data.ui.border end,
-                        set = function(self, key) 
-                            SI_Data.ui.border = key;
+                    barcolor = {
+                        type = "color",
+                        name = "Leistenfarbe",
+                        hasAlpha = true,
+                        order = 3,
+                        get = function() return SI_Data.ui.barcolor end,
+                        set = function(self, r, g, b, a) 
+                            print(self, r, g,b,a);
+                            SI_Data.ui.barcolor.r = r;
+                            SI_Data.ui.barcolor.g = g;
+                            SI_Data.ui.barcolor.b = b;
+                            SI_Data.ui.barcolor.a = a;
                         end
                     },
+                    --border = {
+                    --    type = 'select',
+				    --    dialogControl = 'LSM30_Border',
+                    --    values = LSM:HashTable("border"),
+                    --    order = 1.1,
+                    --    get = function() return SI_Data.ui.border end,
+                    --    set = function(self, key) 
+                    --        SI_Data.ui.border = key;
+                    --    end
+                    --},
                     backgroundtexture = {
                         type = "select",
                         name = "Hintergrund",
@@ -81,7 +95,7 @@ function SI:InitOptions()
                         type = "color",
                         name = "Hintergrundfarbe",
                         hasAlpha = true,
-                        order = 1.1,
+                        order = 4,
                         get = function() return SI_Data.ui.background end,
                         set = function(self, r, g, b, a) 
                             print(r, g,b,a);
@@ -117,7 +131,7 @@ function SI:InitOptions()
                         type = "color",
                         name = "Font color",
                         hasAlpha = true,
-                        order = 2.3,
+                        order = 5,
                         get = function() return SI_Data.ui.fontcolor end,
                         set = function(self, r, g, b, a) 
                             SI_Data.ui.fontcolor.r = r;
