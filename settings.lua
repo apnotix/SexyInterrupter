@@ -22,6 +22,38 @@ function SI:LockFrame()
     end
 end
 
+local function helperColourGet( v )
+	
+	assert( v, "bad code: missing parameter" )
+	assert( type( v ) == "table", "bad code: parameter is not a table" )
+	
+	local f = "%.3f"
+	
+	local r = tonumber( string.format( f, v.r or 1 ) )
+	local g = tonumber( string.format( f, v.g or 1 ) )
+	local b = tonumber( string.format( f, v.b or 1 ) )
+	local a = tonumber( string.format( f, v.a or 1 ) )
+	
+	return r, g, b, a
+	
+end
+
+local function helperColourSet( v, r, g, b, a )
+	
+	assert( v, "bad code: missing parameter" )
+	assert( type( v ) == "table", "bad code: parameter is not a table" )
+	
+	local f = "%.3f"
+	
+	v.r = tonumber( string.format( f, r or 1 ) )
+	v.g = tonumber( string.format( f, g or 1 ) )
+	v.b = tonumber( string.format( f, b or 1 ) )
+	if a then
+		v.a = tonumber( string.format( f, a or 1 ) )
+	end
+	
+end
+
 function SI:InitOptions() 
     SI.optionsTable = {
         type = "group",
@@ -53,6 +85,7 @@ function SI:InitOptions()
                         dialogControl = 'LSM30_Statusbar',
                         values = LSM:HashTable("statusbar"),
                         order = 1.1,
+                        width = "double",
                         get = function() return SI_Data.ui.texture end,
                         set = function(self, opt) SI_Data.ui.texture = opt end
                     },
@@ -61,25 +94,23 @@ function SI:InitOptions()
                         name = "Leistenfarbe",
                         hasAlpha = true,
                         order = 3,
-                        get = function() return SI_Data.ui.barcolor end,
+                        width = "double",
+                        get = function() return helperColourGet(SI_Data.ui.barcolor) end,
                         set = function(self, r, g, b, a) 
-                            print(self, r, g,b,a);
-                            SI_Data.ui.barcolor.r = r;
-                            SI_Data.ui.barcolor.g = g;
-                            SI_Data.ui.barcolor.b = b;
-                            SI_Data.ui.barcolor.a = a;
+                            helperColourSet(SI_Data.ui.barcolor, r, g, b, a);
                         end
                     },
-                    --border = {
-                    --    type = 'select',
-				    --    dialogControl = 'LSM30_Border',
-                    --    values = LSM:HashTable("border"),
-                    --    order = 1.1,
-                    --    get = function() return SI_Data.ui.border end,
-                    --    set = function(self, key) 
-                    --        SI_Data.ui.border = key;
-                    --    end
-                    --},
+                    border = {
+                        name = 'Rahmen',
+                        type = 'select',
+				        dialogControl = 'LSM30_Border',
+                        values = LSM:HashTable("border"),
+                        order = 1.1,
+                        get = function() return SI_Data.ui.border end,
+                        set = function(self, key) 
+                            SI_Data.ui.border = key;
+                        end
+                    },
                     backgroundtexture = {
                         type = "select",
                         name = "Hintergrund",
@@ -96,13 +127,9 @@ function SI:InitOptions()
                         name = "Hintergrundfarbe",
                         hasAlpha = true,
                         order = 4,
-                        get = function() return SI_Data.ui.background end,
+                        get = function() return helperColourGet(SI_Data.ui.background) end,
                         set = function(self, r, g, b, a) 
-                            print(r, g,b,a);
-                            SI_Data.ui.background.r = r;
-                            SI_Data.ui.background.g = g;
-                            SI_Data.ui.background.b = b;
-                            SI_Data.ui.background.a = a;
+                            helperColourSet(SI_Data.ui.background, r, g, b, a);
                         end
                     },
                     font = {
@@ -130,14 +157,11 @@ function SI:InitOptions()
                     fontcolor = {
                         type = "color",
                         name = "Font color",
-                        hasAlpha = true,
+                        hasAlpha = false,
                         order = 5,
-                        get = function() return SI_Data.ui.fontcolor end,
-                        set = function(self, r, g, b, a) 
-                            SI_Data.ui.fontcolor.r = r;
-                            SI_Data.ui.fontcolor.g = g;
-                            SI_Data.ui.fontcolor.b = b;
-                            SI_Data.ui.fontcolor.a = a;
+                        get = function() return helperColourGet(SI_Data.ui.fontcolor) end,
+                        set = function(self, r, g, b) 
+                            helperColourSet(SI_Data.ui.fontcolor, r, g, b);
                         end
                     }
                 }

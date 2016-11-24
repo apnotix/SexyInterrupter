@@ -1,5 +1,6 @@
 SexyInterrupter = {}
-local SI = SexyInterrupter
+local SI = SexyInterrupter;
+local LSM = LibStub("LibSharedMedia-3.0");
 
 function SI:InitializeSavedVariables()
 	if not SI_Globals then
@@ -42,6 +43,8 @@ function SI:InitializeSavedVariables()
 		b = 0,
 		a = 0.4
 	};
+
+	SI_Data.ui.border = SI_Data.ui.border or 'None';
 
 	SI_Data.ui.texture = SI_Data.ui.texture or 'BantoBar';
 
@@ -149,7 +152,7 @@ function SI:UpdateUI()
 			f:SetSize(180, 20)
 			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "RIGHT")
 			f:SetOrientation("HORIZONTAL")
-			f:SetStatusBarTexture(SI_Data.ui.texture)
+			f:SetStatusBarTexture(LSM:Fetch("border", SI_Data.ui.texture));
 			f:SetStatusBarColor(SI_Data.ui.barcolor.r, SI_Data.ui.barcolor.g, SI_Data.ui.barcolor.b, SI_Data.ui.barcolor.a)
 			f:SetFrameLevel(3)
 			f:SetMinMaxValues(0, 1)
