@@ -152,7 +152,7 @@ function SI:UpdateUI()
 			f:SetSize(180, 20)
 			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "RIGHT")
 			f:SetOrientation("HORIZONTAL")
-			f:SetStatusBarTexture(LSM:Fetch("border", SI_Data.ui.texture));
+			f:SetStatusBarTexture(LSM:Fetch("statusbar", SI_Data.ui.texture));
 			f:SetStatusBarColor(SI_Data.ui.barcolor.r, SI_Data.ui.barcolor.g, SI_Data.ui.barcolor.b, SI_Data.ui.barcolor.a)
 			f:SetFrameLevel(3)
 			f:SetMinMaxValues(0, 1)
@@ -432,8 +432,8 @@ function SI:OnLoad()
     f:SetSize(200, 100)
     f:SetPoint(SI_Data.ui.anchorPosition.point, SI_Data.ui.anchorPosition.region, SI_Data.ui.anchorPosition.relativePoint, SI_Data.ui.anchorPosition.x, SI_Data.ui.anchorPosition.y)
 	f:SetBackdrop({
-        bgFile = 'Interface\\DialogFrame\\UI-DialogBox-Background-Dark',
-        edgeFile = 'Interface\\DialogFrame\\UI-DialogBox-Border',
+        bgFile = LSM:Fetch("background", SI_Data.ui.backgroundtexture), --'Interface\\DialogFrame\\UI-DialogBox-Background-Dark',
+        edgeFile = LSM:Fetch("border", SI_Data.ui.border), --'Interface\\DialogFrame\\UI-DialogBox-Border',
         tile = true,
         tileSize = 16,
         edgeSize = 16,
