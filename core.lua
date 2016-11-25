@@ -154,7 +154,7 @@ function SI:UpdateUI()
 			t:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a)
 		
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
-			f:SetSize(160, 20)
+			f:SetSize(170, 20)
 			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "RIGHT")
 			f:SetOrientation("HORIZONTAL")
 			f:SetStatusBarTexture(LSM:Fetch("statusbar", SI_Data.ui.texture));
