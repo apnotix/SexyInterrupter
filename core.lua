@@ -149,7 +149,7 @@ function SI:UpdateUI()
 			t:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a)
 		
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
-			f:SetSize(180, 20)
+			f:SetSize(160, 20)
 			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "RIGHT")
 			f:SetOrientation("HORIZONTAL")
 			f:SetStatusBarTexture(LSM:Fetch("statusbar", SI_Data.ui.texture));
@@ -325,7 +325,7 @@ function SI:OnUpdate()
 				if (value.readyTime - GetTime() <= 0) then
 					bar.cooldownText:SetText('');
 					value.readyTime = 0;
-
+					bar:SetValue(0);
 					return;
 				end
 
@@ -434,7 +434,7 @@ function SI:OnLoad()
 	f:SetBackdrop({
         bgFile = LSM:Fetch("background", SI_Data.ui.backgroundtexture), --'Interface\\DialogFrame\\UI-DialogBox-Background-Dark',
         edgeFile = LSM:Fetch("border", SI_Data.ui.border), --'Interface\\DialogFrame\\UI-DialogBox-Border',
-        tile = true,
+        tile = false,
         tileSize = 16,
         edgeSize = 16,
         insets = {
