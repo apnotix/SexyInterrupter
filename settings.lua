@@ -69,101 +69,140 @@ function SI:InitOptions()
                 name = "Aussehen",
                 type = "group",
                 args = {
-                    lock = {
-                        type = "toggle",
-                        name = "Lock",
-                        desc = "Lock this bar to prevent resizing or moving",
-                        order = 1,
-                        get = function() return SI_Data.ui.lock end,
-                        set = function() 
-                            SI:LockFrame();
-                        end
+                    bars = {
+                        name = "Leisten",
+                        type = "group",
+                        args = {
+                            texture = {
+                                type = "select",
+                                name = "Statusbar",
+                                dialogControl = 'LSM30_Statusbar',
+                                values = LSM:HashTable("statusbar"),
+                                order = 2.1,
+                                get = function() return SI_Data.ui.texture end,
+                                set = function(self, opt) SI_Data.ui.texture = opt end
+                            },
+                            barcolor = {
+                                type = "color",
+                                name = "Leistenfarbe",
+                                hasAlpha = true,
+                                order = 2.1,
+                                get = function() return helperColourGet(SI_Data.ui.barcolor) end,
+                                set = function(self, r, g, b, a) 
+                                    helperColourSet(SI_Data.ui.barcolor, r, g, b, a);
+                                end
+                            },
+                            headline_font = {
+                                type = "header",
+                                name = "Font",
+                                order = 3
+                            },                    
+                            font = {
+                                type = "select",
+                                name = "Font",
+                                dialogControl = 'LSM30_Font',
+                                values = LSM:HashTable("font"),
+                                order = 3.1,
+                                get = function() return SI_Data.ui.font end,
+                                set = function(self, opt) SI_Data.ui.font = opt end
+                            },
+                            fontsize = {
+                                type = "range",
+                                name = "Font size",
+                                min = 4,
+                                max = 30,
+                                step = 1,
+                                bigStep = 1,
+                                order = 3.1,
+                                get = function() return SI_Data.ui.fontsize end,
+                                set = function(self, val) SI_Data.ui.fontsize = val end
+                            },
+                            fontcolor = {
+                                type = "color",
+                                name = "Font color",
+                                hasAlpha = false,
+                                order = 3.2,
+                                get = function() return helperColourGet(SI_Data.ui.fontcolor) end,
+                                set = function(self, r, g, b) 
+                                    helperColourSet(SI_Data.ui.fontcolor, r, g, b);
+                                end
+                            }
+                        }
                     },
-                    texture = {
-                        type = "select",
-                        name = "Statusbar",
-                        dialogControl = 'LSM30_Statusbar',
-                        values = LSM:HashTable("statusbar"),
-                        order = 1.1,
-                        width = "double",
-                        get = function() return SI_Data.ui.texture end,
-                        set = function(self, opt) SI_Data.ui.texture = opt end
-                    },
-                    barcolor = {
-                        type = "color",
-                        name = "Leistenfarbe",
-                        hasAlpha = true,
-                        order = 3,
-                        width = "double",
-                        get = function() return helperColourGet(SI_Data.ui.barcolor) end,
-                        set = function(self, r, g, b, a) 
-                            helperColourSet(SI_Data.ui.barcolor, r, g, b, a);
-                        end
-                    },
-                    border = {
-                        name = 'Rahmen',
-                        type = 'select',
-				        dialogControl = 'LSM30_Border',
-                        values = LSM:HashTable("border"),
-                        order = 1.1,
-                        get = function() return SI_Data.ui.border end,
-                        set = function(self, key) 
-                            SI_Data.ui.border = key;
-                        end
-                    },
-                    backgroundtexture = {
-                        type = "select",
-                        name = "Hintergrund",
-                        dialogControl = "LSM30_Background",
-                        values = LSM:HashTable("background"),
-                        order = 1.1,
-                        get = function() return SI_Data.ui.backgroundtexture end,
-                        set = function(self, key) 
-                            SI_Data.ui.backgroundtexture = key;
-                        end
-                    },
-                    backgroundcolor = {
-                        type = "color",
-                        name = "Hintergrundfarbe",
-                        hasAlpha = true,
-                        order = 4,
-                        get = function() return helperColourGet(SI_Data.ui.background) end,
-                        set = function(self, r, g, b, a) 
-                            helperColourSet(SI_Data.ui.background, r, g, b, a);
-                        end
-                    },
-                    font = {
-                        type = "select",
-                        name = "Font",
-                        dialogControl = 'LSM30_Font',
-                        values = LSM:HashTable("font"),
-                        order = 2.1,
-                        width = "full",
-                        get = function() return SI_Data.ui.font end,
-                        set = function(self, opt) SI_Data.ui.font = opt end
-                    },
-                    fontsize = {
-                        type = "range",
-                        name = "Font size",
-                        min = 4,
-                        max = 30,
-                        step = 1,
-                        bigStep = 1,
-                        order = 2.2,
-                        width = "full",
-                        get = function() return SI_Data.ui.fontsize end,
-                        set = function(self, val) SI_Data.ui.fontsize = val end
-                    },
-                    fontcolor = {
-                        type = "color",
-                        name = "Font color",
-                        hasAlpha = false,
-                        order = 5,
-                        get = function() return helperColourGet(SI_Data.ui.fontcolor) end,
-                        set = function(self, r, g, b) 
-                            helperColourSet(SI_Data.ui.fontcolor, r, g, b);
-                        end
-                    }
+                    window = {
+                        name = "Fenster",
+                        type = "group",
+                        args = {
+                            lock = {
+                                type = "toggle",
+                                name = "Lock",
+                                desc = "Lock this bar to prevent resizing or moving",
+                                order = 1,
+                                get = function() return SI_Data.ui.lock end,
+                                set = function() 
+                                    SI:LockFrame();
+                                end
+                            },
+                            headline_frame = {
+                                type = "header",
+                                name = "Frame",
+                                order = 2
+                            },
+
+                            backgroundtexture = {
+                                type = "select",
+                                name = "Hintergrund",
+                                dialogControl = "LSM30_Background",
+                                values = LSM:HashTable("background"),
+                                order = 2.2,
+                                width = "full",
+                                get = function() return SI_Data.ui.backgroundtexture end,
+                                set = function(self, key) 
+                                    SI_Data.ui.backgroundtexture = key;
+                                end
+                            },
+                            backgroundcolor = {
+                                type = "color",
+                                name = "Hintergrundfarbe",
+                                hasAlpha = true,
+                                order = 2.3,
+                                get = function() return helperColourGet(SI_Data.ui.background) end,
+                                set = function(self, r, g, b, a) 
+                                    helperColourSet(SI_Data.ui.background, r, g, b, a);
+                                end
+                            },
+
+                            headline_border = {
+                                type = "header",
+                                name = "Border",
+                                order = 3
+                            },
+
+                            border = {
+                                name = 'Rahmen',
+                                type = 'select',
+                                dialogControl = 'LSM30_Border',
+                                values = LSM:HashTable("border"),
+                                order = 3.1,
+                                width = "full",
+                                get = function() return SI_Data.ui.border end,
+                                set = function(self, key) 
+                                    SI_Data.ui.border = key;
+                                end
+                            },
+
+                            bordercolor = {
+                                type = "color",
+                                name = "Rahmenfarbe",
+                                hasAlpha = false,
+                                order = 3.2,
+                                get = function() return helperColourGet(SI_Data.ui.bordercolor) end,
+                                set = function(self, r, g, b, a) 
+                                    helperColourSet(SI_Data.ui.bordercolor, r, g, b, a);
+                                end
+                            },
+                        }
+                    }             
                 }
             }
         }

@@ -46,6 +46,12 @@ function SI:InitializeSavedVariables()
 
 	SI_Data.ui.border = SI_Data.ui.border or 'None';
 
+	SI_Data.ui.bordercolor = SI_Data.ui.bordercolor or {
+		r = 0.3,
+		g = 0.3, 
+		b = 0.3
+	};
+
 	SI_Data.ui.texture = SI_Data.ui.texture or 'BantoBar';
 
 	SI_Data.ui.font = SI_Data.ui.font or 'Accidental Presidency';
@@ -55,8 +61,7 @@ function SI:InitializeSavedVariables()
 	SI_Data.ui.fontcolor = SI_Data.ui.fontcolor or {
 		r = 0.3,
 		g = 0.3, 
-		b = 0.3,
-		a = 0.6
+		b = 0.3
 	};
 end
 
