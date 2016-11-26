@@ -206,7 +206,10 @@ function SI:UpdateInterrupterStatus()
 			rowParent:Show();
 		end
 
-		if row and rowParent then	
+		if row and rowParent then
+			row:SetValue(0);
+			row.cooldownText:SetText();
+
 			if interrupter.offline then
 				rowParent:Hide();
 			elseif interrupter.dead then
@@ -220,6 +223,11 @@ function SI:UpdateInterrupterStatus()
 			if interrupter.cooldown > 0 then
 				row:SetMinMaxValues(0, interrupter.cooldown);
 				row.cooldownText:Show();
+
+				if interrupter.readyTime - GetTime() > 0 then
+					row.cooldownText:SetText(interrupter.readyTime - GetTime());
+					row:SetValue(interrupter.readyTime - GetTime());
+				end
 			else 
 				row.cooldownText:Hide();
 			end
