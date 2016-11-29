@@ -31,17 +31,17 @@ function SI:InitializeSavedVariables()
 	SI_Data.ui.barheight = SI_Data.ui.barheight or 25;
 
 	SI_Data.ui.barcolor = SI_Data.ui.barcolor or {
-		r = 0,
-		g = 0,
-		b = 0,
-		a = 0.4
+		r = 0.451,
+		g = 0.471,
+		b = 0.435,
+		a = 1
 	};
 
 	SI_Data.ui.background = SI_Data.ui.background or {
-		r = 0,
-		g = 0,
+		r = 0.514,
+		g = 0.514,
 		b = 0,
-		a = 0.4
+		a = 0.453
 	};
 
 	SI_Data.ui.border = SI_Data.ui.border or 'None';
@@ -59,9 +59,9 @@ function SI:InitializeSavedVariables()
 	SI_Data.ui.fontsize = SI_Data.ui.fontsize or 13;
 
 	SI_Data.ui.fontcolor = SI_Data.ui.fontcolor or {
-		r = 0.3,
-		g = 0.3, 
-		b = 0.3
+		r = 0.514,
+		g = 0.514, 
+		b = 0
 	};
 end
 
