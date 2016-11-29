@@ -127,6 +127,10 @@ function SI:GetCurrentInterrupters()
 		return retVal;
 	end)
 
+	for cx, value in pairs(interrupters) do
+		value.sortpos = cx;
+	end
+
 	return interrupters;
 end
 
@@ -411,7 +415,18 @@ function SI_UNIT_SPELLCAST_START(...)
         local startTime, endTime, _, _, interruptImmune = select(5, UnitCastingInfo("target"));
 
 		if not interruptImmune then
-			DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: Interrupt that shit ' .. startTime .. ' - ' .. endTime, 1, 0.5, 0);
+			local name, realm = UnitName('player');
+			local fullname = name;
+
+			if realm ~= nil then
+				fullname = name .. '-' .. realm;
+			end
+
+			local interrupter = SI:GetInterrupter(fullname, realm);
+
+			if interrupter.sortpos == 1 then
+				DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: Interrupt that shit ' .. startTime .. ' - ' .. endTime, 1, 0.5, 0);
+			end
 		end
 	end
 end
