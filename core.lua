@@ -220,8 +220,10 @@ function SI:UpdateInterrupterStatus()
 				row.text:SetTextColor(1, 0, 0, 1);
 			elseif interrupter.afk then
 				row.text:SetTextColor(1, 1, 0, 1);
-			else 			
-            	row.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
+			else 		
+				if interrupter.classColor then	
+            		row.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
+				end
 			end
 
 			if interrupter.cooldown > 0 then
