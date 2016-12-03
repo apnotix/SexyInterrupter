@@ -185,8 +185,12 @@ function SI:UpdateUI()
 	end
 
 	if SI_Globals.numInterrupters > 0 then
-		SexyInterrupterAnchor:Show();
-		SexyInterrupterAnchor:SetSize(200, SI_Data.ui.barheight * SI_Globals.numInterrupters + 10);
+		if UnitInRaid('player') ~= nil then
+			SexyInterrupterAnchor:Hide();
+		else 
+			SexyInterrupterAnchor:Show();
+			SexyInterrupterAnchor:SetSize(200, SI_Data.ui.barheight * SI_Globals.numInterrupters + 10);
+		end
 	else 
 		SexyInterrupterAnchor:Hide();
 	end
@@ -434,12 +438,14 @@ function SI_UNIT_SPELLCAST_START(...)
                     timeVisible = endTime - startTime
                 end
 
-				local text =  'Interrupt now !!';
+				local tName = UnitName('target');
+
+				local text =  'Interrupt now ' .. tName .. ' !!';
 				SexyInterrupterInterruptNowText:AddMessage(text, 1,1,1);
                 SexyInterrupterInterruptNowText:SetTimeVisible(timeVisible);
                 SexyInterrupterInterruptNowText.text = text;
 
-				PlaySoundFile("Interface\\AddOns\\SexyInterrupter\\sounds\\InterruptNow.ogg");
+				PlaySoundFile("Sound\\Spells\\PVPFlagTaken.ogg");
 
 				SexyInterrupterBlueWarningFrame:Show();
 			end
