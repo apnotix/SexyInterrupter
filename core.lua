@@ -1,6 +1,7 @@
 SexyInterrupter = {}
 local SI = SexyInterrupter;
 local LSM = LibStub("LibSharedMedia-3.0");
+local Flasher =  {};
 
 function SI:InitializeSavedVariables()
 	if not SI_Globals then
@@ -416,7 +417,7 @@ function SI_UNIT_SPELLCAST_START(...)
 	if (unit == "target" and SI_Globals.numInterrupters > 0) then
         local startTime, endTime, _, _, interruptImmune = select(5, UnitCastingInfo("target"));
 
-		if not interruptImmune then
+		if not interruptImmune and UnitCanAttack('player', 'target') then
 			local name, realm = UnitName('player');
 			local fullname = name;
 
@@ -427,7 +428,20 @@ function SI_UNIT_SPELLCAST_START(...)
 			local interrupter = SI:GetInterrupter(fullname, realm);
 
 			if interrupter.sortpos == 1 then
-				DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: Interrupt that shit ' .. startTime .. ' - ' .. endTime, 1, 0.5, 0);
+				local timeVisible = 10;
+
+                if (startTime and endTime and endTime/1000 - startTime/1000 < 10) then
+                    timeVisible = endTime - startTime
+                end
+
+				local text =  'Interrupt now !!';
+				SexyInterrupterInterruptNowText:AddMessage(text, 1,1,1);
+                SexyInterrupterInterruptNowText:SetTimeVisible(timeVisible);
+                SexyInterrupterInterruptNowText.text = text;
+
+				PlaySoundFile("Interface\\AddOns\\SexyInterrupter\\sounds\\InterruptNow.ogg");
+
+				SexyInterrupterBlueWarningFrame:Show();
 			end
 		end
 	end
@@ -436,10 +450,19 @@ end
 function SI_UNIT_SPELLCAST_STOP(...)
     local unit = ...
     
-    --if (unit == "target" and IMDB.targetWarn and InterruptManagerText.text == "Interrupt now! (target)") then
-    --    InterruptManagerText:SetTimeVisible(0)
+    if unit == "target" and SexyInterrupterInterruptNowText:IsVisible() then
+        SexyInterrupterInterruptNowText:SetTimeVisible(0);
 
-	--end
+		SexyInterrupterBlueWarningFrame:Hide();
+	end
+end
+
+function SI_PLAYER_TARGET_CHANGED()
+    if SexyInterrupterInterruptNowText:IsVisible() then
+        SexyInterrupterInterruptNowText:SetTimeVisible(0);
+		
+		SexyInterrupterBlueWarningFrame:Hide();
+    end
 end
 
 local SIframe = CreateFrame("Frame");
@@ -462,8 +485,8 @@ function SI:OnLoad()
     f:SetSize(200, 100)
     f:SetPoint(SI_Data.ui.anchorPosition.point, SI_Data.ui.anchorPosition.region, SI_Data.ui.anchorPosition.relativePoint, SI_Data.ui.anchorPosition.x, SI_Data.ui.anchorPosition.y)
 	f:SetBackdrop({
-        bgFile = LSM:Fetch("background", SI_Data.ui.backgroundtexture), --'Interface\\DialogFrame\\UI-DialogBox-Background-Dark',
-        edgeFile = LSM:Fetch("border", SI_Data.ui.border), --'Interface\\DialogFrame\\UI-DialogBox-Border',
+        bgFile = LSM:Fetch("background", SI_Data.ui.backgroundtexture), 
+        edgeFile = LSM:Fetch("border", SI_Data.ui.border),
         tile = false,
         tileSize = 16,
         edgeSize = 16,
@@ -476,8 +499,17 @@ function SI:OnLoad()
     });
 
 	f:SetBackdropColor(SI_Data.ui.background.r, SI_Data.ui.background.g, SI_Data.ui.background.b, SI_Data.ui.background.a);
-
 	f:SetScript("OnUpdate", SI.OnUpdate);
+
+	local c = CreateFrame("MessageFrame", "SexyInterrupterInterruptNowText");
+    c:SetFontObject(BossEmoteNormalHuge);
+    c:SetWidth(300);
+    c:SetHeight(50);
+    c:SetPoint("CENTER", UIParent, "CENTER", 0, 80);
+
+    local fontPath = c:GetFont();
+    c:SetFont(fontPath, 25, "OUTLINE");
+    c:SetFadeDuration(0.4);
 
 	if not SI_Data.ui.lock then
 		f:SetMovable(true)
@@ -494,6 +526,8 @@ function SI:OnLoad()
 	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. SI:GetVersion() .. ' loaded', 1, 0.5, 0);
 
 	SI:InitOptions();
+
+	SI:CreateFlasher('Blue');
 	
 	SIframe:UnregisterEvent("ADDON_LOADED");
 	SIframe:RegisterEvent("UNIT_FLAGS");
@@ -501,4 +535,51 @@ function SI:OnLoad()
 	SIframe:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
     SIframe:RegisterEvent("UNIT_SPELLCAST_START");
     SIframe:RegisterEvent("UNIT_SPELLCAST_STOP");
+	SIframe:RegisterEvent("PLAYER_TARGET_CHANGED");
 end
+
+function SI:CreateFlasher(color)
+    local frameImage = "None";
+
+    if color == "Blue" then
+        frameImage = "Interface\\FullScreenTextures\\OutofControl";
+    elseif color == "Red" then
+        frameImage = "Interface\\FullScreenTextures\\LowHealth";
+    else
+        frameImage = nil;
+    end
+
+    local frameName = "SexyInterrupter" .. color .. "WarningFrame";
+
+    if not ((Flasher[color]) and (frameImage)) then
+        local flasher = CreateFrame("Frame", frameName)
+
+        flasher:SetToplevel(true)
+        flasher:SetFrameStrata("FULLSCREEN_DIALOG")
+        flasher:SetAllPoints(UIParent)
+        flasher:EnableMouse(false)
+        flasher.texture = flasher:CreateTexture(nil, "BACKGROUND")
+        flasher.texture:SetTexture(frameImage)
+        flasher.texture:SetAllPoints(UIParent)
+        flasher.texture:SetBlendMode("ADD")
+        flasher:Hide()
+
+        flasher:SetScript("OnShow", function(self)
+            self.elapsed = 0;
+            self:SetAlpha(0);
+        end)
+		
+        flasher:SetScript("OnUpdate", function(self, elapsed)
+            elapsed = self.elapsed + elapsed;
+            
+            local alpha = elapsed % 0.5;
+
+            if elapsed > 0.2 then
+                alpha = 0.5 - alpha
+            end
+
+            self:SetAlpha(alpha * 3);
+            self.elapsed = elapsed;
+        end)
+    end
+ end
