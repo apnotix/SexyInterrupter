@@ -9,16 +9,12 @@ function SI:LockFrame()
         DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Frame locked.", 1, 0.5, 0);
 
         SexyInterrupterAnchor:SetMovable(false);
-        SexyInterrupterAnchor:EnableMouse(false);
-        SexyInterrupterAnchor:SetScript("OnMouseDown", nil);
-        SexyInterrupterAnchor:SetScript("OnMouseUp", nil);
+        SexyInterrupterHeader:Hide();
     else 
         DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Frame unlocked.", 1, 0.5, 0);
 
         SexyInterrupterAnchor:SetMovable(true);
-        SexyInterrupterAnchor:EnableMouse(true);
-        SexyInterrupterAnchor:SetScript("OnMouseDown", function() SexyInterrupterAnchor:StartMoving() end);
-        SexyInterrupterAnchor:SetScript("OnMouseUp", SI.SaveAnchorPosition);
+        SexyInterrupterHeader:Show();
     end
 end
 
