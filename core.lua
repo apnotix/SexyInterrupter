@@ -14,9 +14,22 @@ function SI:InitializeSavedVariables()
 	if not SI_Data then
 		SI_Data = {
 			interrupters = {},
+			general = {
+				notification = {
+
+				}
+			},
 			ui = {
 			}
 		}
+	else 
+		if not SI_Data.general then
+			SI_Data.general = {
+				notification = {
+
+				}
+			}
+		end
 	end
 	
 	SI.menu = {
@@ -35,8 +48,13 @@ function SI:InitializeSavedVariables()
 		}
 	};
 
-	SI_Data.ui.lock = SI_Data.ui.lock or true;
+	SI_Data.general.infightonly = SI_Data.ui.infightonly or false;
+	SI_Data.general.notification.sound = SI_Data.general.notification.sound or true;
+	SI_Data.general.notification.flash = SI_Data.general.notification.flash or true;
+	SI_Data.general.notification.message = SI_Data.general.notification.message or true;
 
+	SI_Data.ui.lock = SI_Data.ui.lock or true;
+	
 	SI_Data.ui.anchorPosition = SI_Data.ui.anchorPosition or {
 		point = 'CENTER',
 		region = nil,
@@ -222,6 +240,10 @@ function SI:CreateUi()
 
 	-- Frame: RightClickMenu
 	CreateFrame("Frame", "SexyInterrupterMenu", SexyInterrupterAnchor, "UIDropDownMenuTemplate");
+
+	if SI_Data.general.infightonly then
+		SexyInterrupterAnchor:Hide();
+	end
 end
 
 function SI:UpdateUI() 
@@ -530,14 +552,20 @@ function SI_UNIT_SPELLCAST_START(...)
 
 				local tName = UnitName('target');
 
-				local text =  'Interrupt now ' .. tName .. ' !!';
-				SexyInterrupterInterruptNowText:AddMessage(text, 1,1,1);
-                SexyInterrupterInterruptNowText:SetTimeVisible(timeVisible);
-                SexyInterrupterInterruptNowText.text = text;
+				if SI_Data.general.notification.message then
+					local text =  'Interrupt now ' .. tName .. ' !!';
+					SexyInterrupterInterruptNowText:AddMessage(text, 1,1,1);
+					SexyInterrupterInterruptNowText:SetTimeVisible(timeVisible);
+					SexyInterrupterInterruptNowText.text = text;
+				end
 
-				PlaySoundFile("Sound\\Spells\\PVPFlagTaken.ogg");
+				if SI_Data.general.notification.sound then
+					PlaySoundFile("Sound\\Spells\\PVPFlagTaken.ogg");
+				end
 
-				SexyInterrupterBlueWarningFrame:Show();
+				if SI_Data.general.notification.flash then
+					SexyInterrupterBlueWarningFrame:Show();
+				end
 			end
 		end
 	end
@@ -559,6 +587,18 @@ function SI_PLAYER_TARGET_CHANGED()
 		
 		SexyInterrupterBlueWarningFrame:Hide();
     end
+end
+
+function SI_PLAYER_REGEN_DISABLED() 
+	if SI_Data.general.infightonly then
+		SexyInterrupterAnchor:Show();
+	end
+end
+
+function SI_PLAYER_REGEN_ENABLED() 
+	if SI_Data.general.infightonly then
+		SexyInterrupterAnchor:Hide();
+	end
 end
 
 local SIframe = CreateFrame("Frame");
@@ -608,6 +648,8 @@ function SI:OnLoad()
     SIframe:RegisterEvent("UNIT_SPELLCAST_START");
     SIframe:RegisterEvent("UNIT_SPELLCAST_STOP");
 	SIframe:RegisterEvent("PLAYER_TARGET_CHANGED");
+	SIframe:RegisterEvent("PLAYER_REGEN_DISABLED");
+	SIframe:RegisterEvent("PLAYER_REGEN_ENABLED");
 end
 
 function SI:CreateFlasher(color)

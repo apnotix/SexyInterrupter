@@ -65,6 +65,53 @@ function SI:InitOptions()
                 name = "Aussehen",
                 type = "group",
                 args = {
+                    general = {
+                        name = "Allgemein",
+                        type = "group",
+                        args = {
+                            infightonly = {
+                                type = "toggle",
+                                name = "Infight only",
+                                order = 1,
+                                get = function() return SI_Data.general.infightonly end,
+                                set = function() 
+                                    SI_Data.general.infightonly = not SI_Data.general.infightonly;
+                                end
+                            },
+                            headline_notification = {
+                                type = "header",
+                                name = "Notification",
+                                order = 2
+                            },
+                            notication_sound = {
+                                type = "toggle",
+                                name = "Play Sound",
+                                order = 3,
+                                get = function() return SI_Data.general.notification.sound end,
+                                set = function() 
+                                    SI_Data.general.notification.sound = not SI_Data.general.notification.sound;
+                                end
+                            },
+                            notication_flash = {
+                                type = "toggle",
+                                name = "Flash Display",
+                                order = 3,
+                                get = function() return SI_Data.general.notification.flash end,
+                                set = function() 
+                                    SI_Data.general.notification.flash = not SI_Data.general.notification.flash;
+                                end
+                            },
+                            notication_message = {
+                                type = "toggle",
+                                name = "Show Message",
+                                order = 3,
+                                get = function() return SI_Data.general.notification.message end,
+                                set = function() 
+                                    SI_Data.general.notification.message = not SI_Data.general.notification.message;
+                                end
+                            }
+                        }
+                    },
                     bars = {
                         name = "Leisten",
                         type = "group",
