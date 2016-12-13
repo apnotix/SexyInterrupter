@@ -241,6 +241,7 @@ function SI:CreateUi()
 	-- Frame: RightClickMenu
 	CreateFrame("Frame", "SexyInterrupterMenu", SexyInterrupterAnchor, "UIDropDownMenuTemplate");
 
+	-- Infight only
 	if SI_Data.general.infightonly then
 		SexyInterrupterAnchor:Hide();
 	end
