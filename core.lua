@@ -2,6 +2,7 @@ SexyInterrupter = {}
 local SI = SexyInterrupter;
 local LSM = LibStub("LibSharedMedia-3.0");
 local Flasher =  {};
+local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
 function SI:InitializeSavedVariables()
 	if not SI_Globals then
@@ -48,7 +49,7 @@ function SI:InitializeSavedVariables()
 		}
 	};
 
-	SI_Data.general.infightonly = SI_Data.ui.infightonly or false;
+	SI_Data.general.modeincombat = SI_Data.general.modeincombat or false;
 	SI_Data.general.notification.sound = SI_Data.general.notification.sound or true;
 	SI_Data.general.notification.flash = SI_Data.general.notification.flash or true;
 	SI_Data.general.notification.message = SI_Data.general.notification.message or true;
@@ -242,7 +243,7 @@ function SI:CreateUi()
 	CreateFrame("Frame", "SexyInterrupterMenu", SexyInterrupterAnchor, "UIDropDownMenuTemplate");
 
 	-- Infight only
-	if SI_Data.general.infightonly then
+	if SI_Data.general.modeincombat then
 		SexyInterrupterAnchor:Hide();
 	end
 end
@@ -301,7 +302,6 @@ function SI:UpdateUI()
 		if UnitInRaid('player') ~= nil then
 			SexyInterrupterAnchor:Hide();
 		else 
-			SexyInterrupterAnchor:Show();
 			SexyInterrupterAnchor:SetSize(200, SI_Data.ui.barheight * SI_Globals.numInterrupters + 10);
 		end
 	else 
@@ -554,7 +554,7 @@ function SI_UNIT_SPELLCAST_START(...)
 				local tName = UnitName('target');
 
 				if SI_Data.general.notification.message then
-					local text =  'Interrupt now ' .. tName .. ' !!';
+					local text = L["Interrupt now"] .. ' |cFFFF0000' .. tName .. '|r !!';
 					SexyInterrupterInterruptNowText:AddMessage(text, 1,1,1);
 					SexyInterrupterInterruptNowText:SetTimeVisible(timeVisible);
 					SexyInterrupterInterruptNowText.text = text;
@@ -591,13 +591,13 @@ function SI_PLAYER_TARGET_CHANGED()
 end
 
 function SI_PLAYER_REGEN_DISABLED() 
-	if SI_Data.general.infightonly then
+	if SI_Data.general.modeincombat then
 		SexyInterrupterAnchor:Show();
 	end
 end
 
 function SI_PLAYER_REGEN_ENABLED() 
-	if SI_Data.general.infightonly then
+	if SI_Data.general.modeincombat then
 		SexyInterrupterAnchor:Hide();
 	end
 end

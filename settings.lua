@@ -1,25 +1,24 @@
 local SI = SexyInterrupter;
-
-local LSM = LibStub("LibSharedMedia-3.0")
+local LSM = LibStub("LibSharedMedia-3.0");
+local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
 function SI:LockFrame()
     SI_Data.ui.lock = not SI_Data.ui.lock;
 
     if SI_Data.ui.lock then
-        DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Frame locked.", 1, 0.5, 0);
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s.", L["Addon name"], L["Frame locked"]), 1, 0.5, 0);
 
         SexyInterrupterAnchor:SetMovable(false);
         SexyInterrupterHeader:Hide();
     else 
-        DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Frame unlocked.", 1, 0.5, 0);
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s.", L["Addon name"], L["Frame unlocked"]), 1, 0.5, 0);
 
         SexyInterrupterAnchor:SetMovable(true);
         SexyInterrupterHeader:Show();
     end
 end
 
-local function helperColourGet( v )
-	
+local function helperColourGet( v )	
 	assert( v, "bad code: missing parameter" )
 	assert( type( v ) == "table", "bad code: parameter is not a table" )
 	
@@ -34,8 +33,7 @@ local function helperColourGet( v )
 	
 end
 
-local function helperColourSet( v, r, g, b, a )
-	
+local function helperColourSet( v, r, g, b, a )	
 	assert( v, "bad code: missing parameter" )
 	assert( type( v ) == "table", "bad code: parameter is not a table" )
 	
@@ -55,70 +53,78 @@ function SI:InitOptions()
         type = "group",
         args = {
             spellassignment = {
-                name = "Zauberzuweisung",
+                name = L["Spell assignment"],
                 type = "group",
                 args = {
                     
                 }        
             },
             ui = {
-                name = "Aussehen",
+                name = L["Look"],
                 type = "group",
                 args = {
                     general = {
-                        name = "Allgemein",
+                        name = L["General"],
                         type = "group",
                         args = {
                             infightonly = {
                                 type = "toggle",
-                                name = "Infight only",
+                                name = L["Show in combat only"],
                                 order = 1,
-                                get = function() return SI_Data.general.infightonly end,
+                                get = function() return SI_Data.general.modeincombat end,
                                 set = function() 
-                                    SI_Data.general.infightonly = not SI_Data.general.infightonly;
+                                    SI_Data.general.modeincombat = not SI_Data.general.modeincombat;
+
+                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show in combat only"], tostring(SI_Data.general.modeincombat)), 1, 0.5, 0);
                                 end
                             },
                             headline_notification = {
                                 type = "header",
-                                name = "Notification",
+                                name = L["Notification"],
                                 order = 2
                             },
                             notication_sound = {
                                 type = "toggle",
-                                name = "Play Sound",
+                                name = L["Play sound"],
                                 order = 3,
                                 get = function() return SI_Data.general.notification.sound end,
                                 set = function() 
                                     SI_Data.general.notification.sound = not SI_Data.general.notification.sound;
+
+                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Play sound"], tostring(SI_Data.general.notification.sound)), 1, 0.5, 0);
                                 end
                             },
                             notication_flash = {
                                 type = "toggle",
-                                name = "Flash Display",
+                                name = L["Flash display"],
                                 order = 3,
                                 get = function() return SI_Data.general.notification.flash end,
                                 set = function() 
                                     SI_Data.general.notification.flash = not SI_Data.general.notification.flash;
+
+                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Flash display"], tostring(SI_Data.general.notification.flash)), 1, 0.5, 0);
                                 end
                             },
                             notication_message = {
                                 type = "toggle",
-                                name = "Show Message",
+                                name = L["Show message"],
                                 order = 3,
                                 get = function() return SI_Data.general.notification.message end,
                                 set = function() 
                                     SI_Data.general.notification.message = not SI_Data.general.notification.message;
+
+                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show message"], tostring(SI_Data.general.notification.message)), 1, 0.5, 0);
                                 end
                             }
                         }
                     },
                     bars = {
-                        name = "Leisten",
+                        name = L["Bars"],
                         type = "group",
                         args = {
                             texture = {
                                 type = "select",
-                                name = "Statusbar",
+                                name = L["Statusbar"],
                                 dialogControl = 'LSM30_Statusbar',
                                 values = LSM:HashTable("statusbar"),
                                 order = 2.1,
@@ -127,7 +133,7 @@ function SI:InitOptions()
                             },
                             barcolor = {
                                 type = "color",
-                                name = "Leistenfarbe",
+                                name = L["Bar color"],
                                 hasAlpha = true,
                                 order = 2.1,
                                 get = function() return helperColourGet(SI_Data.ui.barcolor) end,
@@ -137,12 +143,12 @@ function SI:InitOptions()
                             },
                             headline_font = {
                                 type = "header",
-                                name = "Font",
+                                name = L["Font"],
                                 order = 3
                             },                    
                             font = {
                                 type = "select",
-                                name = "Font",
+                                name = L["Font art"],
                                 dialogControl = 'LSM30_Font',
                                 values = LSM:HashTable("font"),
                                 order = 3.1,
@@ -151,7 +157,7 @@ function SI:InitOptions()
                             },
                             fontsize = {
                                 type = "range",
-                                name = "Font size",
+                                name = L["Font size"],
                                 min = 4,
                                 max = 30,
                                 step = 1,
@@ -162,7 +168,7 @@ function SI:InitOptions()
                             },
                             fontcolor = {
                                 type = "color",
-                                name = "Font color",
+                                name = L["Font color"],
                                 hasAlpha = false,
                                 order = 3.2,
                                 get = function() return helperColourGet(SI_Data.ui.fontcolor) end,
@@ -173,13 +179,13 @@ function SI:InitOptions()
                         }
                     },
                     window = {
-                        name = "Fenster",
+                        name = L["Window"],
                         type = "group",
                         args = {
                             lock = {
                                 type = "toggle",
-                                name = "Lock",
-                                desc = "Lock this bar to prevent resizing or moving",
+                                name = L["Lock window"],
+                                desc = L["Lock this bar to prevent resizing or moving"],
                                 order = 1,
                                 get = function() return SI_Data.ui.lock end,
                                 set = function() 
@@ -194,7 +200,7 @@ function SI:InitOptions()
 
                             backgroundtexture = {
                                 type = "select",
-                                name = "Hintergrund",
+                                name = L["Background"],
                                 dialogControl = "LSM30_Background",
                                 values = LSM:HashTable("background"),
                                 order = 2.2,
@@ -206,7 +212,7 @@ function SI:InitOptions()
                             },
                             backgroundcolor = {
                                 type = "color",
-                                name = "Hintergrundfarbe",
+                                name = L["Background color"],
                                 hasAlpha = true,
                                 order = 2.3,
                                 get = function() return helperColourGet(SI_Data.ui.background) end,
@@ -217,13 +223,13 @@ function SI:InitOptions()
 
                             headline_border = {
                                 type = "header",
-                                name = "Border",
+                                name = L["Border"],
                                 order = 3
                             },
 
                             border = {
-                                name = 'Rahmen',
-                                type = 'select',
+                                name = L["Border"],
+                                type = "select",
                                 dialogControl = 'LSM30_Border',
                                 values = LSM:HashTable("border"),
                                 order = 3.1,
@@ -236,7 +242,7 @@ function SI:InitOptions()
 
                             bordercolor = {
                                 type = "color",
-                                name = "Rahmenfarbe",
+                                name = L["Border color"],
                                 hasAlpha = false,
                                 order = 3.2,
                                 get = function() return helperColourGet(SI_Data.ui.bordercolor) end,
@@ -253,14 +259,14 @@ function SI:InitOptions()
 
     for i = 1,GetNumGroupMembers() do
         SI.optionsTable.args.spellassignment.args['partymember_header' .. i] = {
-            name = "Spieler " .. i,
+            name = L["Player"] .. i,
             type = "header",
             order = 100 * i,
             width = "full"
         }
 
         SI.optionsTable.args.spellassignment.args['partymember_name' .. i] = {
-            name = "Name",
+            name = L["Name"],
             type = "input",
             order = 101 * i,
             width = "full",
@@ -269,8 +275,8 @@ function SI:InitOptions()
         }
         
         SI.optionsTable.args.spellassignment.args['partymember_prio' .. i] = {
-            name = "Priorität",
-            desc = "Überschreibt die vordefinierte Priorität (1-3)",
+            name = L["Priority"],
+            desc = L["Overwrite the predefined priority (1-3)"],
             type = "range",
             min = 1,
             max = 3,
@@ -282,8 +288,8 @@ function SI:InitOptions()
         }
 
         SI.optionsTable.args.spellassignment.args['partymember_spells' .. i] = {
-            name = "Zauber",
-            desc = "Gibt an welche Zauber von diesem Spieler gekickt werden sollen",
+            name = L["Spell"],
+            desc = L["Spell assignment to the player"],
             type = "input",
             width = "full",
             order = 102 * i,
