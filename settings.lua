@@ -52,13 +52,13 @@ function SI:InitOptions()
     SI.optionsTable = {
         type = "group",
         args = {
-            spellassignment = {
-                name = L["Spell assignment"],
-                type = "group",
-                args = {
+            -- spellassignment = {
+            --     name = L["Spell assignment"],
+            --     type = "group",
+            --     args = {
                     
-                }        
-            },
+            --     }        
+            -- },
             ui = {
                 name = L["Look"],
                 type = "group",
@@ -257,46 +257,46 @@ function SI:InitOptions()
         }
     }
 
-    for i = 1,GetNumGroupMembers() do
-        SI.optionsTable.args.spellassignment.args['partymember_header' .. i] = {
-            name = L["Player"] .. i,
-            type = "header",
-            order = 100 * i,
-            width = "full"
-        }
+    -- for i = 1,GetNumGroupMembers() do
+    --     SI.optionsTable.args.spellassignment.args['partymember_header' .. i] = {
+    --         name = L["Player"] .. i,
+    --         type = "header",
+    --         order = 100 * i,
+    --         width = "full"
+    --     }
 
-        SI.optionsTable.args.spellassignment.args['partymember_name' .. i] = {
-            name = L["Name"],
-            type = "input",
-            order = 101 * i,
-            width = "full",
-            disabled = true,
-            get = function() return SI_Globals.interrupters[i].name end
-        }
+    --     SI.optionsTable.args.spellassignment.args['partymember_name' .. i] = {
+    --         name = L["Name"],
+    --         type = "input",
+    --         order = 101 * i,
+    --         width = "full",
+    --         disabled = true,
+    --         get = function() return SI_Globals.interrupters[i].name end
+    --     }
         
-        SI.optionsTable.args.spellassignment.args['partymember_prio' .. i] = {
-            name = L["Priority"],
-            desc = L["Overwrite the predefined priority (1-3)"],
-            type = "range",
-            min = 1,
-            max = 3,
-            step = 1,
-            width = "full",
-            order = 101 * i,
-            get = function() return SI_Data.interrupters[SI_Globals.interrupters[i].name].prio end,
-            set = function(self, val) SI_Data.interrupters[SI_Globals.interrupters[i].name].prio = val end
-        }
+    --     SI.optionsTable.args.spellassignment.args['partymember_prio' .. i] = {
+    --         name = L["Priority"],
+    --         desc = L["Overwrite the predefined priority (1-3)"],
+    --         type = "range",
+    --         min = 1,
+    --         max = 3,
+    --         step = 1,
+    --         width = "full",
+    --         order = 101 * i,
+    --         get = function() return SI_Data.interrupters[SI_Globals.interrupters[i].name].prio end,
+    --         set = function(self, val) SI_Data.interrupters[SI_Globals.interrupters[i].name].prio = val end
+    --     }
 
-        SI.optionsTable.args.spellassignment.args['partymember_spells' .. i] = {
-            name = L["Spell"],
-            desc = L["Spell assignment to the player"],
-            type = "input",
-            width = "full",
-            order = 102 * i,
-            --get = function() return SI_Globals.interrupters[i].prio end,
-            --set = function(self, val) SI_Globals.interrupters[i].prio = val end
-        }
-    end
+    --     SI.optionsTable.args.spellassignment.args['partymember_spells' .. i] = {
+    --         name = L["Spell"],
+    --         desc = L["Spell assignment to the player"],
+    --         type = "input",
+    --         width = "full",
+    --         order = 102 * i,
+    --         --get = function() return SI_Globals.interrupters[i].prio end,
+    --         --set = function(self, val) SI_Globals.interrupters[i].prio = val end
+    --     }
+    -- end
 
     LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("SexyInterrupter", SI.optionsTable, true);
     SI.optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("SexyInterrupter", "SexyInterrupter");
