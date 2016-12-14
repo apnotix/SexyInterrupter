@@ -50,6 +50,10 @@ function SI:InitializeSavedVariables()
 	};
 
 	SI_Data.general.modeincombat = SI_Data.general.modeincombat or false;
+
+	SI_Data.general.interruptmessage = SI_Data.general.interruptmessage or false;
+	SI_Data.general.outputchannel = SI_Data.general.outputchannel or 'SAY';
+
 	SI_Data.general.notification.sound = SI_Data.general.notification.sound or true;
 	SI_Data.general.notification.flash = SI_Data.general.notification.flash or true;
 	SI_Data.general.notification.message = SI_Data.general.notification.message or true;
@@ -302,7 +306,11 @@ function SI:UpdateUI()
 		if UnitInRaid('player') ~= nil then
 			SexyInterrupterAnchor:Hide();
 		else 
-			SexyInterrupterAnchor:SetSize(200, SI_Data.ui.barheight * SI_Globals.numInterrupters + 10);
+			SexyInterrupterAnchor:SetSize(200, (SI_Data.ui.barheight * SI_Globals.numInterrupters) + 10);
+
+			if not SI_Data.general.modeincombat then
+				SexyInterrupterAnchor:Show();
+			end
 		end
 	else 
 		SexyInterrupterAnchor:Hide();
@@ -442,7 +450,7 @@ function SI:UpdateInterrupters()
 	end
 end
 
-function SI:InterruptUsed(name, cooldown)
+function SI:InterruptUsed(name, cooldown, spellName)
 	local interrupter = SI:GetInterrupter(name);
 
 	if interrupter then
@@ -450,6 +458,23 @@ function SI:InterruptUsed(name, cooldown)
 		interrupter.readyTime = GetTime() + cooldown;
 
 		SI:UpdateInterrupterStatus();
+	end
+end
+
+function SI:ShowInterruptMessage(destName, spellId, spellName)
+	local output = SI_Data.general.outputchannel;
+	local channel;
+	local inGroup, inRaid, inPartyLFG = IsInGroup(), IsInRaid(), IsPartyLFG();
+	local msg = L["Interrupted"] .. string.format(" %s's %s!", destName, GetSpellLink(spellId));
+
+	if not inGroup then return end;
+
+	if output == 'PARTY' then
+		SendChatMessage(msg, inPartyLFG and "INSTANCE_CHAT" or "PARTY");
+	elseif output == 'RAID' and inRaid then
+		SendChatMessage(msg, inPartyLFG and "INSTANCE_CHAT" or "RAID");
+	else
+		SendChatMessage(msg, output);
 	end
 end
 
@@ -495,29 +520,25 @@ function SI_COMBAT_LOG_EVENT_UNFILTERED(...)
 	local event = select(2, ...)
     local sourceGUID = select(4, ...)
     local sourceName = select(5, ...)
+	local destName = select(9, ...)
     local spellId = select(12, ...)
     local spellName = select(13, ...)
 	local spells = { 132409, 119911, 116705, 147362, 96231, 106839, 78675, 47528, 2139, 1766, 57994, 119910, 6552, 15487, 171138 };
     
-    if (event == "SPELL_CAST_SUCCESS") then
+    if event == "SPELL_CAST_SUCCESS" then
         if (tContains(spells, spellId)) then
 			local cooldown = GetSpellBaseCooldown(spellId);
 
 			SI:InterruptUsed(sourceName, cooldown / 1000);
-
-			--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_CAST_SUCCESS ' .. sourceName .. ' - ' .. spellId .. ' - ' .. cooldown, 1, 0.5, 0);
-            
-            -- Announce my interrupt
-            --if (sourceGUID == UnitGUID("player") and IMDB.announce) then
-            --    IM:AnnounceMyInterrupt(spellName)
-            --end
         end
-    --elseif (event == "SPELL_INTERRUPT") then
-    --    if (tContains(spells, spellId)) then
-    --        IM:UnitInterrupted(sourceName, spellId)
-	--		DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: SPELL_INTERRUPT' .. sourceName .. ' - ' .. spellId, 1, 0.5, 0);
-    --    end
-    end
+    elseif event == 'SPELL_INTERRUPT' then
+		spellId = select(15, ...);
+		spellName = select(16, ...);
+
+		if SI_Data.general.interruptmessage and (sourceGUID == UnitGUID('player') or sourceGUID == UnitGUID('pet')) then
+			SI:ShowInterruptMessage(destName, spellId, spellName);
+		end
+	end
 end
 
 function SI_ADDON_LOADED(...)

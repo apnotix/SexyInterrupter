@@ -2,6 +2,13 @@ local SI = SexyInterrupter;
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
+SI.outputchannels = {
+    ['SAY'] = 'SAY',    
+    ['YELL'] = 'YELL',
+    ['PARTY'] = 'PARTY',
+    ['RAID'] = 'RAID'
+};
+
 function SI:LockFrame()
     SI_Data.ui.lock = not SI_Data.ui.lock;
 
@@ -70,6 +77,7 @@ function SI:InitOptions()
                             infightonly = {
                                 type = "toggle",
                                 name = L["Show in combat only"],
+                                width = "full",
                                 order = 1,
                                 get = function() return SI_Data.general.modeincombat end,
                                 set = function() 
@@ -115,6 +123,36 @@ function SI:InitOptions()
 
                                     DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show message"], tostring(SI_Data.general.notification.message)), 1, 0.5, 0);
                                 end
+                            },
+                            headline_interrupt = {
+                                type = "header",
+                                name = L["Interrupts"],
+                                order = 4
+                            },
+                            interrupt_chatmessage = {
+                                type = "toggle",
+                                name = L["Show chat message"],
+                                order = 5,
+                                get = function() return SI_Data.general.interruptmessage end,
+                                set = function() 
+                                    SI_Data.general.interruptmessage = not SI_Data.general.interruptmessage;
+
+                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show chat message"], tostring(SI_Data.general.interruptmessage)), 1, 0.5, 0);
+                                end
+                            },
+                            interrupt_channel = {
+                                type = "select",
+                                name = L["Ouput channel"],
+                                order = 5,
+                                values = function () return SI.outputchannels end,
+                                style = "dropdown",
+                                get = function() return SI_Data.general.outputchannel end,
+                                set = function(self, opt)
+                                    SI_Data.general.outputchannel = opt;
+
+                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Ouput channel"], SI.outputchannels[opt]), 1, 0.5, 0);
+                                end,
+                                disabled = function() return not SI_Data.general.interruptmessage end
                             }
                         }
                     },
