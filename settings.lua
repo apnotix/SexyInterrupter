@@ -2,6 +2,8 @@ local SI = SexyInterrupter;
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
+SI.Version = GetAddOnMetadata("SexyInterrupter", "Version");
+
 SI.outputchannels = {
     ['SAY'] = 'SAY',    
     ['YELL'] = 'YELL',
@@ -15,13 +17,17 @@ function SI:LockFrame()
     if SI_Data.ui.lock then
         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s.", L["Addon name"], L["Frame locked"]), 1, 0.5, 0);
 
-        SexyInterrupterAnchor:SetMovable(false);
-        SexyInterrupterHeader:Hide();
+        SexyInterrupterAnchor:Show();
+        SexyInterrupterDummyAnchorFrame:Hide();
+        SexyInterrupterDummyMessageFrame:Hide();
+
+        SI:UpdateFrames();
     else 
         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s.", L["Addon name"], L["Frame unlocked"]), 1, 0.5, 0);
 
-        SexyInterrupterAnchor:SetMovable(true);
-        SexyInterrupterHeader:Show();
+        SexyInterrupterAnchor:Hide();
+        SexyInterrupterDummyAnchorFrame:Show();
+        SexyInterrupterDummyMessageFrame:Show();
     end
 end
 
@@ -58,14 +64,28 @@ end
 function SI:InitOptions() 
     SI.optionsTable = {
         type = "group",
+        name = L["Addon name"],
         args = {
-            -- spellassignment = {
-            --     name = L["Spell assignment"],
-            --     type = "group",
-            --     args = {
-                    
-            --     }        
-            -- },
+            spellassignment = {
+                name = L["Spell assignment"],
+                type = "group",
+                -- hidden = function()
+                --     return not UnitIsGroupLeader("player");
+                -- end,
+                args = {
+                   
+                }        
+            },
+            lock = {
+                type = "toggle",
+                name = L["Lock window"],
+                desc = L["Lock this bar to prevent resizing or moving"],
+                order = 1,
+                get = function() return SI_Data.ui.lock end,
+                set = function() 
+                    SI:LockFrame();
+                end
+            },
             ui = {
                 name = L["Look"],
                 type = "group",
@@ -220,16 +240,6 @@ function SI:InitOptions()
                         name = L["Window"],
                         type = "group",
                         args = {
-                            lock = {
-                                type = "toggle",
-                                name = L["Lock window"],
-                                desc = L["Lock this bar to prevent resizing or moving"],
-                                order = 1,
-                                get = function() return SI_Data.ui.lock end,
-                                set = function() 
-                                    SI:LockFrame();
-                                end
-                            },
                             headline_frame = {
                                 type = "header",
                                 name = "Frame",
@@ -295,47 +305,85 @@ function SI:InitOptions()
         }
     }
 
-    -- for i = 1,GetNumGroupMembers() do
-    --     SI.optionsTable.args.spellassignment.args['partymember_header' .. i] = {
-    --         name = L["Player"] .. i,
-    --         type = "header",
-    --         order = 100 * i,
-    --         width = "full"
-    --     }
+    function SI:SendOverridePrioInfos()
+        local interrupters = SI:GetCurrentInterrupters();
+        local msg = "overrideprio:";
 
-    --     SI.optionsTable.args.spellassignment.args['partymember_name' .. i] = {
-    --         name = L["Name"],
-    --         type = "input",
-    --         order = 101 * i,
-    --         width = "full",
-    --         disabled = true,
-    --         get = function() return SI_Globals.interrupters[i].name end
-    --     }
+        for i, interrupter in pairs(interrupters) do
+            if interrupter.overrideprio then
+                msg = msg .. interrupter.fullname .. '+' .. interrupter.overridedprio .. ';';
+            end
+        end
+
+        SI:SendAddonMessage(msg);
+    end
+
+    function SI:UpdateInterrupterSettings() 
+        local interrupters = SI:GetCurrentInterrupters();
+
+        SI.optionsTable.args.spellassignment.args = {};
+
+        for i, interrupter in pairs(interrupters) do
+            SI.optionsTable.args.spellassignment.args['partymember_header' .. i] = {
+                name = interrupter.name,
+                type = "header",
+                order = 100 * i,
+                width = "full"
+            }
+
+            SI.optionsTable.args.spellassignment.args['partymember_override_prio' .. i] = {
+                name = L["Override priority"],
+                type = "toggle",
+                order = 101 * i,
+                get = function() return interrupter.overrideprio end,
+                set = function() 
+                    interrupter.overrideprio = not interrupter.overrideprio; 
+                    
+                    if not interrupter.overrideprio then
+                        interrupter.overridedprio = nil;
+                    end
+                end
+            }
+            
+            SI.optionsTable.args.spellassignment.args['partymember_prio' .. i] = {
+                name = L["Priority"],
+                desc = L["Overwrite the predefined priority (1-3)"],
+                type = "range",
+                min = 1,
+                max = 3,
+                step = 1,
+                order = 102 * i,
+                get = function() return interrupter.overridedprio or interrupter.prio end,
+                set = function(self, val) interrupter.overridedprio = val end,
+                disabled = function() return not interrupter.overrideprio end
+            }
+
+            -- SI.optionsTable.args.spellassignment.args['partymember_spells' .. i] = {
+            --     name = L["Spell"],
+            --     desc = L["Spell assignment to the player"],
+            --     type = "input",
+            --     width = "full",
+            --     order = 103 * i,
+            --     --get = function() return SI_Globals.interrupters[i].prio end,
+            --     --set = function(self, val) SI_Globals.interrupters[i].prio = val end
+            -- }
+        end
         
-    --     SI.optionsTable.args.spellassignment.args['partymember_prio' .. i] = {
-    --         name = L["Priority"],
-    --         desc = L["Overwrite the predefined priority (1-3)"],
-    --         type = "range",
-    --         min = 1,
-    --         max = 3,
-    --         step = 1,
-    --         width = "full",
-    --         order = 101 * i,
-    --         get = function() return SI_Data.interrupters[SI_Globals.interrupters[i].name].prio end,
-    --         set = function(self, val) SI_Data.interrupters[SI_Globals.interrupters[i].name].prio = val end
-    --     }
-
-    --     SI.optionsTable.args.spellassignment.args['partymember_spells' .. i] = {
-    --         name = L["Spell"],
-    --         desc = L["Spell assignment to the player"],
-    --         type = "input",
-    --         width = "full",
-    --         order = 102 * i,
-    --         --get = function() return SI_Globals.interrupters[i].prio end,
-    --         --set = function(self, val) SI_Globals.interrupters[i].prio = val end
-    --     }
-    -- end
+	    LibStub("AceConfigRegistry-3.0"):NotifyChange("SexyInterrupter");
+    end
 
     LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("SexyInterrupter", SI.optionsTable, true);
     SI.optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("SexyInterrupter", "SexyInterrupter");
+
+    SLASH_SEXYINTERRUPTER1, SLASH_SEXYINTERRUPTER2 = '/si', '/sexyinterrupter';
+
+    local function handler(msg, editbox)
+        if msg == 'lock' then
+            SI:LockFrame();
+        else
+            LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
+        end
+    end
+
+    SlashCmdList["SEXYINTERRUPTER"] = handler; -- Also a valid assignment strategy
 end

@@ -68,6 +68,14 @@ function SI:InitializeSavedVariables()
 		y = -300
 	};
 
+	SI_Data.ui.messagePosition = SI_Data.ui.messagePosition or {
+		point = 'CENTER',
+		region = UIParent,
+		relativePoint = 'CENTER',
+		x = 0,
+		y = 80
+	};
+
 	SI_Data.ui.barheight = SI_Data.ui.barheight or 25;
 
 	SI_Data.ui.barcolor = SI_Data.ui.barcolor or {
@@ -105,9 +113,7 @@ function SI:InitializeSavedVariables()
 	};
 end
 
-function SI:GetVersion() return '1.0.0' end
-
-function SI:GetInterrupter(name, realm)
+function SI:GetInterrupter(name)
 	local retVal = nil;
 
 	for cx, value in pairs(SI_Globals.interrupters) do
@@ -148,7 +154,7 @@ function SI:GetCurrentInterrupters()
 					else
 						if a.readyTime > 0 then
 							if a.readyTime == b.readyTime then
-								retVal = a.prio < b.prio;
+								retVal = (a.overridedprio or a.prio) < (b.overridedprio or b.prio);
 							else
 								retVal = a.readyTime < b.readyTime;
 							end
@@ -156,7 +162,7 @@ function SI:GetCurrentInterrupters()
 							if b.readyTime > 0 then
 								retVal = true;
 							else
-								retVal = a.prio < b.prio;
+								retVal = (a.overridedprio or a.prio) < (b.overridedprio or b.prio);
 							end
 						end
 					end
@@ -196,13 +202,35 @@ function SI:CreateUi()
 
 	f:SetBackdropColor(SI_Data.ui.background.r, SI_Data.ui.background.g, SI_Data.ui.background.b, SI_Data.ui.background.a);
 	f:SetScript("OnUpdate", SI.OnUpdate);
-	f:SetScript("OnMouseDown", SI.OnMouseDown);
-	f:SetScript("OnMouseUp", SI.OnMouseUp);
+	
+    local t = f:CreateTexture()
+    t:SetTexture(0, 0, 0, 0.2)
+    t:SetAllPoints(f);
 
-	local header = CreateFrame('Frame', 'SexyInterrupterHeader', SexyInterrupterAnchor);
-	header:SetSize(200, 30);
-	header:SetPoint("TOPLEFT", "SexyInterrupterAnchor", "TOPLEFT", 0, 26);
-	header:SetBackdrop({
+	-- Frame: InterruptMessage
+	local c = CreateFrame("MessageFrame", "SexyInterrupterInterruptNowText");
+    c:SetFontObject(BossEmoteNormalHuge);
+    c:SetWidth(500);
+    c:SetHeight(50);
+    c:SetPoint(SI_Data.ui.messagePosition.point, UIParent, SI_Data.ui.messagePosition.relativePoint, SI_Data.ui.messagePosition.x, SI_Data.ui.messagePosition.y);
+
+    local fontPath = c:GetFont();
+    c:SetFont(fontPath, 25, "OUTLINE");
+    c:SetFadeDuration(0.4);
+
+	-- Frame: RightClickMenu
+	CreateFrame("Frame", "SexyInterrupterMenu", SexyInterrupterAnchor, "UIDropDownMenuTemplate");
+
+	-- Infight only
+	if SI_Data.general.modeincombat then
+		SexyInterrupterAnchor:Hide();
+	end
+
+	-- Dummy Anchor Container
+	local dummyAnchorFrame = CreateFrame("Frame", "SexyInterrupterDummyAnchorFrame", UIParent);
+	dummyAnchorFrame:SetSize(200, (SI_Data.ui.barheight * 5) + 10);
+    dummyAnchorFrame:SetPoint(SI_Data.ui.anchorPosition.point, SI_Data.ui.anchorPosition.region, SI_Data.ui.anchorPosition.relativePoint, SI_Data.ui.anchorPosition.x, SI_Data.ui.anchorPosition.y);
+	dummyAnchorFrame:SetBackdrop({
         bgFile = LSM:Fetch("background", SI_Data.ui.backgroundtexture), 
         edgeFile = LSM:Fetch("border", SI_Data.ui.border),
         tile = false,
@@ -216,40 +244,98 @@ function SI:CreateUi()
 		}
     });
 
-	header.title = header:CreateFontString();
-	header.title:SetPoint("CENTER", "SexyInterrupterHeader", "CENTER")
-	header.title:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-	header.title:SetText('SexyInterrupter');
+	dummyAnchorFrame:SetBackdropColor(SI_Data.ui.background.r, SI_Data.ui.background.g, SI_Data.ui.background.b, SI_Data.ui.background.a);
+	dummyAnchorFrame:SetMovable(true);
 
-	if not SI_Data.ui.lock then
-		f:SetMovable(true);
-		header:Show();
-	else 
-		header:Hide();
-	end
+	dummyAnchorFrame:SetScript("OnMouseDown", function(self, button) 
+		SI:OnMouseDown(self, button);
+	end);
+
+	dummyAnchorFrame:SetScript("OnMouseUp", function(self, button) 
+		SI:OnMouseUp(self, button);
+	end);
+
+	local dummyAnchorFrameText = dummyAnchorFrame:CreateFontString("SexyInterrupterDummyAnchorFrameText", nil, "GameFontNormal");
+	dummyAnchorFrameText:SetPoint("CENTER", "SexyInterrupterDummyAnchorFrame", "CENTER")
+	dummyAnchorFrameText:SetFont(SI_Data.ui.font, SI_Data.ui.fontsize, "OUTLINE");
+	dummyAnchorFrameText:SetText("SexyInterrupter Frame");
+	dummyAnchorFrameText:SetSize(200, 12);
+	dummyAnchorFrameText:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a);
+
+	dummyAnchorFrame:Hide();
+
+	-- Dummy Message Container
+	local dummyMessageFrame = CreateFrame("Frame", "SexyInterrupterDummyMessageFrame", UIParent);
+	dummyMessageFrame:SetSize(500, 50);
+    dummyMessageFrame:SetPoint(SI_Data.ui.messagePosition.point, UIParent, SI_Data.ui.messagePosition.relativePoint, SI_Data.ui.messagePosition.x, SI_Data.ui.messagePosition.y);
+	dummyMessageFrame:SetBackdrop({
+        bgFile = LSM:Fetch("background", SI_Data.ui.backgroundtexture), 
+        edgeFile = LSM:Fetch("border", SI_Data.ui.border),
+        tile = false,
+        tileSize = 16,
+        edgeSize = 16,
+        insets = {
+			left = 1,
+			right = 1,
+			top = 1,
+			bottom = 1
+		}
+    });
+
+	dummyMessageFrame:SetBackdropColor(SI_Data.ui.background.r, SI_Data.ui.background.g, SI_Data.ui.background.b, SI_Data.ui.background.a);
+	dummyMessageFrame:SetMovable(true);
 	
-    local t = f:CreateTexture()
-    t:SetTexture(0, 0, 0, 0.2)
-    t:SetAllPoints(f);
+	dummyMessageFrame:SetScript("OnMouseDown", function(self, button) 
+		SI:OnMouseDown(self, button);
+	end);
 
-	-- Frame: InterruptMessage
-	local c = CreateFrame("MessageFrame", "SexyInterrupterInterruptNowText");
-    c:SetFontObject(BossEmoteNormalHuge);
-    c:SetWidth(500);
-    c:SetHeight(50);
-    c:SetPoint("CENTER", UIParent, "CENTER", 0, 80);
+	dummyMessageFrame:SetScript("OnMouseUp", function(self, button) 
+		SI:OnMouseUp(self, button);
+	end);
 
-    local fontPath = c:GetFont();
-    c:SetFont(fontPath, 25, "OUTLINE");
-    c:SetFadeDuration(0.4);
+	local dummyMessageFrameText = dummyMessageFrame:CreateFontString("SexyInterrupterDummyMessageFrameText", nil, "GameFontNormal");
+	dummyMessageFrameText:SetPoint("CENTER", "SexyInterrupterDummyMessageFrame", "CENTER")
+	dummyMessageFrameText:SetFont(SI_Data.ui.font, SI_Data.ui.fontsize, "OUTLINE");
+	dummyMessageFrameText:SetText("SexyInterrupter Interrupt Message");
+	dummyMessageFrameText:SetSize(500, 12);
+	dummyMessageFrameText:SetTextColor(SI_Data.ui.fontcolor.r, SI_Data.ui.fontcolor.g, SI_Data.ui.fontcolor.b, SI_Data.ui.fontcolor.a);
 
-	-- Frame: RightClickMenu
-	CreateFrame("Frame", "SexyInterrupterMenu", SexyInterrupterAnchor, "UIDropDownMenuTemplate");
+	dummyMessageFrame:Hide();
+end
 
-	-- Infight only
-	if SI_Data.general.modeincombat then
-		SexyInterrupterAnchor:Hide();
+function SI:UpdateFrames()
+	SexyInterrupterAnchor:SetPoint(SI_Data.ui.anchorPosition.point, SI_Data.ui.anchorPosition.region, SI_Data.ui.anchorPosition.relativePoint, SI_Data.ui.anchorPosition.x, SI_Data.ui.anchorPosition.y);
+	SexyInterrupterAnchor:SetBackdropColor(SI_Data.ui.background.r, SI_Data.ui.background.g, SI_Data.ui.background.b, SI_Data.ui.background.a);
+	SexyInterrupterAnchor:SetBackdrop({
+        bgFile = LSM:Fetch("background", SI_Data.ui.backgroundtexture), 
+        edgeFile = LSM:Fetch("border", SI_Data.ui.border),
+        tile = false,
+        tileSize = 16,
+        edgeSize = 16,
+        insets = {
+			left = 1,
+			right = 1,
+			top = 1,
+			bottom = 1
+		}
+    });
+
+	for _, child in ipairs({ SexyInterrupterAnchor:GetChildren() }) do
+		if string.find(child:GetName(), "SexyInterrupterRow") then
+			for _, subchild in ipairs({ child:GetChildren() }) do
+				-- TODO: Font, fontcolor
+
+				if string.find(subchild:GetName(), "SexyInterrupterStatusBar") then
+					subchild:SetStatusBarTexture(LSM:Fetch("statusbar", SI_Data.ui.texture));
+					subchild:SetStatusBarColor(SI_Data.ui.barcolor.r, SI_Data.ui.barcolor.g, SI_Data.ui.barcolor.b, SI_Data.ui.barcolor.a);
+				end
+			end
+		end
 	end
+
+	SexyInterrupterInterruptNowText:SetPoint(SI_Data.ui.messagePosition.point, UIParent, SI_Data.ui.messagePosition.relativePoint, SI_Data.ui.messagePosition.x, SI_Data.ui.messagePosition.y);
+
+	SI:UpdateUI();
 end
 
 function SI:UpdateUI() 
@@ -392,7 +478,7 @@ function SI:UpdateInterrupters()
 			fullname = name .. '-' .. realm;
 		end
 
-		local interrupter = SI:GetInterrupter(fullname, realm);
+		local interrupter = SI:GetInterrupter(fullname);
 
 		if interrupter == nil then
 			local class, classFileName = UnitClass(unit);
@@ -407,11 +493,12 @@ function SI:UpdateInterrupters()
 			interrupter.classColor = color;
 			interrupter.cooldown = 0;
 			interrupter.readyTime = 0;
+			interrupter.overrideprio = false;
 
 			tinsert(SI_Globals.interrupters, interrupter);
 		end
 
-		interrupter = SI:GetInterrupter(fullname, realm);
+		interrupter = SI:GetInterrupter(fullname);
 
 		interrupter.active = true;
 		interrupter.role = UnitGroupRolesAssigned(unit);
@@ -448,6 +535,8 @@ function SI:UpdateInterrupters()
 			interrupter.inrange = false;
 		end
 	end
+
+	SI:SendAddonMessage("versioninfo:" .. SI.Version);
 end
 
 function SI:InterruptUsed(name, cooldown, spellName)
@@ -506,6 +595,8 @@ function SI_GROUP_ROSTER_UPDATE()
 	SI:UpdateInterrupters();
 	SI:UpdateUI();
 	SI:UpdateInterrupterStatus();
+
+	SI:UpdateInterrupterSettings();
 end
 
 function SI_OnEvent(self, event, ...)
@@ -563,7 +654,7 @@ function SI_UNIT_SPELLCAST_START(...)
 				fullname = name .. '-' .. realm;
 			end
 
-			local interrupter = SI:GetInterrupter(fullname, realm);
+			local interrupter = SI:GetInterrupter(fullname);
 
 			if interrupter.sortpos == 1 then
 				local timeVisible = 10;
@@ -623,6 +714,14 @@ function SI_PLAYER_REGEN_ENABLED()
 	end
 end
 
+function SI_CHAT_MSG_ADDON(...)
+    local prefix = ...
+
+    if (prefix == "SexyInterrupter") then
+        SI:AddonMessageReceived(...)
+    end
+end
+
 local SIframe = CreateFrame("Frame");
 SIframe:SetScript("OnEvent", SI_OnEvent);
 SIframe:RegisterEvent("ADDON_LOADED");
@@ -635,19 +734,30 @@ function SI:SaveAnchorPosition()
     a.point, a.region, a.relativePoint, a.x, a.y = SexyInterrupterAnchor:GetPoint();
 end
 
-function SI:OnMouseUp(button) 
+function SI:OnMouseUp(self, button) 
 	if button == "RightButton" then
 		EasyMenu(SI.menu, SexyInterrupterMenu, "cursor", nil, nil);
 	end
 
 	if not SI_Data.ui.lock then
-		SI.SaveAnchorPosition();
+		local frameName = self:GetName();
+		local a;
+		
+		self:StopMovingOrSizing();
+
+		if frameName == 'SexyInterrupterDummyAnchorFrame' then
+			a = SI_Data.ui.anchorPosition;
+		elseif frameName == 'SexyInterrupterDummyMessageFrame' then
+			a = SI_Data.ui.messagePosition;
+		end
+
+		a.point, a.region, a.relativePoint, a.x, a.y = self:GetPoint();
 	end
 end
 
-function SI:OnMouseDown(button)
+function SI:OnMouseDown(self, button)
 	if not SI_Data.ui.lock then
-		SexyInterrupterAnchor:StartMoving();
+		self:StartMoving();
 	end
 end
 
@@ -664,6 +774,7 @@ function SI:OnLoad()
 	SI:CreateFlasher('Blue');
 	
 	SIframe:UnregisterEvent("ADDON_LOADED");
+	SIframe:RegisterEvent("CHAT_MSG_ADDON");
 	SIframe:RegisterEvent("UNIT_FLAGS");
 	SIframe:RegisterEvent("GROUP_ROSTER_UPDATE");
 	SIframe:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
@@ -672,6 +783,8 @@ function SI:OnLoad()
 	SIframe:RegisterEvent("PLAYER_TARGET_CHANGED");
 	SIframe:RegisterEvent("PLAYER_REGEN_DISABLED");
 	SIframe:RegisterEvent("PLAYER_REGEN_ENABLED");
+
+	RegisterAddonMessagePrefix("SexyInterrupter");
 end
 
 function SI:CreateFlasher(color)

@@ -26,6 +26,7 @@ L["Interrupt now"] = "Interrupt now";
 L["Name"] = "Name";
 L["Notification"] = "Notification";
 L["Ouput channel"] = "Output channel";
+L["Override priority"] = "Override priority";
 L["Show message"] = "Show message";
 L["Show chat message"] = "Show chat message";
 L["Statusbar"] = "Statusbar";
