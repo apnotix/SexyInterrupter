@@ -10,7 +10,7 @@ function SI:SendAddonMessage(msg)
     end
     
 	if channel then
-    	SendAddonMessage("InterruptManager", msg, channel);
+    	SendAddonMessage("SexyInterrupter", msg, channel);
 	end
 end
 

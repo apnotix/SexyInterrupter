@@ -310,9 +310,7 @@ function SI:InitOptions()
         local msg = "overrideprio:";
 
         for i, interrupter in pairs(interrupters) do
-            if interrupter.overrideprio then
-                msg = msg .. interrupter.fullname .. '+' .. interrupter.overridedprio .. ';';
-            end
+            msg = msg .. interrupter.fullname .. '+' .. interrupter.overridedprio .. '+' .. interrupter.overridedprio .. ';';
         end
 
         SI:SendAddonMessage(msg);

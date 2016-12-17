@@ -537,6 +537,10 @@ function SI:UpdateInterrupters()
 	end
 
 	SI:SendAddonMessage("versioninfo:" .. SI.Version);
+
+	if UnitIsGroupLeader("player") then
+		--SI:SendOverridePrioInfos();
+	end
 end
 
 function SI:InterruptUsed(name, cooldown, spellName)
@@ -718,6 +722,7 @@ function SI_CHAT_MSG_ADDON(...)
     local prefix = ...
 
     if (prefix == "SexyInterrupter") then
+		print("Message Received");
         SI:AddonMessageReceived(...)
     end
 end
@@ -767,7 +772,7 @@ function SI:OnLoad()
 	SI:CreateUi();
 	SI:UpdateUI();
 	
-	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. SI:GetVersion() .. ' loaded', 1, 0.5, 0);
+	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. SI.Version .. ' loaded', 1, 0.5, 0);
 
 	SI:InitOptions();
 
