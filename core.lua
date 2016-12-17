@@ -720,9 +720,9 @@ end
 
 function SI_CHAT_MSG_ADDON(...)
     local prefix = ...
+	local msg, _, sender, noRealmNameSender = select(2, ...);
 
-    if (prefix == "SexyInterrupter") then
-		print("Message Received");
+    if prefix == "SexyInterrupter" and not strfind(sender, UnitName("player")) then
         SI:AddonMessageReceived(...)
     end
 end

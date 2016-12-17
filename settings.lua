@@ -378,10 +378,12 @@ function SI:InitOptions()
     local function handler(msg, editbox)
         if msg == 'lock' then
             SI:LockFrame();
+        elseif msg == 'version' then
+            DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Version " .. SI.Version, 1, 0.5, 0);
         else
             LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
         end
     end
 
-    SlashCmdList["SEXYINTERRUPTER"] = handler; -- Also a valid assignment strategy
+    SlashCmdList["SEXYINTERRUPTER"] = handler;
 end
