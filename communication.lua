@@ -3,10 +3,12 @@ local SI = SexyInterrupter;
 function SI:SendAddonMessage(msg)
     local channel;
 
-    if (IsInRaid()) then
-        channel = "RAID"
-    elseif (IsInGroup()) then
-        channel = "PARTY"
+    if IsPartyLFG() then
+        channel = "INSTANCE_CHAT";
+    elseif IsInRaid() then
+        channel = "RAID";
+    elseif IsInGroup() then
+        channel = "PARTY";
     end
     
 	if channel then
@@ -48,11 +50,19 @@ function SI:ReceiveOverridePrioInfos(msg, sender)
     for cx, info in pairs(fullinfos) do
         infos = { strsplit('+', info) };
 
-        interrupter = SI:GetInterrupter(infos[1]);
+        interrupter = SI:GetInterrupter(infos[2] and infos[1] .. infos[2] or infos[1]);
+
+        --print('infos[1]', infos[1]);
+        --print('infos[2]', infos[2]);
+        --print('infos[3]', infos[3]);
+        --print('infos[4]', infos[4]);
+        --print('interrupter', interrupter);
 
         if interrupter then
-            interrupter.overrideprio = infos[2] == "true" and true or false;
-            interrupter.overridedprio = infos[3] == nil and infos[3] or tonumber(infos[3]);
+            --print('infos[2] == "true" and true or false', infos[3] == "true" and true or false);
+            interrupter.overrideprio = infos[3] == "true" and true or false;
+            --print('infos[3] == nil and infos[3] or tonumber(infos[3])', infos[4] == nil and infos[4] or tonumber(infos[4]))
+            interrupter.overridedprio = infos[4] == nil and infos[4] or tonumber(infos[4]);
         end
     end
 end
