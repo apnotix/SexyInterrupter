@@ -52,8 +52,8 @@ function SI:ReceiveOverridePrioInfos(msg, sender)
             interrupter = SI:GetInterrupter(infos[0]);
             
             if interrupter then
-                interrupter.overrideprio = infos[1];
-                interrupter.overridedprio = infos[2];
+                interrupter.overrideprio = infos[1] == "true" or false;
+                interrupter.overridedprio = infos[2] == "nil" or tonumber(infos[2]);
             end
         end 
     end

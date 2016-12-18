@@ -503,6 +503,10 @@ function SI:UpdateInterrupters()
 		interrupter.active = true;
 		interrupter.role = UnitGroupRolesAssigned(unit);
 		
+		if interrupter.overrideprio == nil then
+			interrupter.overrideprio = false;
+		end
+
 		if interrupter.role == 'HEALER' then
 			interrupter.prio = 3;
 		elseif interrupter.role == 'DAMAGER' then
@@ -539,7 +543,7 @@ function SI:UpdateInterrupters()
 	SI:SendAddonMessage("versioninfo:" .. SI.Version);
 
 	if UnitIsGroupLeader("player") then
-		--SI:SendOverridePrioInfos();
+		SI:SendOverridePrioInfos();
 	end
 end
 
