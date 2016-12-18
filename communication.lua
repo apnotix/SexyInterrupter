@@ -41,20 +41,18 @@ function SI:ReceiveVersionInfo(msg, sender)
 end
 
 function SI:ReceiveOverridePrioInfos(msg, sender) 
-    local fullinfos = strsplit(';', msg);
+    local fullinfos = { strsplit(';', msg) };
     local infos;
     local interrupter;
 
     for cx, info in pairs(fullinfos) do
-        infos = strsplit('+', info);
+        infos = { strsplit('+', info) };
 
-        if not strfind(infos[0], UnitName("player")) then
-            interrupter = SI:GetInterrupter(infos[0]);
-            
-            if interrupter then
-                interrupter.overrideprio = infos[1] == "true" or false;
-                interrupter.overridedprio = infos[2] == "nil" or tonumber(infos[2]);
-            end
-        end 
+        interrupter = SI:GetInterrupter(infos[1]);
+
+        if interrupter then
+            interrupter.overrideprio = infos[2] == "true" and true or false;
+            interrupter.overridedprio = infos[3] == nil and infos[3] or tonumber(infos[3]);
+        end
     end
 end

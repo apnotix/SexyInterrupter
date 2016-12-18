@@ -69,9 +69,9 @@ function SI:InitOptions()
             spellassignment = {
                 name = L["Spell assignment"],
                 type = "group",
-                -- hidden = function()
-                --     return not UnitIsGroupLeader("player");
-                -- end,
+                hidden = function()
+                   return not UnitIsGroupLeader("player");
+                end,
                 args = {
                    
                 }        
