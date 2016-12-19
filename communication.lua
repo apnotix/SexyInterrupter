@@ -59,12 +59,12 @@ function SI:ReceiveOverridePrioInfos(msg, sender)
 
         interrupter = SI:GetInterrupter(realm and fullname or name);
 
-        print('name', name);
-        print('realm', realm);
-        print('fullname', fullname);
-        print('overrideprio', overrideprio);
-        print('overridedprio', overridedprio);
-        print('interrupter', interrupter);
+        --print('name', name);
+        --print('realm', realm);
+        --print('fullname', fullname);
+        --print('overrideprio', overrideprio);
+        --print('overridedprio', overridedprio);
+        --print('interrupter', interrupter);
 
         if interrupter then
             interrupter.overrideprio = overrideprio == "true" and true or false;
