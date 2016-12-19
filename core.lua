@@ -783,7 +783,7 @@ function SI:OnLoad()
 	SI:CreateFlasher('Blue');
 	
 	SIframe:UnregisterEvent("ADDON_LOADED");
-	SIframe:RegisterEvent("PLAYER_ENTERING_WORLD");
+	--SIframe:RegisterEvent("PLAYER_ENTERING_WORLD");
 	SIframe:RegisterEvent("CHAT_MSG_ADDON");
 	SIframe:RegisterEvent("UNIT_FLAGS");
 	SIframe:RegisterEvent("GROUP_ROSTER_UPDATE");
