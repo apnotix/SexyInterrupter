@@ -46,23 +46,29 @@ function SI:ReceiveOverridePrioInfos(msg, sender)
     local fullinfos = { strsplit(';', msg) };
     local infos;
     local interrupter;
+    local name, realm, fullname, overrideprio, overridedprio;
 
     for cx, info in pairs(fullinfos) do
         infos = { strsplit('+', info) };
 
-        interrupter = SI:GetInterrupter(infos[2] and infos[1] .. infos[2] or infos[1]);
+        name = infos[1];
+        realm = infos[2];
+        fullname = infos[3];
+        overrideprio = infos[4];
+        overridedprio = infos[5];
 
-        --print('infos[1]', infos[1]);
-        --print('infos[2]', infos[2]);
-        --print('infos[3]', infos[3]);
-        --print('infos[4]', infos[4]);
-        --print('interrupter', interrupter);
+        interrupter = SI:GetInterrupter(realm and fullname or name);
+
+        print('name', name);
+        print('realm', realm);
+        print('fullname', fullname);
+        print('overrideprio', overrideprio);
+        print('overridedprio', overridedprio);
+        print('interrupter', interrupter);
 
         if interrupter then
-            --print('infos[2] == "true" and true or false', infos[3] == "true" and true or false);
-            interrupter.overrideprio = infos[3] == "true" and true or false;
-            --print('infos[3] == nil and infos[3] or tonumber(infos[3])', infos[4] == nil and infos[4] or tonumber(infos[4]))
-            interrupter.overridedprio = infos[4] == nil and infos[4] or tonumber(infos[4]);
+            interrupter.overrideprio = overrideprio == "true" and true or false;
+            interrupter.overridedprio = overridedprio == nil and overridedprio or tonumber(overridedprio);
         end
     end
 end
