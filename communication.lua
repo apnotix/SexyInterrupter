@@ -57,7 +57,7 @@ function SI:ReceiveOverridePrioInfos(msg, sender)
         overrideprio = infos[4];
         overridedprio = infos[5];
 
-        interrupter = SI:GetInterrupter(realm and fullname or name);
+        interrupter = SI:GetInterrupter(fullname);
 
         --print('name', name);
         --print('realm', realm);
