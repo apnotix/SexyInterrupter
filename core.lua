@@ -472,11 +472,7 @@ function SI:UpdateInterrupters()
 		end;	
 		
 		local name, realm = UnitName(unit);
-		local fullname = name;
-
-		if realm ~= nil then
-			fullname = name .. '-' .. realm;
-		end
+		local fullname = UnitFullName(unit);
 
 		local interrupter = SI:GetInterrupter(fullname);
 
