@@ -3,6 +3,7 @@ if not L then return end
 
 L["Addon name"] = "SexyInterrupter";
 
+L["Assignments"] = "Assignments";
 L["Bars"] = "Bars";
 L["Bar color"] = "Bar color";
 L["Background"] = "Background";
@@ -17,6 +18,7 @@ L["Font art"] = "Font art";
 L["Font size"] = "Font size";
 L["Font color"] = "Font color";
 L["General"] = "General";
+L["Invalid Spell Name/ID/Link"] = "Invalid Spell Name/ID/Link";
 L["Show in combat only"] = "Show in combat only";
 L["Lock window"] = "Lock window";
 L["Look"] = "Look";
@@ -27,6 +29,7 @@ L["Name"] = "Name";
 L["Notification"] = "Notification";
 L["Ouput channel"] = "Output channel";
 L["Override priority"] = "Override priority";
+L['Priority assignment'] = "Priority assignment";
 L["Show message"] = "Show message";
 L["Show chat message"] = "Show chat message";
 L["Statusbar"] = "Statusbar";

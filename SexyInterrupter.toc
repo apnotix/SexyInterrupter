@@ -5,7 +5,7 @@
 ## Notes: Easily interrupt rotations within a party
 ## DefaultState: Enabled
 ## LoadOnDemand: 0
-## SavedVariables: SI_Globals
+## SavedVariables: SexyInterrupterDB, SI_Globals
 ## SavedVariablesPerCharacter: SI_Data
 
 ## OptionalDeps: Ace3
@@ -17,5 +17,7 @@ locale\enUS.lua
 
 core.lua
 settings.lua
+events.lua
+utils.lua
 communication.lua
 SexyInterrupter.xml

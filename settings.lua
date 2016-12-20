@@ -11,25 +11,70 @@ SI.outputchannels = {
     ['RAID'] = 'RAID'
 };
 
-function SI:LockFrame()
-    SI_Data.ui.lock = not SI_Data.ui.lock;
-
-    if SI_Data.ui.lock then
-        DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s.", L["Addon name"], L["Frame locked"]), 1, 0.5, 0);
-
-        SexyInterrupterAnchor:Show();
-        SexyInterrupterDummyAnchorFrame:Hide();
-        SexyInterrupterDummyMessageFrame:Hide();
-
-        SI:UpdateFrames();
-    else 
-        DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s.", L["Addon name"], L["Frame unlocked"]), 1, 0.5, 0);
-
-        SexyInterrupterAnchor:Hide();
-        SexyInterrupterDummyAnchorFrame:Show();
-        SexyInterrupterDummyMessageFrame:Show();
-    end
-end
+local defaults = {
+	profile = {
+		general = {
+			modeincombat = false,
+            lock = true			
+		},
+		ui = {
+			anchorPosition = {
+				point = 'CENTER',
+				region = nil,
+				relativePoint = 'CENTER',
+				x = 0,
+				y = -300
+			},
+			messagePosition = {
+				point = 'CENTER',
+				region = UIParent,
+				relativePoint = 'CENTER',
+				x = 0,
+				y = 80
+			},
+			font = 'Accidental Presidency',
+			fontsize = 13,
+			fontcolor = {
+				r = 1,
+				g = 1, 
+				b = 1
+			},
+			window = {
+				lock = true,
+				background = {
+					r = 0.514,
+					g = 0.514,
+					b = 0,
+					a = 0.453
+				},
+                backgroundtexture = "Blizzard Dialog Background Dark",
+				border = 'NONE',
+				bordercolor = {
+					r = 0,
+					g = 0, 
+					b = 0
+				},
+			},
+			bars = {
+				barheight = 25,
+				barcolor = {
+					r = 0.451,
+					g = 0.471,
+					b = 0.435,
+					a = 1
+				},
+				texture = 'BantoBar'
+			}
+		},
+		notification = {
+			sound = true,
+			flash = true,
+			message = true,
+			interruptmessage = false,
+			outputchannel = 'SAY'
+		}
+	}
+}
 
 local function helperColourGet( v )	
 	assert( v, "bad code: missing parameter" )
@@ -61,177 +106,166 @@ local function helperColourSet( v, r, g, b, a )
 	
 end
 
-function SI:InitOptions() 
+function SexyInterrupter:InitOptions() 
+    self.db = LibStub("AceDB-3.0"):New("SexyInterrupterDB", defaults, true)
+
     SI.optionsTable = {
         type = "group",
         name = L["Addon name"],
         args = {
-            spellassignment = {
-                name = L["Spell assignment"],
-                type = "group",
-                hidden = function()
-                   return not UnitIsGroupLeader("player");
-                end,
-                args = {
-                   
-                }        
-            },
             lock = {
                 type = "toggle",
                 name = L["Lock window"],
                 desc = L["Lock this bar to prevent resizing or moving"],
                 order = 1,
-                get = function() return SI_Data.ui.lock end,
+                get = function() return self.db.profile.general.lock end,
                 set = function() 
-                    SI:LockFrame();
+                    SexyInterrupter:LockFrame();
                 end
+            },
+            assignments = {
+                name = L["Assignments"],
+                type = "group",
+	            childGroups = "tab",
+                hidden = function() 
+                    return not IsInGroup() or not UnitIsGroupLeader("player");
+                end,
+                args = {
+                    priority = {
+                        name = L['Priority assignment'],
+                        type = "group",
+                        args = {
+                        
+                        }
+                    },
+                    spell = {
+                        name = L["Spell assignment"],
+                        type = "group",
+                        args = {
+                        
+                        }        
+                    },
+                }
+            },     
+            general = {
+                name = L["General"],
+                type = "group",
+                get = function(info) return self.db.profile.general[info[#info]] end,
+                set = function(info, value) self.db.profile.general[info[#info]] = value end,
+                args = {
+                    modeincombat = {
+                        type = "toggle",
+                        name = L["Show in combat only"],
+                        width = "full",
+                        order = 1
+                    }
+                }
+            },
+            notification = {
+                type = "group",
+                name = L["Notification"],
+                get = function(info) return self.db.profile.notification[info[#info]] end,
+                set = function(info, value) self.db.profile.notification[info[#info]] = value end,
+                args = {
+                    headline_notification = {
+                        type = "header",
+                        name = L["Notification"],
+                        order = 2
+                    },
+                    sound = {
+                        type = "toggle",
+                        name = L["Play sound"],
+                        order = 3
+                    },
+                    flash = {
+                        type = "toggle",
+                        name = L["Flash display"],
+                        order = 3
+                    },
+                    message = {
+                        type = "toggle",
+                        name = L["Show message"],
+                        order = 3
+                    },
+                    headline_interrupt = {
+                        type = "header",
+                        name = L["Interrupts"],
+                        order = 4
+                    },
+                    interruptmessage = {
+                        type = "toggle",
+                        name = L["Show chat message"],
+                        order = 5
+                    },
+                    outputchannel = {
+                        type = "select",
+                        name = L["Ouput channel"],
+                        order = 5,
+                        values = function () return SI.outputchannels end,
+                        style = "dropdown",
+                        disabled = function() return not self.db.profile.general.interruptmessage end
+                    }
+                }
             },
             ui = {
                 name = L["Look"],
                 type = "group",
+	            childGroups = "tab",
+                get = function(info) return self.db.profile.ui[info[#info]] end,
+                set = function(info, value) self.db.profile.ui[info[#info]] = value end,
                 args = {
-                    general = {
-                        name = L["General"],
-                        type = "group",
-                        args = {
-                            infightonly = {
-                                type = "toggle",
-                                name = L["Show in combat only"],
-                                width = "full",
-                                order = 1,
-                                get = function() return SI_Data.general.modeincombat end,
-                                set = function() 
-                                    SI_Data.general.modeincombat = not SI_Data.general.modeincombat;
-
-                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show in combat only"], tostring(SI_Data.general.modeincombat)), 1, 0.5, 0);
-                                end
-                            },
-                            headline_notification = {
-                                type = "header",
-                                name = L["Notification"],
-                                order = 2
-                            },
-                            notication_sound = {
-                                type = "toggle",
-                                name = L["Play sound"],
-                                order = 3,
-                                get = function() return SI_Data.general.notification.sound end,
-                                set = function() 
-                                    SI_Data.general.notification.sound = not SI_Data.general.notification.sound;
-
-                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Play sound"], tostring(SI_Data.general.notification.sound)), 1, 0.5, 0);
-                                end
-                            },
-                            notication_flash = {
-                                type = "toggle",
-                                name = L["Flash display"],
-                                order = 3,
-                                get = function() return SI_Data.general.notification.flash end,
-                                set = function() 
-                                    SI_Data.general.notification.flash = not SI_Data.general.notification.flash;
-
-                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Flash display"], tostring(SI_Data.general.notification.flash)), 1, 0.5, 0);
-                                end
-                            },
-                            notication_message = {
-                                type = "toggle",
-                                name = L["Show message"],
-                                order = 3,
-                                get = function() return SI_Data.general.notification.message end,
-                                set = function() 
-                                    SI_Data.general.notification.message = not SI_Data.general.notification.message;
-
-                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show message"], tostring(SI_Data.general.notification.message)), 1, 0.5, 0);
-                                end
-                            },
-                            headline_interrupt = {
-                                type = "header",
-                                name = L["Interrupts"],
-                                order = 4
-                            },
-                            interrupt_chatmessage = {
-                                type = "toggle",
-                                name = L["Show chat message"],
-                                order = 5,
-                                get = function() return SI_Data.general.interruptmessage end,
-                                set = function() 
-                                    SI_Data.general.interruptmessage = not SI_Data.general.interruptmessage;
-
-                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show chat message"], tostring(SI_Data.general.interruptmessage)), 1, 0.5, 0);
-                                end
-                            },
-                            interrupt_channel = {
-                                type = "select",
-                                name = L["Ouput channel"],
-                                order = 5,
-                                values = function () return SI.outputchannels end,
-                                style = "dropdown",
-                                get = function() return SI_Data.general.outputchannel end,
-                                set = function(self, opt)
-                                    SI_Data.general.outputchannel = opt;
-
-                                    DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Ouput channel"], SI.outputchannels[opt]), 1, 0.5, 0);
-                                end,
-                                disabled = function() return not SI_Data.general.interruptmessage end
-                            }
-                        }
+                    headline_font = {
+                        type = "header",
+                        name = L["Font"],
+                        order = 4
+                    },              
+                    font = {
+                        type = "select",
+                        name = L["Font art"],
+                        dialogControl = 'LSM30_Font',
+                        values = LSM:HashTable("font"),
+                        order = 5
+                    },
+                    fontsize = {
+                        type = "range",
+                        name = L["Font size"],
+                        min = 4,
+                        max = 30,
+                        step = 1,
+                        bigStep = 1,
+                        order = 5
+                    },
+                    fontcolor = {
+                        type = "color",
+                        name = L["Font color"],
+                        hasAlpha = false,
+                        order = 6,
+                        get = function() return helperColourGet(self.db.profile.ui.fontcolor) end,
+                        set = function(self, r, g, b) 
+                            helperColourSet(self.db.profile.ui.fontcolor, r, g, b);
+                        end
                     },
                     bars = {
                         name = L["Bars"],
                         type = "group",
+                        get = function(info) return self.db.profile.ui.bars[info[#info]] end,
+                        set = function(info, value) self.db.profile.ui.bars[info[#info]] = value end,
                         args = {
                             texture = {
                                 type = "select",
                                 name = L["Statusbar"],
                                 dialogControl = 'LSM30_Statusbar',
                                 values = LSM:HashTable("statusbar"),
-                                order = 2.1,
-                                get = function() return SI_Data.ui.texture end,
-                                set = function(self, opt) SI_Data.ui.texture = opt end
+                                order = 2.1
                             },
                             barcolor = {
                                 type = "color",
                                 name = L["Bar color"],
                                 hasAlpha = true,
                                 order = 2.1,
-                                get = function() return helperColourGet(SI_Data.ui.barcolor) end,
+                                get = function() return helperColourGet(self.db.profile.ui.bars.barcolor) end,
                                 set = function(self, r, g, b, a) 
-                                    helperColourSet(SI_Data.ui.barcolor, r, g, b, a);
-                                end
-                            },
-                            headline_font = {
-                                type = "header",
-                                name = L["Font"],
-                                order = 3
-                            },                    
-                            font = {
-                                type = "select",
-                                name = L["Font art"],
-                                dialogControl = 'LSM30_Font',
-                                values = LSM:HashTable("font"),
-                                order = 3.1,
-                                get = function() return SI_Data.ui.font end,
-                                set = function(self, opt) SI_Data.ui.font = opt end
-                            },
-                            fontsize = {
-                                type = "range",
-                                name = L["Font size"],
-                                min = 4,
-                                max = 30,
-                                step = 1,
-                                bigStep = 1,
-                                order = 3.1,
-                                get = function() return SI_Data.ui.fontsize end,
-                                set = function(self, val) SI_Data.ui.fontsize = val end
-                            },
-                            fontcolor = {
-                                type = "color",
-                                name = L["Font color"],
-                                hasAlpha = false,
-                                order = 3.2,
-                                get = function() return helperColourGet(SI_Data.ui.fontcolor) end,
-                                set = function(self, r, g, b) 
-                                    helperColourSet(SI_Data.ui.fontcolor, r, g, b);
+                                    helperColourSet(self.db.profile.ui.bars.barcolor, r, g, b, a);
                                 end
                             }
                         }
@@ -239,97 +273,184 @@ function SI:InitOptions()
                     window = {
                         name = L["Window"],
                         type = "group",
+                        get = function(info) return self.db.profile.ui.window[info[#info]] end,
+                        set = function(info, value) self.db.profile.ui.window[info[#info]] = value end,
                         args = {
                             headline_frame = {
                                 type = "header",
                                 name = "Frame",
                                 order = 2
                             },
-
                             backgroundtexture = {
                                 type = "select",
                                 name = L["Background"],
                                 dialogControl = "LSM30_Background",
                                 values = LSM:HashTable("background"),
                                 order = 2.2,
-                                width = "full",
-                                get = function() return SI_Data.ui.backgroundtexture end,
-                                set = function(self, key) 
-                                    SI_Data.ui.backgroundtexture = key;
-                                end
+                                width = "full"
                             },
                             backgroundcolor = {
                                 type = "color",
                                 name = L["Background color"],
                                 hasAlpha = true,
                                 order = 2.3,
-                                get = function() return helperColourGet(SI_Data.ui.background) end,
+                                get = function() return helperColourGet(self.db.profile.ui.window.background) end,
                                 set = function(self, r, g, b, a) 
-                                    helperColourSet(SI_Data.ui.background, r, g, b, a);
+                                    helperColourSet(self.db.profile.ui.window.background, r, g, b, a);
                                 end
                             },
-
                             headline_border = {
                                 type = "header",
                                 name = L["Border"],
                                 order = 3
                             },
-
                             border = {
                                 name = L["Border"],
                                 type = "select",
                                 dialogControl = 'LSM30_Border',
                                 values = LSM:HashTable("border"),
                                 order = 3.1,
-                                width = "full",
-                                get = function() return SI_Data.ui.border end,
-                                set = function(self, key) 
-                                    SI_Data.ui.border = key;
-                                end
+                                width = "full"
                             },
-
                             bordercolor = {
                                 type = "color",
                                 name = L["Border color"],
                                 hasAlpha = false,
                                 order = 3.2,
-                                get = function() return helperColourGet(SI_Data.ui.bordercolor) end,
+                                get = function() return helperColourGet(self.db.profile.ui.window.bordercolor) end,
                                 set = function(self, r, g, b, a) 
-                                    helperColourSet(SI_Data.ui.bordercolor, r, g, b, a);
+                                    helperColourSet(self.db.profile.ui.window.ui.bordercolor, r, g, b, a);
                                 end
                             },
                         }
-                    }             
+                    }   
                 }
             }
+            -- ui = {
+            --     name = L["Look"],
+            --     type = "group",
+	        --     childGroups = "tab",
+            --     args = {
+            --         general = {
+            --             name = L["General"],
+            --             type = "group",
+            --             args = {
+            --                 modeincombat = {
+            --                     type = "toggle",
+            --                     name = L["Show in combat only"],
+            --                     width = "full",
+            --                     order = 1,
+            --                     -- get = function() return SI_Data.general.modeincombat end,
+            --                     -- set = function() 
+            --                     --     SI_Data.general.modeincombat = not SI_Data.general.modeincombat;
+
+            --                     --     DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show in combat only"], tostring(SI_Data.general.modeincombat)), 1, 0.5, 0);
+            --                     -- end
+            --                 },
+            --                 headline_notification = {
+            --                     type = "header",
+            --                     name = L["Notification"],
+            --                     order = 2
+            --                 },
+            --                 notication_sound = {
+            --                     type = "toggle",
+            --                     name = L["Play sound"],
+            --                     order = 3,
+            --                     get = function() return SI_Data.general.notification.sound end,
+            --                     set = function() 
+            --                         SI_Data.general.notification.sound = not SI_Data.general.notification.sound;
+
+            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Play sound"], tostring(SI_Data.general.notification.sound)), 1, 0.5, 0);
+            --                     end
+            --                 },
+            --                 notication_flash = {
+            --                     type = "toggle",
+            --                     name = L["Flash display"],
+            --                     order = 3,
+            --                     get = function() return SI_Data.general.notification.flash end,
+            --                     set = function() 
+            --                         SI_Data.general.notification.flash = not SI_Data.general.notification.flash;
+
+            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Flash display"], tostring(SI_Data.general.notification.flash)), 1, 0.5, 0);
+            --                     end
+            --                 },
+            --                 notication_message = {
+            --                     type = "toggle",
+            --                     name = L["Show message"],
+            --                     order = 3,
+            --                     get = function() return SI_Data.general.notification.message end,
+            --                     set = function() 
+            --                         SI_Data.general.notification.message = not SI_Data.general.notification.message;
+
+            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show message"], tostring(SI_Data.general.notification.message)), 1, 0.5, 0);
+            --                     end
+            --                 },
+            --                 headline_interrupt = {
+            --                     type = "header",
+            --                     name = L["Interrupts"],
+            --                     order = 4
+            --                 },
+            --                 interrupt_chatmessage = {
+            --                     type = "toggle",
+            --                     name = L["Show chat message"],
+            --                     order = 5,
+            --                     get = function() return SI_Data.general.interruptmessage end,
+            --                     set = function() 
+            --                         SI_Data.general.interruptmessage = not SI_Data.general.interruptmessage;
+
+            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show chat message"], tostring(SI_Data.general.interruptmessage)), 1, 0.5, 0);
+            --                     end
+            --                 },
+            --                 interrupt_channel = {
+            --                     type = "select",
+            --                     name = L["Ouput channel"],
+            --                     order = 5,
+            --                     values = function () return SI.outputchannels end,
+            --                     style = "dropdown",
+            --                     get = function() return SI_Data.general.outputchannel end,
+            --                     set = function(self, opt)
+            --                         SI_Data.general.outputchannel = opt;
+
+            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Ouput channel"], SI.outputchannels[opt]), 1, 0.5, 0);
+            --                     end,
+            --                     disabled = function() return not SI_Data.general.interruptmessage end
+            --                 }
+            --             }
+            --         },
+                              
+            --     }
+            --}
         }
     }
 
-    function SI:SendOverridePrioInfos()
-        local interrupters = SI:GetCurrentInterrupters();
+    SI.optionsTable.args.profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(self.db);
+
+    function SexyInterrupter:SendOverridePrioInfos()
+        local interrupters = SexyInterrupter:GetCurrentInterrupters();
         local msg = "overrideprio:";
 
         for i, interrupter in pairs(interrupters) do
             msg = msg .. tostring(interrupter.name) .. '+' .. tostring(interrupter.realm) .. '+' .. tostring(interrupter.fullname) .. '+' .. tostring(interrupter.overrideprio) .. '+' .. tostring(interrupter.overridedprio) .. ';';
         end
 
-        SI:SendAddonMessage(msg);
+        SexyInterrupter:SendAddonMessage(msg);
     end
 
-    function SI:UpdateInterrupterSettings() 
-        local interrupters = SI:GetCurrentInterrupters();
+    function SexyInterrupter:UpdateInterrupterSettings() 
+        local interrupters = SexyInterrupter:GetCurrentInterrupters();
 
-        SI.optionsTable.args.spellassignment.args = {};
+        SI.optionsTable.args.assignments.args.priority.args = {};
+        SI.optionsTable.args.assignments.args.spell.args = {};
 
         for i, interrupter in pairs(interrupters) do
-            SI.optionsTable.args.spellassignment.args['partymember_header' .. i] = {
+            SI.optionsTable.args.assignments.args.priority.args['partymember_header' .. i] = {
                 name = interrupter.name,
                 type = "header",
                 order = 100 * i,
                 width = "full"
             }
 
-            SI.optionsTable.args.spellassignment.args['partymember_override_prio' .. i] = {
+            SI.optionsTable.args.assignments.args.priority.args['partymember_override_prio' .. i] = {
                 name = L["Override priority"],
                 type = "toggle",
                 order = 101 * i,
@@ -343,7 +464,7 @@ function SI:InitOptions()
                 end
             }
             
-            SI.optionsTable.args.spellassignment.args['partymember_prio' .. i] = {
+            SI.optionsTable.args.assignments.args.priority.args['partymember_prio' .. i] = {
                 name = L["Priority"],
                 desc = L["Overwrite the predefined priority (1-3)"],
                 type = "range",
@@ -356,15 +477,45 @@ function SI:InitOptions()
                 disabled = function() return not interrupter.overrideprio end
             }
 
-            -- SI.optionsTable.args.spellassignment.args['partymember_spells' .. i] = {
-            --     name = L["Spell"],
-            --     desc = L["Spell assignment to the player"],
-            --     type = "input",
-            --     width = "full",
-            --     order = 103 * i,
-            --     --get = function() return SI_Globals.interrupters[i].prio end,
-            --     --set = function(self, val) SI_Globals.interrupters[i].prio = val end
-            -- }
+            SI.optionsTable.args.assignments.args.spell.args['partymember_header' .. i] = {
+                name = interrupter.name,
+                type = "header",
+                order = 100 * i,
+                width = "full"
+            }
+
+            SI.optionsTable.args.assignments.args.spell.args['partymember_spells_icon' .. i] = {
+                name = "",
+                type = "execute",
+                width = "half",
+                order = 102 * i,
+                hidden = function() 
+                    return not interrupter.spells;
+                end,
+                image = function() 
+                    local _, _, icon = GetSpellInfo(interrupter.spells);
+                    
+                    return icon and tostring(icon) or "", 18, 18;
+                end
+            }
+
+            SI.optionsTable.args.assignments.args.spell.args['partymember_spells' .. i] = {
+                name = L["Spell"],
+                desc = L["Spell assignment to the player"],
+                type = "input",
+                width = "double",
+                order = 101 * i,
+                get = function() 
+                    local name = GetSpellInfo(interrupter.spells);
+
+                    if name then
+                        return name;
+                    else
+                        return L["Invalid Spell Name/ID/Link"];
+                    end                
+                end,
+                set = function(self, val) interrupter.spells = val end
+            }
         end
         
 	    LibStub("AceConfigRegistry-3.0"):NotifyChange("SexyInterrupter");
@@ -377,7 +528,7 @@ function SI:InitOptions()
 
     local function handler(msg, editbox)
         if msg == 'lock' then
-            SI:LockFrame();
+            SexyInterrupter:LockFrame();
         elseif msg == 'version' then
             DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Version " .. SI.Version, 1, 0.5, 0);
         else

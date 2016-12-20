@@ -1,6 +1,6 @@
 local SI = SexyInterrupter;
 
-function SI:SendAddonMessage(msg)
+function SexyInterrupter:SendAddonMessage(msg)
     local channel;
 
     if IsPartyLFG() then
@@ -16,33 +16,33 @@ function SI:SendAddonMessage(msg)
 	end
 end
 
-function SI:AddonMessageReceived(...)
-	local msg, _, sender, noRealmNameSender = select(2, ...)
+function SexyInterrupter:AddonMessageReceived(...)
+	local msg, _, sender, noRealmNameSender = select(3, ...)
 
     --if (strfind(sender, UnitName("player"))) then return end 
 
     if (strfind(msg, "overrideprio:")) then
         msg = gsub(msg, "overrideprio:", "");
 
-        SI:ReceiveOverridePrioInfos(msg, sender);
+        SexyInterrupter:ReceiveOverridePrioInfos(msg, sender);
     elseif (strfind(msg, "versioninfo:")) then
 		msg = gsub(msg, "versioninfo:", "");
 
-		SI:ReceiveVersionInfo(msg, sender);
+		SexyInterrupter:ReceiveVersionInfo(msg, sender);
 	end
 end
 
-function SI:ReceiveVersionInfo(msg, sender)
-	local currentVersion = tonumber(SI.Version);
+function SexyInterrupter:ReceiveVersionInfo(msg, sender)
+	local currentVersion = tonumber(SexyInterrupter.Version);
 	local receivedVersion = tonumber(msg);
 
-	if receivedVersion > currentVersion and not SI.newVersionNoticed then
+	if receivedVersion > currentVersion and not SexyInterrupter.newVersionNoticed then
 		DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: An update is available V" .. receivedVersion, 1, 0.5, 0);
-		SI.newVersionNoticed = true;
+		SexyInterrupter.newVersionNoticed = true;
 	end
 end
 
-function SI:ReceiveOverridePrioInfos(msg, sender) 
+function SexyInterrupter:ReceiveOverridePrioInfos(msg, sender) 
     local fullinfos = { strsplit(';', msg) };
     local infos;
     local interrupter;
@@ -57,7 +57,7 @@ function SI:ReceiveOverridePrioInfos(msg, sender)
         overrideprio = infos[4];
         overridedprio = infos[5];
 
-        interrupter = SI:GetInterrupter(fullname);
+        interrupter = SexyInterrupter:GetInterrupter(fullname);
 
         --print('name', name);
         --print('realm', realm);

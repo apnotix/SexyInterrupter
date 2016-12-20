@@ -3,6 +3,7 @@ if not L then return end
 
 L["Addon name"] = "SexyInterrupter";
 
+L["Assignments"] = "Zuweisungen";
 L["Bars"] = "Leisten";
 L["Bar color"] = "Leistenfarbe";
 L["Background"] = "Hintergrund";
@@ -17,6 +18,7 @@ L["Font art"] = "Schriftart";
 L["Font size"] = "Schriftgröße";
 L["Font color"] = "Schriftfarbe";
 L["General"] = "Allgemein";
+L["Invalid Spell Name/ID/Link"] = "Ungültiger Zaubername/ID/Link";
 L["Show in combat only"] = "Nur im Kampf anzeigen";
 L["Lock window"] = "Fenster sperren";
 L["Look"] = "Aussehen";
@@ -27,6 +29,7 @@ L["Name"] = "Name";
 L["Notification"] = "Benachrichtung";
 L["Ouput channel"] = "Ausgabe";
 L["Override priority"] = "Priorität überschreiben";
+L['Priority assignment'] = "Prioritätenzuweisung";
 L["Show message"] = "Nachricht anzeigen";
 L["Show chat message"] = "Chatmeldung ausgeben";
 L["Statusbar"] = "Statusbar";
