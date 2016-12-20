@@ -209,8 +209,6 @@ function SexyInterrupter:OnUpdate()
 end
 
 function SexyInterrupter:CreateFlasher(color)
-
-
     local frameImage = "None";
 
     if color == "Blue" then

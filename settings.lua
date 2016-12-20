@@ -461,6 +461,8 @@ function SexyInterrupter:InitOptions()
                     if not interrupter.overrideprio then
                         interrupter.overridedprio = nil;
                     end
+
+                    SexyInterrupter:SendOverridePrioInfos();
                 end
             }
             
@@ -473,7 +475,11 @@ function SexyInterrupter:InitOptions()
                 step = 1,
                 order = 102 * i,
                 get = function() return interrupter.overridedprio or interrupter.prio end,
-                set = function(self, val) interrupter.overridedprio = val end,
+                set = function(self, val)
+                    interrupter.overridedprio = val;
+                    
+                    SexyInterrupter:SendOverridePrioInfos();
+                end,
                 disabled = function() return not interrupter.overrideprio end
             }
 
