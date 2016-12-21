@@ -141,6 +141,7 @@ function SexyInterrupter:InitOptions()
                     spell = {
                         name = L["Spell assignment"],
                         type = "group",
+                        hidden = true,
                         args = {
                         
                         }        
