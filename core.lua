@@ -157,6 +157,7 @@ function SexyInterrupter:CreateUi()
     });
 
 	f:SetBackdropColor(self.db.profile.ui.window.background.r, self.db.profile.ui.window.background.g, self.db.profile.ui.window.background.b, self.db.profile.ui.window.background.a);
+	f:SetBackdropBorderColor(self.db.profile.ui.window.bordercolor.r, self.db.profile.ui.window.bordercolor.g, self.db.profile.ui.window.bordercolor.b, self.db.profile.ui.window.bordercolor.a);
 	f:SetScript("OnUpdate", SexyInterrupter.OnUpdate);
 	
     local t = f:CreateTexture()
@@ -261,7 +262,7 @@ end
 
 function SexyInterrupter:UpdateFrames()
 	SexyInterrupterAnchor:SetPoint(self.db.profile.ui.anchorPosition.point, self.db.profile.ui.anchorPosition.region, self.db.profile.ui.anchorPosition.relativePoint, self.db.profile.ui.anchorPosition.x, self.db.profile.ui.anchorPosition.y);
-	SexyInterrupterAnchor:SetBackdropColor(self.db.profile.ui.window.background.r, self.db.profile.ui.window.background.g, self.db.profile.ui.window.background.b, self.db.profile.ui.window.background.a);
+	
 	SexyInterrupterAnchor:SetBackdrop({
         bgFile = LSM:Fetch("background", self.db.profile.ui.window.backgroundtexture), 
         edgeFile = LSM:Fetch("border", self.db.profile.ui.window.border),
@@ -275,6 +276,9 @@ function SexyInterrupter:UpdateFrames()
 			bottom = 1
 		}
     });
+
+	SexyInterrupterAnchor:SetBackdropColor(self.db.profile.ui.window.background.r, self.db.profile.ui.window.background.g, self.db.profile.ui.window.background.b, self.db.profile.ui.window.background.a);
+	SexyInterrupterAnchor:SetBackdropBorderColor(self.db.profile.ui.window.bordercolor.r, self.db.profile.ui.window.bordercolor.g, self.db.profile.ui.window.bordercolor.b, self.db.profile.ui.window.bordercolor.a);
 
 	for _, child in ipairs({ SexyInterrupterAnchor:GetChildren() }) do
 		if string.find(child:GetName(), "SexyInterrupterRow") then

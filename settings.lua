@@ -42,12 +42,12 @@ local defaults = {
 			window = {
 				lock = true,
 				background = {
-					r = 0.514,
-					g = 0.514,
+					r = 0,
+					g = 0,
 					b = 0,
 					a = 0.453
 				},
-                backgroundtexture = "Blizzard Dialog Background Dark",
+                backgroundtexture = "Solid",
 				border = 'NONE',
 				bordercolor = {
 					r = 0,
@@ -242,7 +242,8 @@ function SexyInterrupter:InitOptions()
                         order = 6,
                         get = function() return helperColourGet(self.db.profile.ui.fontcolor) end,
                         set = function(self, r, g, b) 
-                            helperColourSet(self.db.profile.ui.fontcolor, r, g, b);
+                            helperColourSet(SexyInterrupter.db.profile.ui.fontcolor, r, g, b);
+                            SexyInterrupter:UpdateFrames();
                         end
                     },
                     bars = {
@@ -265,7 +266,8 @@ function SexyInterrupter:InitOptions()
                                 order = 2.1,
                                 get = function() return helperColourGet(self.db.profile.ui.bars.barcolor) end,
                                 set = function(self, r, g, b, a) 
-                                    helperColourSet(self.db.profile.ui.bars.barcolor, r, g, b, a);
+                                    helperColourSet(SexyInterrupter.db.profile.ui.bars.barcolor, r, g, b, a);
+                                    SexyInterrupter:UpdateFrames();
                                 end
                             }
                         }
@@ -274,7 +276,7 @@ function SexyInterrupter:InitOptions()
                         name = L["Window"],
                         type = "group",
                         get = function(info) return self.db.profile.ui.window[info[#info]] end,
-                        set = function(info, value) self.db.profile.ui.window[info[#info]] = value end,
+                        set = function(info, value) self.db.profile.ui.window[info[#info]] = value; SexyInterrupter:UpdateFrames(); end,
                         args = {
                             headline_frame = {
                                 type = "header",
@@ -296,7 +298,8 @@ function SexyInterrupter:InitOptions()
                                 order = 2.3,
                                 get = function() return helperColourGet(self.db.profile.ui.window.background) end,
                                 set = function(self, r, g, b, a) 
-                                    helperColourSet(self.db.profile.ui.window.background, r, g, b, a);
+                                    helperColourSet(SexyInterrupter.db.profile.ui.window.background, r, g, b, a);
+                                    SexyInterrupter:UpdateFrames();
                                 end
                             },
                             headline_border = {
@@ -319,107 +322,14 @@ function SexyInterrupter:InitOptions()
                                 order = 3.2,
                                 get = function() return helperColourGet(self.db.profile.ui.window.bordercolor) end,
                                 set = function(self, r, g, b, a) 
-                                    helperColourSet(self.db.profile.ui.window.ui.bordercolor, r, g, b, a);
+                                    helperColourSet(SexyInterrupter.db.profile.ui.window.bordercolor, r, g, b, a);
+                                    SexyInterrupter:UpdateFrames();
                                 end
                             },
                         }
                     }   
                 }
             }
-            -- ui = {
-            --     name = L["Look"],
-            --     type = "group",
-	        --     childGroups = "tab",
-            --     args = {
-            --         general = {
-            --             name = L["General"],
-            --             type = "group",
-            --             args = {
-            --                 modeincombat = {
-            --                     type = "toggle",
-            --                     name = L["Show in combat only"],
-            --                     width = "full",
-            --                     order = 1,
-            --                     -- get = function() return SI_Data.general.modeincombat end,
-            --                     -- set = function() 
-            --                     --     SI_Data.general.modeincombat = not SI_Data.general.modeincombat;
-
-            --                     --     DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show in combat only"], tostring(SI_Data.general.modeincombat)), 1, 0.5, 0);
-            --                     -- end
-            --                 },
-            --                 headline_notification = {
-            --                     type = "header",
-            --                     name = L["Notification"],
-            --                     order = 2
-            --                 },
-            --                 notication_sound = {
-            --                     type = "toggle",
-            --                     name = L["Play sound"],
-            --                     order = 3,
-            --                     get = function() return SI_Data.general.notification.sound end,
-            --                     set = function() 
-            --                         SI_Data.general.notification.sound = not SI_Data.general.notification.sound;
-
-            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Play sound"], tostring(SI_Data.general.notification.sound)), 1, 0.5, 0);
-            --                     end
-            --                 },
-            --                 notication_flash = {
-            --                     type = "toggle",
-            --                     name = L["Flash display"],
-            --                     order = 3,
-            --                     get = function() return SI_Data.general.notification.flash end,
-            --                     set = function() 
-            --                         SI_Data.general.notification.flash = not SI_Data.general.notification.flash;
-
-            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Flash display"], tostring(SI_Data.general.notification.flash)), 1, 0.5, 0);
-            --                     end
-            --                 },
-            --                 notication_message = {
-            --                     type = "toggle",
-            --                     name = L["Show message"],
-            --                     order = 3,
-            --                     get = function() return SI_Data.general.notification.message end,
-            --                     set = function() 
-            --                         SI_Data.general.notification.message = not SI_Data.general.notification.message;
-
-            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show message"], tostring(SI_Data.general.notification.message)), 1, 0.5, 0);
-            --                     end
-            --                 },
-            --                 headline_interrupt = {
-            --                     type = "header",
-            --                     name = L["Interrupts"],
-            --                     order = 4
-            --                 },
-            --                 interrupt_chatmessage = {
-            --                     type = "toggle",
-            --                     name = L["Show chat message"],
-            --                     order = 5,
-            --                     get = function() return SI_Data.general.interruptmessage end,
-            --                     set = function() 
-            --                         SI_Data.general.interruptmessage = not SI_Data.general.interruptmessage;
-
-            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Show chat message"], tostring(SI_Data.general.interruptmessage)), 1, 0.5, 0);
-            --                     end
-            --                 },
-            --                 interrupt_channel = {
-            --                     type = "select",
-            --                     name = L["Ouput channel"],
-            --                     order = 5,
-            --                     values = function () return SI.outputchannels end,
-            --                     style = "dropdown",
-            --                     get = function() return SI_Data.general.outputchannel end,
-            --                     set = function(self, opt)
-            --                         SI_Data.general.outputchannel = opt;
-
-            --                         DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s - %s", L["Addon name"], L["Ouput channel"], SI.outputchannels[opt]), 1, 0.5, 0);
-            --                     end,
-            --                     disabled = function() return not SI_Data.general.interruptmessage end
-            --                 }
-            --             }
-            --         },
-                              
-            --     }
-            --}
         }
     }
 

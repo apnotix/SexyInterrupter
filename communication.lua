@@ -19,8 +19,6 @@ end
 function SexyInterrupter:AddonMessageReceived(...)
 	local msg, _, sender, noRealmNameSender = select(3, ...)
 
-    --if (strfind(sender, UnitName("player"))) then return end 
-
     if (strfind(msg, "overrideprio:")) then
         msg = gsub(msg, "overrideprio:", "");
 
@@ -58,13 +56,6 @@ function SexyInterrupter:ReceiveOverridePrioInfos(msg, sender)
         overridedprio = infos[5];
 
         interrupter = SexyInterrupter:GetInterrupter(fullname);
-
-        --print('name', name);
-        --print('realm', realm);
-        --print('fullname', fullname);
-        --print('overrideprio', overrideprio);
-        --print('overridedprio', overridedprio);
-        --print('interrupter', interrupter);
 
         if interrupter then
             interrupter.overrideprio = overrideprio == "true" and true or false;
