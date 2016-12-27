@@ -5,7 +5,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 function SexyInterrupter:OnInitialize()
 	self:InitOptions();
 
-	--self:InitializeSavedVariables();
+	self:InitializeSavedVariables();
 
 	self:CreateUi();
 	self:UpdateUI();
@@ -27,114 +27,14 @@ function SexyInterrupter:OnInitialize()
 	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. self.Version .. ' loaded', 1, 0.5, 0);  
 end
 
--- function SexyInterrupter:InitializeSavedVariables()
--- 	if not SI_Globals then
--- 		SI_Globals = {
--- 			interrupters = {};
--- 			numInterrupters = 0;
--- 		}
--- 	end
-
--- 	if not SI_Data then
--- 		SI_Data = {
--- 			interrupters = {},
--- 			general = {
--- 				notification = {
-
--- 				}
--- 			},
--- 			ui = {
--- 			}
--- 		}
--- 	else 
--- 		if not SI_Data.general then
--- 			SI_Data.general = {
--- 				notification = {
-
--- 				}
--- 			}
--- 		end
--- 	end
-	
--- 	SexyInterrupter.menu = {
--- 		{
--- 			text = 'SexyInterrupter',
--- 			isTitle = true,
---             notCheckable = true
--- 		},
--- 		{
--- 			text = 'Locked',
--- 			checked = SI_Data.ui.lock,
--- 			func = function()
--- 				SexyInterrupter.menu[1].checked = not SexyInterrupter.menu[1].checked;
--- 				SexyInterrupter:LockFrame();
--- 			end
--- 		}
--- 	};
-
--- 	SI_Data.general.modeincombat = SI_Data.general.modeincombat or false;
-
--- 	SI_Data.general.interruptmessage = SI_Data.general.interruptmessage or false;
--- 	SI_Data.general.outputchannel = SI_Data.general.outputchannel or 'SAY';
-
--- 	SI_Data.general.notification.sound = SI_Data.general.notification.sound or true;
--- 	SI_Data.general.notification.flash = SI_Data.general.notification.flash or true;
--- 	SI_Data.general.notification.message = SI_Data.general.notification.message or true;
-
--- 	SI_Data.ui.lock = SI_Data.ui.lock or true;
-	
--- 	SI_Data.ui.anchorPosition = SI_Data.ui.anchorPosition or {
--- 		point = 'CENTER',
--- 		region = nil,
--- 		relativePoint = 'CENTER',
--- 		x = 0,
--- 		y = -300
--- 	};
-
--- 	SI_Data.ui.messagePosition = SI_Data.ui.messagePosition or {
--- 		point = 'CENTER',
--- 		region = UIParent,
--- 		relativePoint = 'CENTER',
--- 		x = 0,
--- 		y = 80
--- 	};
-
--- 	SI_Data.ui.barheight = SI_Data.ui.barheight or 25;
-
--- 	SI_Data.ui.barcolor = SI_Data.ui.barcolor or {
--- 		r = 0.451,
--- 		g = 0.471,
--- 		b = 0.435,
--- 		a = 1
--- 	};
-
--- 	SI_Data.ui.background = SI_Data.ui.background or {
--- 		r = 0.514,
--- 		g = 0.514,
--- 		b = 0,
--- 		a = 0.453
--- 	};
-
--- 	SI_Data.ui.border = SI_Data.ui.border or 'None';
-
--- 	SI_Data.ui.bordercolor = SI_Data.ui.bordercolor or {
--- 		r = 0.3,
--- 		g = 0.3, 
--- 		b = 0.3
--- 	};
-
--- 	SI_Data.ui.texture = SI_Data.ui.texture or 'BantoBar';
-
--- 	SI_Data.ui.font = SI_Data.ui.font or 'Accidental Presidency';
-
--- 	SI_Data.ui.fontsize = SI_Data.ui.fontsize or 13;
-
--- 	SI_Data.ui.fontcolor = SI_Data.ui.fontcolor or {
--- 		r = 0.514,
--- 		g = 0.514, 
--- 		b = 0
--- 	};
--- end
+ function SexyInterrupter:InitializeSavedVariables()
+	if not SI_Globals then
+		SI_Globals = {
+			interrupters = {};
+			numInterrupters = 0;
+		}
+	end
+end
 
 function SexyInterrupter:CreateUi()
 	-- Frame: Anchor
