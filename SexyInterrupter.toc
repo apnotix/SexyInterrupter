@@ -1,5 +1,5 @@
 ## Interface: 70100
-## Version: 1.3
+## Version: 1.33
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
@@ -8,7 +8,7 @@
 ## SavedVariables: SexyInterrupterDB, SI_Globals
 ## SavedVariablesPerCharacter: SI_Data
 
-## OptionalDeps: Ace3
+## OptionalDeps: Ace3, LibSharedMedia-3.0
 
 embeds.xml
 
