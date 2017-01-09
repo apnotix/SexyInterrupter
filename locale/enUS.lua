@@ -1,4 +1,4 @@
-local L = LibStub("AceLocale-3.0"):NewLocale("SexyInterrupter", "enUS", false)
+local L = LibStub("AceLocale-3.0"):NewLocale("SexyInterrupter", "enUS", true)
 if not L then return end
 
 L["Addon name"] = "SexyInterrupter";
