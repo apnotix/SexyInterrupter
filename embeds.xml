@@ -14,4 +14,5 @@
     <Include file="lib\AceConsole-3.0\AceConsole-3.0.xml" />
     <Include file="lib\AceEvent-3.0\AceEvent-3.0.xml" />
     <Include file="lib\AceHook-3.0\AceHook-3.0.xml" />
+	<Include file="lib\AceGUI-3.0-SharedMediaWidgets\widget.xml" />
 </Ui>
