@@ -28,6 +28,7 @@ L["Interrupt now"] = "Interrupt now";
 L["Name"] = "Name";
 L["Notification"] = "Notification";
 L["Ouput channel"] = "Output channel";
+L["Only the group leader can override the priority"] = "Only the group leader can override the priority";
 L["Override priority"] = "Override priority";
 L['Priority assignment'] = "Priority assignment";
 L["Show message"] = "Show message";

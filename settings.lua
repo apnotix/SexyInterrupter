@@ -128,7 +128,7 @@ function SexyInterrupter:InitOptions()
                 type = "group",
 	            childGroups = "tab",
                 hidden = function() 
-                    return not IsInGroup() or not UnitIsGroupLeader("player");
+                    return not IsInGroup();
                 end,
                 args = {
                     priority = {
@@ -374,7 +374,8 @@ function SexyInterrupter:InitOptions()
                     end
 
                     SexyInterrupter:SendOverridePrioInfos();
-                end
+                end,
+                disabled = function() return UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player") end
             }
             
             SI.optionsTable.args.assignments.args.priority.args['partymember_prio' .. i] = {
@@ -391,7 +392,14 @@ function SexyInterrupter:InitOptions()
                     
                     SexyInterrupter:SendOverridePrioInfos();
                 end,
-                disabled = function() return not interrupter.overrideprio end
+                disabled = function() return (UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player")) or not interrupter.overrideprio end
+            }
+
+            SI.optionsTable.args.assignments.args.priority.args['partymember_prio_cantoverride' .. i] = {
+                name = '|cFFFF0000' .. L["Only the group leader can override the priority"],
+                type = "description",
+                order = 103 * i,
+                hidden = function() return UnitName('player') == interrupter.name or UnitIsGroupLeader("player") end
             }
 
             SI.optionsTable.args.assignments.args.spell.args['partymember_header' .. i] = {
@@ -413,7 +421,8 @@ function SexyInterrupter:InitOptions()
                     local _, _, icon = GetSpellInfo(interrupter.spells);
                     
                     return icon and tostring(icon) or "", 18, 18;
-                end
+                end,
+                disabled = function() return UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player") end
             }
 
             SI.optionsTable.args.assignments.args.spell.args['partymember_spells' .. i] = {
@@ -431,7 +440,8 @@ function SexyInterrupter:InitOptions()
                         return L["Invalid Spell Name/ID/Link"];
                     end                
                 end,
-                set = function(self, val) interrupter.spells = val end
+                set = function(self, val) interrupter.spells = val end,
+                disabled = function() return UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player") end
             }
         end
         

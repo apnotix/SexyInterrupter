@@ -1,0 +1,4 @@
+V1.4
+- Fixes
+- Override own prio without group leader
+- Group leader info
