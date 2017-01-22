@@ -20,8 +20,12 @@ function SexyInterrupter:GetCurrentInterrupters()
 	for cx, value in pairs(SI_Globals.interrupters) do
 		value.pos = cx;
 
-		if value.active then
-			tinsert(interrupters, value);	
+		if not value.lastseen or value.lastseen < (time() - 1209600) then
+			tremove(SI_Globals.interrupters, cx);
+		else
+			if value.active then
+				tinsert(interrupters, value);	
+			end
 		end
 	end
 
@@ -113,6 +117,8 @@ function SexyInterrupter:UpdateInterrupters()
 
 		interrupter = SexyInterrupter:GetInterrupter(fullname);
 
+		
+		interrupter.lastseen = time();
 		interrupter.active = true;
 		interrupter.role = UnitGroupRolesAssigned(unit);
 		

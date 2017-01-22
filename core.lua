@@ -309,6 +309,8 @@ function SexyInterrupter:UpdateInterrupterStatus()
 			else 
 				row.cooldownText:Hide();
 			end
+
+			row.text:SetText(interrupter.lastseen);
 			
 			row.text:SetText(interrupter.name);
 		end
