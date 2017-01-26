@@ -1,6 +1,27 @@
 SexyInterrupter = LibStub("AceAddon-3.0"):NewAddon("SexyInterrupter", 'AceConsole-3.0', 'AceEvent-3.0', 'AceTimer-3.0', 'AceHook-3.0', 'LibNotify-1.0');
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
+local icon = LibStub("LibDBIcon-1.0", true);
+
+local dataobj = LibStub("LibDataBroker-1.1"):NewDataObject("SexyInterrupter", {
+	 label = "SexyInterrupter",
+	 type = "launcher",
+	 icon = "Interface\\Icons\\achievement_bg_defendxtowers_av",
+	 text = "SexyInterrupter",
+	 OnClick = function(self,btn)
+		if btn == "RightButton" then
+			LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
+		else
+			SexyInterrupter:LockFrame();
+		end
+	end,
+	OnTooltipShow = function(self)
+		if not self or not self.AddLine then return end
+		self:AddLine("SexyInterrupter");
+		self:AddLine(L["Left click to toggle Frame"],1,1,1);
+		self:AddLine(L["Right click to open settings"],1,1,1);
+	end
+})
 
 function SexyInterrupter:OnInitialize()
 	self:InitOptions();
@@ -27,6 +48,11 @@ function SexyInterrupter:OnInitialize()
 	self:SetNotifyIcon("Interface\\Icons\\achievement_bg_defendxtowers_av")
 	self:SetNotifyStorage(self.db.profile.versions)
 	self:NotifyOnce(self.versions)
+
+	-- Minimap button.
+	if icon and not icon:IsRegistered("SexyInterrupter") then
+		icon:Register("SexyInterrupter", dataobj, self.db.profile.icon)
+	end
 
 	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. self.Version .. ' loaded', 1, 0.5, 0);  
 end
