@@ -1,5 +1,5 @@
 ## Interface: 70100
-## Version: 1.5
+## Version: 1.6
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
