@@ -1,4 +1,5 @@
 local SI = SexyInterrupter;
+local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
 function SexyInterrupter:SendAddonMessage(msg)
     local channel;
@@ -35,7 +36,9 @@ function SexyInterrupter:ReceiveVersionInfo(msg, sender)
 	local receivedVersion = tonumber(msg);
 
 	if receivedVersion > currentVersion and not SexyInterrupter.newVersionNoticed then
-		DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: An update is available V" .. receivedVersion, 1, 0.5, 0);
+        self:SetNotifyIcon("Interface\\Icons\\achievement_bg_defendxtowers_av")
+        self:Notify("SexyInterrupter: " .. L["New Update"], L["An update is available v"] .. receivedVersion .. ". " .. L["Please update to the latest version!"], nil, receivedVersion);
+
 		SexyInterrupter.newVersionNoticed = true;
 	end
 end

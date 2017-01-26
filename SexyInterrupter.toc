@@ -1,5 +1,5 @@
 ## Interface: 70100
-## Version: 1.4
+## Version: 1.5
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
@@ -16,6 +16,7 @@ locale\deDE.lua
 locale\enUS.lua
 
 core.lua
+version.lua
 settings.lua
 events.lua
 utils.lua

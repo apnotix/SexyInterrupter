@@ -1,4 +1,4 @@
-SexyInterrupter = LibStub("AceAddon-3.0"):NewAddon("SexyInterrupter", 'AceConsole-3.0', 'AceEvent-3.0', 'AceTimer-3.0', 'AceHook-3.0');
+SexyInterrupter = LibStub("AceAddon-3.0"):NewAddon("SexyInterrupter", 'AceConsole-3.0', 'AceEvent-3.0', 'AceTimer-3.0', 'AceHook-3.0', 'LibNotify-1.0');
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
@@ -23,6 +23,10 @@ function SexyInterrupter:OnInitialize()
 	self:RegisterEvent("PLAYER_REGEN_ENABLED", "PLAYER_REGEN_ENABLED");
 
 	RegisterAddonMessagePrefix("SexyInterrupter");
+
+	self:SetNotifyIcon("Interface\\Icons\\achievement_bg_defendxtowers_av")
+	self:SetNotifyStorage(self.db.profile.versions)
+	self:NotifyOnce(self.versions)
 
 	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. self.Version .. ' loaded', 1, 0.5, 0);  
 end

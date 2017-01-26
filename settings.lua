@@ -13,6 +13,7 @@ SI.outputchannels = {
 
 local defaults = {
 	profile = {
+        versions = {},
 		general = {
 			modeincombat = false,
             lock = true			
