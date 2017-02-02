@@ -16,7 +16,8 @@ local defaults = {
         versions = {},
 		general = {
 			modeincombat = false,
-            lock = true			
+            lock = true,
+            maxrows = 5		
 		},
 		ui = {
 			anchorPosition = {
@@ -160,6 +161,15 @@ function SexyInterrupter:InitOptions()
                         name = L["Show in combat only"],
                         width = "full",
                         order = 1
+                    },
+                    maxrows = {
+                        hidden = true,
+                        type = "range",
+                        name = L["Max rows of interrupters"],
+                        width = "full",
+                        order = 2,
+                        min = 3,
+                        max = 30
                     }
                 }
             },
@@ -205,7 +215,7 @@ function SexyInterrupter:InitOptions()
                         order = 5,
                         values = function () return SI.outputchannels end,
                         style = "dropdown",
-                        disabled = function() return not self.db.profile.general.interruptmessage end
+                        disabled = function() return not self.db.profile.notification.interruptmessage end
                     }
                 }
             },
