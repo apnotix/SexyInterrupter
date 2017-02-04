@@ -121,3 +121,29 @@ function SexyInterrupter:CHAT_MSG_ADDON(...)
         SexyInterrupter:AddonMessageReceived(...)
     end
 end
+
+function SexyInterrupter:OnUpdate()
+	local currentplayer = SexyInterrupter:GetInterrupter(select(1, UnitName("player")));
+
+	for cx, value in pairs(SexyInterrupter:GetCurrentInterrupters()) do
+		if currentplayer.sortpos > SexyInterrupter.db.profile.general.maxrows and SexyInterrupter.db.profile.general.maxrows == cx then
+			value = currentplayer;
+		end
+
+        if value.readyTime > 0 then
+			local bar = _G["SexyInterrupterStatusBar" .. cx];
+
+			if bar then			
+				if (value.readyTime - GetTime() <= 0) then
+					bar.cooldownText:SetText('');
+					value.readyTime = 0;
+					bar:SetValue(0);
+					return;
+				end
+
+				bar:SetValue(value.readyTime - GetTime());
+				bar.cooldownText:SetText(string.format('%.1f', value.readyTime - GetTime()));
+			end
+		end
+	end
+end

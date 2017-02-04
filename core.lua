@@ -245,12 +245,12 @@ function SexyInterrupter:UpdateUI()
 			t:SetAllPoints(f)
 			t:SetTexture(0, 0, 0, 0.4)
 			
-			t = f:CreateFontString("SexyInterrupterNrText" .. cx, nil, "GameFontNormal")
-			t:SetPoint("CENTER", "SexyInterrupterRow" .. cx, "CENTER")
-			t:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
-			t:SetText(cx);
-			t:SetSize(12*3, 12);
-			t:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
+			f.nr = f:CreateFontString("SexyInterrupterNrText" .. cx, nil, "GameFontNormal")
+			f.nr:SetPoint("CENTER", "SexyInterrupterRow" .. cx, "CENTER")
+			f.nr:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
+			f.nr:SetText(cx);
+			f.nr:SetSize(12*3, 12);
+			f.nr:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
 		
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
 			f:SetSize(170, 20)
@@ -262,8 +262,18 @@ function SexyInterrupter:UpdateUI()
 			f:SetMinMaxValues(0, 1)
 			f:SetValue(0)
 			
+			f.classicon = f:CreateTexture(nil, "OVERLAY");
+			f.classicon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES");
+			f.classicon:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", 2, 0);
+			f.classicon:SetTexCoord(unpack(self.role_icon_tcoords.DAMAGER));
+			f.classicon:SetSize(16, 16);
+
+			if not self.db.profile.ui.bars.showclassicon then
+				f.classicon:Hide();
+			end
+			
 			f.text = f:CreateFontString("SexyInterrupterStatusBarText" .. cx, nil, "GameFontNormal")
-			f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", 5, 0)
+			f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", self.db.profile.ui.bars.showclassicon and 25 or 5, 0)
 			f.text:SetSize(180 - 5, 20)
 			f.text:SetJustifyH("LEFT")
 			f.text:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
@@ -279,14 +289,16 @@ function SexyInterrupter:UpdateUI()
 	end
 
 	if SI_Globals.numInterrupters > 0 then
-		if UnitInRaid('player') ~= nil then
-			SexyInterrupterAnchor:Hide();
-		else 
-			SexyInterrupterAnchor:SetSize(200, (self.db.profile.ui.bars.barheight * SI_Globals.numInterrupters) + 10);
+		local maxRows = SI_Globals.numInterrupters;
 
-			if not self.db.profile.general.modeincombat then
-				SexyInterrupterAnchor:Show();
-			end
+		if maxRows > self.db.profile.general.maxrows then
+			maxRows = self.db.profile.general.maxrows;
+		end
+
+		SexyInterrupterAnchor:SetSize(200, (self.db.profile.ui.bars.barheight * maxRows) + 10);
+
+		if not self.db.profile.general.modeincombat then
+			SexyInterrupterAnchor:Show();
 		end
 	else 
 		SexyInterrupterAnchor:Hide();
@@ -300,16 +312,26 @@ function SexyInterrupter:UpdateInterrupterStatus()
 		end
 	end
 
+	local currentplayer = SexyInterrupter:GetInterrupter(select(1, UnitName("player")));
 	local interrupters = SexyInterrupter:GetCurrentInterrupters();
 
 	for cx, value in pairs(interrupters) do
-		--DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: ' .. value.name, 1, 0.5, 0);
 		local interrupter = value;
 		local row = _G["SexyInterrupterStatusBar" .. cx];
 		local rowParent = _G["SexyInterrupterRow" .. cx];
 
-		if rowParent then
+		if rowParent and self.db.profile.general.maxrows >= cx then
 			rowParent:Show();
+		end
+
+		if currentplayer.sortpos > self.db.profile.general.maxrows and self.db.profile.general.maxrows == cx then
+			interrupter = currentplayer;
+
+			rowParent.nr:SetText(currentplayer.sortpos);
+			rowParent:SetAlpha(0.5);
+		else 
+			rowParent.nr:SetText(cx);
+			rowParent:SetAlpha(1);
 		end
 
 		if row and rowParent then
@@ -326,6 +348,12 @@ function SexyInterrupter:UpdateInterrupterStatus()
 				if interrupter.classColor then	
             		row.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
 				end
+			end
+
+			if interrupter.role then
+				row.classicon:SetTexCoord(unpack(self.role_icon_tcoords[interrupter.role]));
+			else 
+				row.classicon:Hide();
 			end
 
 			if interrupter.cooldown > 0 then

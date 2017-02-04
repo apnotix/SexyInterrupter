@@ -19,7 +19,7 @@ local defaults = {
             lock = true,
             maxrows = 5		
 		},
-		ui = {
+		ui = {            
 			anchorPosition = {
 				point = 'CENTER',
 				region = nil,
@@ -58,6 +58,7 @@ local defaults = {
 				},
 			},
 			bars = {
+                showclassicon = true,
 				barheight = 25,
 				barcolor = {
 					r = 0.451,
@@ -163,7 +164,7 @@ function SexyInterrupter:InitOptions()
                         order = 1
                     },
                     maxrows = {
-                        hidden = true,
+                        step = 1,
                         type = "range",
                         name = L["Max rows of interrupters"],
                         width = "full",
@@ -225,7 +226,7 @@ function SexyInterrupter:InitOptions()
 	            childGroups = "tab",
                 get = function(info) return self.db.profile.ui[info[#info]] end,
                 set = function(info, value) self.db.profile.ui[info[#info]] = value end,
-                args = {
+                args = {                    
                     headline_font = {
                         type = "header",
                         name = L["Font"],
@@ -264,6 +265,11 @@ function SexyInterrupter:InitOptions()
                         get = function(info) return self.db.profile.ui.bars[info[#info]] end,
                         set = function(info, value) self.db.profile.ui.bars[info[#info]] = value end,
                         args = {
+                            showclassicon = {
+                                type = "toggle",
+                                name = L["Show class icon"],
+                                order = 1
+                            },
                             texture = {
                                 type = "select",
                                 name = L["Statusbar"],

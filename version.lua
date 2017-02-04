@@ -1,5 +1,9 @@
 SexyInterrupter.versions = {
     {
+        id = "1.7",
+        title = "SexyInterrupter v1.7",
+        message = "<br />- Raidsupport<br />- RoleIcons in front of the player name"
+    },{
         id = "1.63",
         title = "SexyInterrupter v1.63",
         message = "<br />- Fixed translations"

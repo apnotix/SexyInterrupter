@@ -1,6 +1,14 @@
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
+SexyInterrupter.role_icon_tcoords = {
+	DAMAGER = {0.3125, 0.63, 0.3125, 0.63},
+	HEALER  = {0.3125, 0.63, 0.015625, 0.3125},
+	TANK    = {0, 0.296875, 0.3125, 0.63},
+	LEADER  = {0, 0.296875, 0.015625, 0.3125},
+	NONE    = ""
+};
+
 function SexyInterrupter:GetInterrupter(name)
 	local retVal = nil;
 
@@ -80,12 +88,16 @@ function SexyInterrupter:UpdateInterrupters()
 	for cx, value in pairs(SI_Globals.interrupters) do
 		value.active = false;
 	end
-
+	
 	for i = 1, GetNumGroupMembers() do
-		local unit = "party" .. i		
+		local unit = "party" .. i;
+
+		if IsInRaid() then
+			unit = "raid" .. i;
+		end
 		
 		if not UnitExists(unit) then	
-			unit = 'player'
+			unit = 'player';
 		end;	
 		
 		local name, realm = UnitName(unit);
@@ -116,8 +128,7 @@ function SexyInterrupter:UpdateInterrupters()
 		end
 
 		interrupter = SexyInterrupter:GetInterrupter(fullname);
-
-		
+				
 		interrupter.lastseen = time();
 		interrupter.active = true;
 		interrupter.role = UnitGroupRolesAssigned(unit);
@@ -191,26 +202,6 @@ function SexyInterrupter:ShowInterruptMessage(destName, spellId, spellName)
 		SendChatMessage(msg, inPartyLFG and "INSTANCE_CHAT" or "RAID");
 	else
 		SendChatMessage(msg, output);
-	end
-end
-
-function SexyInterrupter:OnUpdate()
-	for cx, value in pairs(SexyInterrupter:GetCurrentInterrupters()) do
-        if value.readyTime > 0 then
-			local bar = _G["SexyInterrupterStatusBar" .. cx];
-
-			if bar then			
-				if (value.readyTime - GetTime() <= 0) then
-					bar.cooldownText:SetText('');
-					value.readyTime = 0;
-					bar:SetValue(0);
-					return;
-				end
-
-				bar:SetValue(value.readyTime - GetTime());
-				bar.cooldownText:SetText(string.format('%.1f', value.readyTime - GetTime()));
-			end
-		end
 	end
 end
 
