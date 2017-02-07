@@ -2,7 +2,7 @@ SexyInterrupter.versions = {
     {
         id = "1.7",
         title = "SexyInterrupter v1.7",
-        message = "<br />- Raidsupport<br />- RoleIcons in front of the player name"
+        message = "<br />- Raidsupport<br />- RoleIcons in front of the player name<br /> <br />Please report bugs on https://github.com/apnotix/SexyInterrupter/issues"
     },{
         id = "1.63",
         title = "SexyInterrupter v1.63",
