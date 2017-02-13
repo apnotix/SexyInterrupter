@@ -11,6 +11,76 @@ SI.outputchannels = {
     ['RAID'] = 'RAID'
 };
 
+SI.interruptSpells = { 
+    1766, 		-- Roque Kick
+    2139, 		-- Mage Counterspell
+    6552, 		-- Warrior Pummel
+    15487, 		-- Priest Silence
+    31935,		-- Paladin Avenger's Shield
+    47528, 		-- DK Mind Freeze
+    47476, 		-- DK Strangulate
+    57994, 		-- Shaman Wind Shear
+    78675, 		-- Druid Solar beam
+    96231, 		-- Paladin Rebuke
+    116705,  	-- Monk Spear Hand Strike
+    106839,		-- Druid Skull Bash
+    119910,		-- Warlock Spell Lock
+    119911,		-- Warlock Optical Blast
+    132409,		-- Warlock Spell Lock
+    147362, 	-- Hunter Counter Shot
+    171138,		-- Warlock Shadow Lock,
+    183752      -- DH Consume Magic
+};
+
+SI.unitCanInterrupt = {
+    priest = {
+        healer = false,
+        damager = true
+    },
+    warrior = {
+        damager = true,
+        tank = true
+    },
+    shaman = {
+        damager = true,
+        healer = true
+    },
+    deathknight = {
+        damager = true,
+        tank = true
+    },
+    druid = {
+        healer = false,
+        damager = true,
+        tank = true
+    },
+    monk = {
+        healer = false,
+        damager = true,
+        tank = true
+    },
+    paladin = {
+        tank = true,
+        damager = true
+    },
+    rogue = {
+        damager = true
+    },
+    mage = {
+        damager = true
+    },
+    hunter = {
+        damager = true
+    },
+    warlock = {
+        damager = true
+    },
+    demonhunter = {
+        damager = true,
+        tank = true
+    }
+};
+
 local defaults = {
 	profile = {
         versions = {},

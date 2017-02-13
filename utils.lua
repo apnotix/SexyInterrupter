@@ -31,7 +31,7 @@ function SexyInterrupter:GetCurrentInterrupters()
 		if not value.lastseen or value.lastseen < (time() - 1209600) then
 			tremove(SI_Globals.interrupters, cx);
 		else
-			if value.active then
+			if value.active and value.canInterrupt then
 				tinsert(interrupters, value);	
 			end
 		end
@@ -76,12 +76,13 @@ function SexyInterrupter:GetCurrentInterrupters()
 	for cx, value in pairs(interrupters) do
 		value.sortpos = cx;
 	end
+	
+	SI_Globals.numInterrupters = table.getn(interrupters);	
 
 	return interrupters;
 end
 
 function SexyInterrupter:UpdateInterrupters()
-	SI_Globals.numInterrupters = GetNumGroupMembers();	
 	local currentMember = {};
 
 	-- Update active state
@@ -108,17 +109,17 @@ function SexyInterrupter:UpdateInterrupters()
 		end
 
 		local interrupter = SexyInterrupter:GetInterrupter(fullname);
+		local class, englishClass = UnitClass(unit);			
+		local color = RAID_CLASS_COLORS[englishClass];
 
 		if interrupter == nil then
-			local class, classFileName = UnitClass(unit);
-			local color = RAID_CLASS_COLORS[classFileName];
-
 			interrupter = {};
 			
 			interrupter.name = name;
 			interrupter.realm = realm;
 			interrupter.fullname = fullname;
 			interrupter.class = class;
+			interrupter.classEN = englishClass;
 			interrupter.classColor = color;
 			interrupter.cooldown = 0;
 			interrupter.readyTime = 0;
@@ -132,6 +133,16 @@ function SexyInterrupter:UpdateInterrupters()
 		interrupter.lastseen = time();
 		interrupter.active = true;
 		interrupter.role = UnitGroupRolesAssigned(unit);
+
+		if not interrupter.classEN then
+			interrupter.classEN = englishClass;
+		end
+
+		if interrupter.classEN and interrupter.role then
+			interrupter.canInterrupt = self.unitCanInterrupt[strlower(interrupter.classEN)][strlower(interrupter.role)];
+		else
+			interrupter.canInterrupt = true;
+		end
 		
 		if interrupter.overrideprio == nil then
 			interrupter.overrideprio = false;

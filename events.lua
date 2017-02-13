@@ -20,8 +20,7 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED(...)
 	local destName = select(10, ...)
     local spellId = select(13, ...)
     local spellName = select(14, ...)
-	local spells = { 132409, 119911, 116705, 147362, 96231, 106839, 78675, 47528, 2139, 1766, 57994, 119910, 6552, 15487, 171138 };
-
+	local spells = self.interruptSpells;
 
     if event == "SPELL_CAST_SUCCESS" then
         if (tContains(spells, spellId)) then
@@ -38,6 +37,10 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED(...)
 		end
 	end
 end
+
+--function SexyInterrupter:PARTY_MEMBERS_CHANGED() 
+	--print('PARTY_MEMBERS_CHANGED', ...);
+--end
 
 function SexyInterrupter:UNIT_SPELLCAST_START(...)
 	local unit = select(2, ...)
@@ -126,7 +129,7 @@ function SexyInterrupter:OnUpdate()
 	local currentplayer = SexyInterrupter:GetInterrupter(select(1, UnitName("player")));
 
 	for cx, value in pairs(SexyInterrupter:GetCurrentInterrupters()) do
-		if currentplayer.sortpos > SexyInterrupter.db.profile.general.maxrows and SexyInterrupter.db.profile.general.maxrows == cx then
+		if currentplayer and currentplayer.sortpos > SexyInterrupter.db.profile.general.maxrows and SexyInterrupter.db.profile.general.maxrows == cx then
 			value = currentplayer;
 		end
 

@@ -3,13 +3,14 @@ local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
 function SexyInterrupter:SendAddonMessage(msg)
     local channel;
+    local inInstance, instanceType = IsInInstance()
 
-    if IsPartyLFG() then
+    if instanceType == "pvp" then
         channel = "INSTANCE_CHAT";
     elseif IsInRaid() then
-        channel = "RAID";
+        channel = IsPartyLFG() and "INSTANCE_CHAT" or "RAID";
     elseif IsInGroup() then
-        channel = "PARTY";
+        channel = IsPartyLFG() and "INSTANCE_CHAT" or"PARTY";
     end
     
 	if channel then
