@@ -42,6 +42,16 @@ end
 	--print('PARTY_MEMBERS_CHANGED', ...);
 --end
 
+function SexyInterrupter:UPDATE_INSTANCE_INFO() 
+	local name, type, difficulty, difficultyName, maxPlayers, playerDifficulty, isDynamicInstance, mapID, instanceGroupSize = GetInstanceInfo();
+	local isInstance, instanceType = IsInInstance();
+
+	if isInstance then
+		--print('UPDATE_INSTANCE_INFO', name, type, difficulty, difficultyName, maxPlayers, playerDifficulty, isDynamicInstance, mapID, instanceGroupSize);
+		--print('UPDATE_INSTANCE_INFO', isInstance, instanceType);
+	end
+end
+
 function SexyInterrupter:UNIT_SPELLCAST_START(...)
 	local unit = select(2, ...)
 
@@ -97,6 +107,14 @@ function SexyInterrupter:UNIT_SPELLCAST_STOP(...)
 end
 
 function SexyInterrupter:PLAYER_TARGET_CHANGED()
+	local targetName = UnitName("target");
+	
+	if targetName then
+		local encounterId = self:GetEntcounterId(targetName);
+		
+		--print('PLAYER_TARGET_CHANGED', encounterId);
+	end
+
     if SexyInterrupterInterruptNowText:IsVisible() then
         SexyInterrupterInterruptNowText:SetTimeVisible(0);
 		

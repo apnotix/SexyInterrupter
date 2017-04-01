@@ -1,5 +1,6 @@
-## Interface: 70100
-## Version: 1.7
+## Interface: 70200
+## X-Min-Interface: 70200
+## Version: 1.8
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
@@ -10,7 +11,9 @@
 
 ## OptionalDeps: Ace3, LibSharedMedia-3.0
 
+#@no-lib-strip@
 embeds.xml
+#@end-no-lib-strip@
 
 locale\deDE.lua
 locale\enUS.lua

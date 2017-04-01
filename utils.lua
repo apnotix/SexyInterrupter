@@ -22,6 +22,22 @@ function SexyInterrupter:GetInterrupter(name)
 	return retVal;
 end
 
+function SexyInterrupter:GetEntcounterId(targetName)
+	local instanceID = EJ_GetCurrentInstance();
+
+	if targetName then 
+		for i=1, 25 do
+			local name, _, encounterID = EJ_GetEncounterInfoByIndex(i, instanceID)
+
+			if name == targetName then
+				return encounterID;
+			end
+		end
+	end
+
+	return 0;
+end
+
 function SexyInterrupter:GetCurrentInterrupters() 
 	local interrupters = {};
 

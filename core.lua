@@ -43,6 +43,7 @@ function SexyInterrupter:OnInitialize()
 	self:RegisterEvent("PLAYER_REGEN_DISABLED", "PLAYER_REGEN_DISABLED");
 	self:RegisterEvent("PLAYER_REGEN_ENABLED", "PLAYER_REGEN_ENABLED");
 	--self:RegisterEvent("PARTY_MEMBERS_CHANGED", "PARTY_MEMBERS_CHANGED");
+	self:RegisterEvent("UPDATE_INSTANCE_INFO", "UPDATE_INSTANCE_INFO");
 
 	RegisterAddonMessagePrefix("SexyInterrupter");
 

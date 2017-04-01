@@ -32,6 +32,103 @@ SI.interruptSpells = {
     183752      -- DH Consume Magic
 };
 
+-- SI.encounterIds= {
+--   -- The Emerald Nightmare
+--   [1703] = 1853, -- Nythendra
+--   [1744] = 1876, -- Elerethe Renferal
+--   [1738] = 1873, -- Il'gynoth, Heart of Corruption
+--   [1667] = 1841, -- Ursoc
+--   [1704] = 1854, -- Dragons of Nightmare
+--   [1750] = 1877, -- Cenarius
+--   [1726] = 1864, -- Xavius
+--   -- The Nighthold
+--   [1706] = 1849, -- Skorpyron,
+--   [1725] = 1865, -- Chronomatic Anomaly
+--   [1731] = 1867, -- Trilliax,
+--   [1751] = 1871, -- Spellblade Aluriel
+--   [1762] = 1862, -- Tichondrius
+--   [1713] = 1842, -- Krosus
+--   [1761] = 1886, -- High Botanist Tel'arn
+--   [1732] = 1863, -- Star Augur Etraeus
+--   [1743] = 1872, -- Grand Magistrix Elisande
+--   [1737] = 1866, -- Gul'dan
+--   -- Trial of Valor
+--   [1819] = 1958, -- Odyn
+--   [1830] = 1962, -- Guarm
+--   [1829] = 2008, -- Helya
+--   -- Tomb of Sargeras
+--   [1862] = 2032, -- Goroth
+--   [1867] = 2048, -- Demonic Inquisition
+--   [1856] = 2048, -- Harjatan
+--   [1861] = 2037, -- Mistress Sasszine
+--   [1903] = 2050, -- Sisters of the Moon
+--   [1896] = 2054, -- Desolate Host
+--   [1897] = 2052, -- Maiden of Vigilance
+--   [1873] = 2038, -- Fallen Avatar
+--   [1898] = 2051, -- Kiljaeden
+-- };
+
+SI.encounterIDs = {
+    {
+        id = 822,
+        name = "Broken Isles",
+        encounter = {
+            [1790] = "Ana-Mouz",
+            [1774] = "Calamir",
+            [1789] = "Drugon the Frostblood",
+            [1795] = "Flotsam",
+            [1770] = "Humongris",
+            [1769] = "Levantus",
+            [1783] = "Na'zak the Fiend",
+            [1749] = "Nithogg",
+            [1763] = "Shar'thos",
+            [1756] = "The Soultakers",
+            [1796] = "Withered J'im"
+        }
+    }, {
+        id = 768,
+        name = "The Emerald Nightmare",
+        encounter = {
+            [1703] = "Nythendra",
+            [1744] = "Elerethe Renferal",
+            [1738] = "Il'gynoth, Heart of Corruption",
+            [1667] = "Ursoc",
+            [1704] = "Dragons of Nightmare",
+            [1750] = "Cenarius",
+            [1726] = "Xavius"
+        }
+    }, {
+        id = 786,
+        name = "The Nighthold",
+        encounter = {
+            [1706] = "Skorpyron",
+            [1725] = "Chronomatic Anomaly",
+            [1731] = "Trilliax",
+            [1751] = "Spellblade Aluriel",
+            [1762] = "Tichondrius",
+            [1713] = "Krosus",
+            [1761] = "High Botanist Tel'arn",
+            [1732] = "Star Augur Etraeus",
+            [1743] = "Grand Magistrix Elisande",
+            [1737] = "Gul'dan"
+        }
+    }, {
+        id = 999,
+        name = "Tomb of Sargeras",
+        encounter = {
+            [1862] = "Goroth",
+            [1867] = "Demonic Inquisition",
+            [1856] = "Harjatan",
+            [1861] = "Mistress Sasszine",
+            [1903] = "Sisters of the Moon",
+            [1896] = "Desolate Host",
+            [1897] = "Maiden of Vigilance",
+            [1873] = "Fallen Avatar",
+            [1898] = "Kiljaeden"
+        }
+    }
+};
+
 SI.unitCanInterrupt = {
     priest = {
         healer = false,
@@ -200,13 +297,22 @@ function SexyInterrupter:InitOptions()
                 name = L["Assignments"],
                 type = "group",
 	            childGroups = "tab",
-                hidden = function() 
-                    return not IsInGroup();
-                end,
+                
                 args = {
+                    raids = {
+                        name = L["Spell assignment"],
+                        type = "group",
+                        --childGroups = "tab",
+                        args = {
+                            
+                        }
+                    },
                     priority = {
                         name = L['Priority assignment'],
                         type = "group",
+                        hidden = function() 
+                            return not IsInGroup();
+                        end,
                         args = {
                         
                         }
@@ -220,7 +326,7 @@ function SexyInterrupter:InitOptions()
                         }        
                     },
                 }
-            },     
+            },                 
             general = {
                 name = L["General"],
                 type = "group",
@@ -531,8 +637,102 @@ function SexyInterrupter:InitOptions()
                 disabled = function() return UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player") end
             }
         end
+
+        
+
+        -- for i, raid in pairs(SI.encounterIDs) do
+        --     SI.optionsTable.args.assignments.args.raids.args['raid_' .. raid.id] = {
+        --         name = raid.name,
+        --         type = "group",
+        --         args = {
+
+        --         }
+        --     };
+
+        --     for encounterId in raid.encounter do
+        --         local encounterName = raid.encounter[encounterId];
+
+        --         SI.optionsTable.args.assignments.args.raids.args['raid_' .. raid.id].args['encounter_' .. encounterId] = {
+        --             name = encounterName,
+        --             type = "group",
+        --             args = {
+
+        --             }
+        --         };
+
+        --         SI.optionsTable.args.assignments.args.raids.args['raid_' .. raid.id].args['encounter_' .. encounterId].args.assignment = {
+        --             name = "Assignment",
+        --             type = "input",
+        --             width = "double"
+        --         }
+        --     end            
+        -- end
+
+        -- local instanceID = EJ_GetCurrentInstance();
+
+        -- for i=1, 25 do
+        --     local name, _, encounterID = EJ_GetEncounterInfoByIndex(i, instanceID)
+
+        --     if name then
+        --         SI.optionsTable.args.instancebosses.args['boss_' .. encounterID] = {
+        --             name = name,
+        --             type = "group",
+        --             args = {
+        --                 bossname = {
+        --                     name = "ID",
+        --                     type = "input",
+        --                     get = function() 
+        --                         return tostring(encounterID);
+        --                     end, 
+        --                     disabled = true
+        --                 }
+        --             }
+        --         };
+        --     end
+        -- end
         
 	    LibStub("AceConfigRegistry-3.0"):NotifyChange("SexyInterrupter");
+    end
+
+    local instance_idx = 1;
+    local instance_id = EJ_GetInstanceByIndex(instance_idx, true);
+
+    while instance_id do
+        EJ_SelectInstance(instance_id)
+        local name = EJ_GetInstanceInfo();
+
+        SI.optionsTable.args.assignments.args.raids.args['raid_' .. instance_id] = {
+            name = name,
+            type = "group",
+            args = {
+
+            }
+        };
+
+        local encounter_idx = 1;
+        local encounterName, _, encounterId = EJ_GetEncounterInfoByIndex(encounter_idx);
+
+        while encounterName do
+            SI.optionsTable.args.assignments.args.raids.args['raid_' .. instance_id].args['encounter_' .. encounterId] = {
+                name = encounterName,
+                type = "group",
+                args = {
+
+                }
+            };
+
+            SI.optionsTable.args.assignments.args.raids.args['raid_' .. instance_id].args['encounter_' .. encounterId].args.assignment = {
+                name = "Assignment",
+                type = "input",
+                width = "double"
+            };
+
+            encounter_idx = encounter_idx + 1;
+            encounterName, _, encounterId = EJ_GetEncounterInfoByIndex(encounter_idx);
+        end
+
+        instance_idx = instance_idx + 1;
+        instance_id = EJ_GetInstanceByIndex(instance_idx, true);            
     end
 
     LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("SexyInterrupter", SI.optionsTable, true);
