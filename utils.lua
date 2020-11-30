@@ -197,6 +197,7 @@ function SexyInterrupter:UpdateInterrupters()
 		end
 	end
 
+	SexyInterrupter:SendAddonMessage("requesttalents:" .. interrupter.fullname);
 	SexyInterrupter:SendAddonMessage("versioninfo:" .. SexyInterrupter.Version);
 
 	if UnitIsGroupLeader("player") then

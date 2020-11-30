@@ -5,7 +5,8 @@ L["Addon name"] = "SexyInterrupter";
 
 L["Assignments"] = "Zuweisungen";
 L["Bars"] = "Leisten";
-L["Bar color"] = "Leistenfarbe";
+L["Bar color"] = "Balkenfarbe";
+L["Bar height"] = "Balkenhöhe";
 L["Background"] = "Hintergrund";
 L["Background color"] = "Hintergrundfarbe";
 L["Border"] = "Rahmen";

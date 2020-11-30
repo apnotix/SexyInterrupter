@@ -24,9 +24,10 @@ local dataobj = LibStub("LibDataBroker-1.1"):NewDataObject("SexyInterrupter", {
 })
 
 function SexyInterrupter:OnInitialize()
-	self:InitOptions();
+	Mixin(self, BackdropTemplateMixin);
 
 	self:InitializeSavedVariables();
+	self:InitOptions();
 
 	self:CreateUi();
 	self:UpdateUI();
@@ -34,22 +35,33 @@ function SexyInterrupter:OnInitialize()
 	self:CreateFlasher('Blue');
 
 	self:RegisterEvent("CHAT_MSG_ADDON", "CHAT_MSG_ADDON");
-	self:RegisterEvent("UNIT_FLAGS", "UNIT_FLAGS");
-	self:RegisterEvent("GROUP_ROSTER_UPDATE", "GROUP_ROSTER_UPDATE");
 	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", "COMBAT_LOG_EVENT_UNFILTERED");
     self:RegisterEvent("UNIT_SPELLCAST_START", "UNIT_SPELLCAST_START");
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_START");
     self:RegisterEvent("UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_STOP");
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_STOP");
 	self:RegisterEvent("PLAYER_TARGET_CHANGED", "PLAYER_TARGET_CHANGED");
 	self:RegisterEvent("PLAYER_REGEN_DISABLED", "PLAYER_REGEN_DISABLED");
 	self:RegisterEvent("PLAYER_REGEN_ENABLED", "PLAYER_REGEN_ENABLED");
-	--self:RegisterEvent("PARTY_MEMBERS_CHANGED", "PARTY_MEMBERS_CHANGED");
 	self:RegisterEvent("UPDATE_INSTANCE_INFO", "UPDATE_INSTANCE_INFO");
+	
+	self:RegisterEvent("UNIT_FLAGS", "GROUP_ROSTER_UPDATE");	
+	self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED", "GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("GROUP_ROSTER_UPDATE", "GROUP_ROSTER_UPDATE");
+	--self:RegisterEvent("PARTY_MEMBERS_CHANGED", "GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("LEARNED_SPELL_IN_TAB", "GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("PARTY_MEMBER_DISABLE", "GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("PARTY_MEMBER_ENABLE", "GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("PLAYER_FLAGS_CHANGED", "GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("LOADING_SCREEN_DISABLED", "GROUP_ROSTER_UPDATE");
+	
+	C_ChatInfo.RegisterAddonMessagePrefix("SexyInterrupter");
 
-	RegisterAddonMessagePrefix("SexyInterrupter");
-
-	self:SetNotifyIcon("Interface\\Icons\\achievement_bg_defendxtowers_av")
-	self:SetNotifyStorage(self.db.profile.versions)
-	self:NotifyOnce(self.versions)
+	-- self:SetNotifyIcon("Interface\\Icons\\achievement_bg_defendxtowers_av")
+	-- self:SetNotifyStorage(self.db.profile.versions)
+	-- self:NotifyOnce(self.versions)
 
 	-- Minimap button.
 	if icon and not icon:IsRegistered("SexyInterrupter") then
@@ -70,7 +82,7 @@ end
 
 function SexyInterrupter:CreateUi()
 	-- Frame: Anchor
-	local f = CreateFrame("Frame", "SexyInterrupterAnchor", UIParent);	
+	local f = CreateFrame("Frame", "SexyInterrupterAnchor", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil);	
 
     f:SetSize(200, 100)
     f:SetPoint(self.db.profile.ui.anchorPosition.point, self.db.profile.ui.anchorPosition.region, self.db.profile.ui.anchorPosition.relativePoint, self.db.profile.ui.anchorPosition.x, self.db.profile.ui.anchorPosition.y)
@@ -116,7 +128,7 @@ function SexyInterrupter:CreateUi()
 	end
 
 	-- Dummy Anchor Container
-	local dummyAnchorFrame = CreateFrame("Frame", "SexyInterrupterDummyAnchorFrame", UIParent);
+	local dummyAnchorFrame = CreateFrame("Frame", "SexyInterrupterDummyAnchorFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil);
 	dummyAnchorFrame:SetSize(200, (self.db.profile.ui.bars.barheight * 5) + 10);
     dummyAnchorFrame:SetPoint(self.db.profile.ui.anchorPosition.point, self.db.profile.ui.anchorPosition.region, self.db.profile.ui.anchorPosition.relativePoint, self.db.profile.ui.anchorPosition.x, self.db.profile.ui.anchorPosition.y);
 	dummyAnchorFrame:SetBackdrop({
@@ -154,7 +166,7 @@ function SexyInterrupter:CreateUi()
 	dummyAnchorFrame:Hide();
 
 	-- Dummy Message Container
-	local dummyMessageFrame = CreateFrame("Frame", "SexyInterrupterDummyMessageFrame", UIParent);
+	local dummyMessageFrame = CreateFrame("Frame", "SexyInterrupterDummyMessageFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil);
 	dummyMessageFrame:SetSize(500, 50);
     dummyMessageFrame:SetPoint(self.db.profile.ui.messagePosition.point, UIParent, self.db.profile.ui.messagePosition.relativePoint, self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y);
 	dummyMessageFrame:SetBackdrop({
@@ -181,6 +193,7 @@ function SexyInterrupter:CreateUi()
 	dummyMessageFrame:SetScript("OnMouseUp", function(self, button) 
 		SexyInterrupter:OnMouseUp(self, button);
 	end);
+	
 
 	local dummyMessageFrameText = dummyMessageFrame:CreateFontString("SexyInterrupterDummyMessageFrameText", nil, "GameFontNormal");
 	dummyMessageFrameText:SetPoint("CENTER", "SexyInterrupterDummyMessageFrame", "CENTER")
@@ -228,6 +241,7 @@ function SexyInterrupter:UpdateFrames()
 	SexyInterrupterInterruptNowText:SetPoint(self.db.profile.ui.messagePosition.point, UIParent, self.db.profile.ui.messagePosition.relativePoint, self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y);
 
 	SexyInterrupter:UpdateUI();
+	SexyInterrupter:UpdateInterrupterStatus();
 end
 
 function SexyInterrupter:UpdateUI() 
@@ -291,7 +305,15 @@ function SexyInterrupter:UpdateUI()
 	end
 
 	if SI_Globals.numInterrupters > 0 then
-		local maxRows = SI_Globals.numInterrupters;
+		local maxRows = 0;
+
+		for cx, value in pairs(SI_Globals.interrupters) do 
+			if value.active then
+				if value.offline ~= true then
+					maxRows = maxRows + 1;
+				end
+			end
+		end
 
 		if maxRows > self.db.profile.general.maxrows then
 			maxRows = self.db.profile.general.maxrows;
@@ -352,10 +374,10 @@ function SexyInterrupter:UpdateInterrupterStatus()
 				end
 			end
 
-			if interrupter.role then
-				row.classicon:SetTexCoord(unpack(self.role_icon_tcoords[interrupter.role]));
-			else 
+			if not self.db.profile.ui.bars.showclassicon or not interrupter.role then
 				row.classicon:Hide();
+			else
+				row.classicon:SetTexCoord(unpack(self.role_icon_tcoords[interrupter.role]));
 			end
 
 			if interrupter.cooldown > 0 then

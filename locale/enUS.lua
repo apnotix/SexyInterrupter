@@ -6,6 +6,7 @@ L["Addon name"] = "SexyInterrupter";
 L["Assignments"] = "Assignments";
 L["Bars"] = "Bars";
 L["Bar color"] = "Bar color";
+L["Bar height"] = "Bar height";
 L["Background"] = "Background";
 L["Background color"] = "Background color";
 L["Border"] = "Border";

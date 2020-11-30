@@ -14,13 +14,11 @@ function SexyInterrupter:SendAddonMessage(msg)
     end
     
 	if channel then
-    	SendAddonMessage("SexyInterrupter", msg, channel);
+    	C_ChatInfo.SendAddonMessage("SexyInterrupter", msg, channel);
 	end
 end
 
-function SexyInterrupter:AddonMessageReceived(...)
-	local msg, _, sender, noRealmNameSender = select(3, ...)
-
+function SexyInterrupter:AddonMessageReceived(msg, sender)
     if (strfind(msg, "overrideprio:")) then
         msg = gsub(msg, "overrideprio:", "");
 
@@ -28,8 +26,53 @@ function SexyInterrupter:AddonMessageReceived(...)
     elseif (strfind(msg, "versioninfo:")) then
 		msg = gsub(msg, "versioninfo:", "");
 
-		SexyInterrupter:ReceiveVersionInfo(msg, sender);
-	end
+        SexyInterrupter:ReceiveVersionInfo(msg, sender);
+    elseif (strfind(msg, "requesttalents:")) then
+        msg = gsub(msg, "requesttalents:", "");
+
+        SexyInterrupter:SendTalents(msg, sender);
+    elseif (strfind(msg, "talents:")) then
+		msg = gsub(msg, "talents:", "");
+
+		SexyInterrupter:ReceiveTalents(msg, sender);
+    end
+end
+
+function SexyInterrupter:SendTalents(msg, sender)
+    local player = UnitName("player");
+
+    if (strfind(msg, player)) then
+        local msg = "talents:";
+
+        msg = msg .. player .. ';';
+
+        for talentRow = 1, 7 do
+            for talentCol = 1, 3 do
+                local _, name, _, sel, _, id = GetTalentInfo(talentRow, talentCol, 1);
+
+                if sel then
+                    msg = tostring(id) .. '+';
+                end
+            end
+        end
+
+        print('send talents: ' .. msg)
+
+        SexyInterrupter:SendAddonMessage(msg);
+    end
+end
+
+function SexyInterrupter:ReceiveTalents(msg, sender)
+    local infos = { strsplit(';', msg) };
+    local interrupter = SexyInterrupter:GetInterrupter(infos[0]);
+    
+    if interrupter then
+        print("interrupter found: " .. interrupter.name);
+        
+        interrupter.talents = infos[1];
+
+        print('ReceiveTalents' .. interrupter.talents);
+    end
 end
 
 function SexyInterrupter:ReceiveVersionInfo(msg, sender)

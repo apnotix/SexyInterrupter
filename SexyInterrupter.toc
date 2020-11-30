@@ -1,6 +1,6 @@
-## Interface: 70200
-## X-Min-Interface: 70200
-## Version: 1.8
+## Interface: 90001
+## X-Min-Interface: 90001
+## Version: 2.1
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
