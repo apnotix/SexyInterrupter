@@ -62,23 +62,31 @@ function SexyInterrupter:GetCurrentInterrupters()
 			if b.offline then
 				retVal = true;
 			else
-				if a.dead then
-					retVal = false
-				else 
-					if b.dead then
+				if not a.inrange then
+					retVal = false;
+				else
+					if not b.inrange then
 						retVal = true;
 					else
-						if a.readyTime > 0 then
-							if a.readyTime == b.readyTime then
-								retVal = (a.overridedprio or a.prio) < (b.overridedprio or b.prio);
-							else
-								retVal = a.readyTime < b.readyTime;
-							end
-						else
-							if b.readyTime > 0 then
+						if a.dead then
+							retVal = false
+						else 
+							if b.dead then
 								retVal = true;
 							else
-								retVal = (a.overridedprio or a.prio) < (b.overridedprio or b.prio);
+								if a.readyTime > 0 then
+									if a.readyTime == b.readyTime then
+										retVal = (a.overridedprio or a.prio) < (b.overridedprio or b.prio);
+									else
+										retVal = a.readyTime < b.readyTime;
+									end
+								else
+									if b.readyTime > 0 then
+										retVal = true;
+									else
+										retVal = (a.overridedprio or a.prio) < (b.overridedprio or b.prio);
+									end
+								end
 							end
 						end
 					end
@@ -93,7 +101,7 @@ function SexyInterrupter:GetCurrentInterrupters()
 		value.sortpos = cx;
 	end
 	
-	SI_Globals.numInterrupters = table.getn(interrupters);	
+	SI_Globals.numInterrupters = table.getn(interrupters);
 
 	return interrupters;
 end
@@ -154,7 +162,7 @@ function SexyInterrupter:UpdateInterrupters()
 			interrupter.classEN = englishClass;
 		end
 
-		if interrupter.classEN and interrupter.role then
+		if interrupter.classEN and interrupter.role ~= 'NONE' then
 			interrupter.canInterrupt = self.unitCanInterrupt[strlower(interrupter.classEN)][strlower(interrupter.role)];
 		else
 			interrupter.canInterrupt = true;
@@ -195,24 +203,14 @@ function SexyInterrupter:UpdateInterrupters()
 		else
 			interrupter.inrange = false;
 		end
+
+		SexyInterrupter:SendAddonMessage("requesttalents:" .. interrupter.fullname);
 	end
 
-	SexyInterrupter:SendAddonMessage("requesttalents:" .. interrupter.fullname);
 	SexyInterrupter:SendAddonMessage("versioninfo:" .. SexyInterrupter.Version);
 
 	if UnitIsGroupLeader("player") then
 		SexyInterrupter:SendOverridePrioInfos();
-	end
-end
-
-function SexyInterrupter:InterruptUsed(name, cooldown, spellName)
-	local interrupter = SexyInterrupter:GetInterrupter(name);
-
-	if interrupter then
-		interrupter.cooldown = cooldown;
-		interrupter.readyTime = GetTime() + cooldown;
-
-		SexyInterrupter:UpdateInterrupterStatus();
 	end
 end
 
@@ -333,3 +331,41 @@ function SexyInterrupter:OnMouseDown(self, button)
 		self:StartMoving();
 	end
 end
+
+function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime)
+	if not notInterruptible and UnitCanAttack('player', 'target') then
+		local name, realm = UnitName('player');
+		local fullname = name;
+
+		if realm ~= nil then
+			fullname = name .. '-' .. realm;
+		end
+
+		local interrupter = SexyInterrupter:GetInterrupter(fullname);
+
+		if interrupter.sortpos == 1 then
+			local timeVisible = 10;
+
+			if (startTime and endTime and endTime/1000 - startTime/1000 < 10) then
+				timeVisible = endTime - startTime
+			end
+
+			local tName = UnitName('target');
+
+			if self.db.profile.notification.message then
+				local text = L["Interrupt now"] .. ' |cFFFF0000' .. tName .. '|r !!';
+				SexyInterrupterInterruptNowText:AddMessage(text, 1,1,1);
+				SexyInterrupterInterruptNowText:SetTimeVisible(timeVisible);
+				SexyInterrupterInterruptNowText.text = text;
+			end
+
+			if self.db.profile.notification.sound then
+				PlaySoundFile(self.db.profile.notification.soundFile);
+			end
+
+			if self.db.profile.notification.flash then
+				SexyInterrupterBlueWarningFrame:Show();
+			end
+		end
+	end
+end 

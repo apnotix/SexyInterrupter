@@ -19,8 +19,25 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 	if event == "SPELL_CAST_SUCCESS" then
         if (tContains(spells, spellId)) then
 			local cooldown = GetSpellBaseCooldown(spellId);
+			local interrupter = SexyInterrupter:GetInterrupter(sourceName);
 
-			SexyInterrupter:InterruptUsed(sourceName, cooldown / 1000);
+			if interrupter then
+				local cooldownLeft = cooldown / 1000;
+				
+				-- Shadowpriest talent
+				if spellId == 15487 and interrupter.talents ~= nil and strfind(interrupter.talents, '263716') then
+					cooldownLeft = cooldownLeft - 15;
+				end
+
+				if interrupter.talents ~= nil then
+					print('SPELL_CAST_SUCCESS', spellId, strfind(interrupter.talents, '263716'), cooldownLeft);
+				end
+
+				interrupter.cooldown = cooldownLeft;
+				interrupter.readyTime = GetTime() + cooldownLeft;
+
+				SexyInterrupter:UpdateInterrupterStatus();
+			end
         end
     elseif event == 'SPELL_INTERRUPT' then
 		if self.db.profile.notification.interruptmessage and (sourceGUID == UnitGUID('player') or sourceGUID == UnitGUID('pet')) then
@@ -39,56 +56,28 @@ function SexyInterrupter:UPDATE_INSTANCE_INFO()
 	end
 end
 
-function SexyInterrupter:UNIT_SPELLCAST_START(...)
-	local event, unitTag, lineID, spellID = ...;
-
-	--print('UNIT_SPELLCAST_START', unitTag, lineID, spellID);
+function SexyInterrupter:UNIT_SPELLCAST_CHANNEL_START(...) 
+	local event, unitTag, castGUID, spellID = ...;
 
 	if (unitTag == "target" and SI_Globals.numInterrupters > 0) then
-		local spell, rank, displayName, icon, startTime, endTime, isTradeSkill, castID, interrupt = UnitCastingInfo("target");
-		
-		--print('UnitCastingInfo', spell, rank, displayName, icon, startTime, endTime, isTradeSkill, castID, interrupt);
+		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID = UnitChannelInfo("target");
 
-		if not interrupt and UnitCanAttack('player', 'target') then
-			local name, realm = UnitName('player');
-			local fullname = name;
+		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime);
+	end
+end
 
-			if realm ~= nil then
-				fullname = name .. '-' .. realm;
-			end
+function SexyInterrupter:UNIT_SPELLCAST_START(...)
+	local event, unitTag, castGUID, spellID = ...;
 
-			local interrupter = SexyInterrupter:GetInterrupter(fullname);
+	if (unitTag == "target" and SI_Globals.numInterrupters > 0) then
+		local spell, rank, displayName, icon, startTime, endTime, isTradeSkill, castID, notInterruptible = UnitCastingInfo("target");
 
-			if interrupter.sortpos == 1 then
-				local timeVisible = 10;
-
-                if (startTime and endTime and endTime/1000 - startTime/1000 < 10) then
-                    timeVisible = endTime - startTime
-                end
-
-				local tName = UnitName('target');
-
-				if self.db.profile.notification.message then
-					local text = L["Interrupt now"] .. ' |cFFFF0000' .. tName .. '|r !!';
-					SexyInterrupterInterruptNowText:AddMessage(text, 1,1,1);
-					SexyInterrupterInterruptNowText:SetTimeVisible(timeVisible);
-					SexyInterrupterInterruptNowText.text = text;
-				end
-
-				if self.db.profile.notification.sound then
-					PlaySoundFile(self.db.profile.notification.soundFile);
-				end
-
-				if self.db.profile.notification.flash then
-					SexyInterrupterBlueWarningFrame:Show();
-				end
-			end
-		end
+		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime);
 	end
 end
 
 function SexyInterrupter:UNIT_SPELLCAST_STOP(...)
-	local unitTag, lineID, spellID = ...;
+	local event, unitTag, castGUID, spellID = ...;
 
     if unitTag == "target" and SexyInterrupterInterruptNowText:IsVisible() then
         SexyInterrupterInterruptNowText:SetTimeVisible(0);
@@ -125,8 +114,8 @@ function SexyInterrupter:PLAYER_REGEN_ENABLED()
 	end
 end
 
-function SexyInterrupter:CHAT_MSG_ADDON(prefix, msg, channel, sender)
-    if prefix == "SexyInterrupter" and not strfind(sender, UnitName("player")) then
+function SexyInterrupter:CHAT_MSG_ADDON(event, prefix, msg, channel, sender)
+    if prefix == "SexyInterrupter" and not strfind(sender, select(1, UnitName("player"))) then
         SexyInterrupter:AddonMessageReceived(msg, sender)
     end
 end

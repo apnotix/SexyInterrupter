@@ -32,7 +32,7 @@ function SexyInterrupter:AddonMessageReceived(msg, sender)
 
         SexyInterrupter:SendTalents(msg, sender);
     elseif (strfind(msg, "talents:")) then
-		msg = gsub(msg, "talents:", "");
+        msg = gsub(msg, "talents:", "");
 
 		SexyInterrupter:ReceiveTalents(msg, sender);
     end
@@ -51,27 +51,21 @@ function SexyInterrupter:SendTalents(msg, sender)
                 local _, name, _, sel, _, id = GetTalentInfo(talentRow, talentCol, 1);
 
                 if sel then
-                    msg = tostring(id) .. '+';
+                    msg = msg .. tostring(id) .. '+';
                 end
             end
         end
 
-        print('send talents: ' .. msg)
-
-        SexyInterrupter:SendAddonMessage(msg);
+        SexyInterrupter:SendAddonMessage(msg:sub(1, -2));
     end
 end
 
 function SexyInterrupter:ReceiveTalents(msg, sender)
     local infos = { strsplit(';', msg) };
-    local interrupter = SexyInterrupter:GetInterrupter(infos[0]);
+    local interrupter = SexyInterrupter:GetInterrupter(infos[1]);
     
-    if interrupter then
-        print("interrupter found: " .. interrupter.name);
-        
-        interrupter.talents = infos[1];
-
-        print('ReceiveTalents' .. interrupter.talents);
+    if interrupter then        
+        interrupter.talents = infos[2];
     end
 end
 

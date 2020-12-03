@@ -37,13 +37,13 @@ function SexyInterrupter:OnInitialize()
 	self:RegisterEvent("CHAT_MSG_ADDON", "CHAT_MSG_ADDON");
 	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", "COMBAT_LOG_EVENT_UNFILTERED");
     self:RegisterEvent("UNIT_SPELLCAST_START", "UNIT_SPELLCAST_START");
-    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_START");
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_CHANNEL_START");
     self:RegisterEvent("UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_STOP");
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_STOP");
 	self:RegisterEvent("PLAYER_TARGET_CHANGED", "PLAYER_TARGET_CHANGED");
 	self:RegisterEvent("PLAYER_REGEN_DISABLED", "PLAYER_REGEN_DISABLED");
 	self:RegisterEvent("PLAYER_REGEN_ENABLED", "PLAYER_REGEN_ENABLED");
-	self:RegisterEvent("UPDATE_INSTANCE_INFO", "UPDATE_INSTANCE_INFO");
+	--self:RegisterEvent("UPDATE_INSTANCE_INFO", "UPDATE_INSTANCE_INFO");
 	
 	self:RegisterEvent("UNIT_FLAGS", "GROUP_ROSTER_UPDATE");	
 	self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "GROUP_ROSTER_UPDATE");
@@ -84,7 +84,7 @@ function SexyInterrupter:CreateUi()
 	-- Frame: Anchor
 	local f = CreateFrame("Frame", "SexyInterrupterAnchor", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil);	
 
-    f:SetSize(200, 100)
+    f:SetSize(self.db.profile.ui.window.width, 100)
     f:SetPoint(self.db.profile.ui.anchorPosition.point, self.db.profile.ui.anchorPosition.region, self.db.profile.ui.anchorPosition.relativePoint, self.db.profile.ui.anchorPosition.x, self.db.profile.ui.anchorPosition.y)
 	f:SetBackdrop({
         bgFile = LSM:Fetch("background", self.db.profile.ui.window.backgroundtexture), 
@@ -319,7 +319,7 @@ function SexyInterrupter:UpdateUI()
 			maxRows = self.db.profile.general.maxrows;
 		end
 
-		SexyInterrupterAnchor:SetSize(200, (self.db.profile.ui.bars.barheight * maxRows) + 10);
+		SexyInterrupterAnchor:SetSize(self.db.profile.ui.window.width, (self.db.profile.ui.bars.barheight * maxRows) + 10);
 
 		if not self.db.profile.general.modeincombat then
 			SexyInterrupterAnchor:Show();
@@ -368,13 +368,15 @@ function SexyInterrupter:UpdateInterrupterStatus()
 				row.text:SetTextColor(1, 0, 0, 1);
 			elseif interrupter.afk then
 				row.text:SetTextColor(1, 1, 0, 1);
+			elseif not interrupter.inrange then
+				row.text:SetTextColor(1, 1, 1, 0.3);
 			else 		
 				if interrupter.classColor then	
             		row.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
 				end
 			end
 
-			if not self.db.profile.ui.bars.showclassicon or not interrupter.role then
+			if not self.db.profile.ui.bars.showclassicon or not interrupter.role or interrupter.role == 'NONE' then
 				row.classicon:Hide();
 			else
 				row.classicon:SetTexCoord(unpack(self.role_icon_tcoords[interrupter.role]));

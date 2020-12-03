@@ -42,7 +42,8 @@ SI.interruptSpells = {
     132409,		-- Warlock Spell Lock
     147362, 	-- Hunter Counter Shot
     171138,		-- Warlock Shadow Lock,
-    183752      -- DH Consume Magic
+    183752,     -- DH Consume Magic
+    115750      -- Paladin Blinding Light
 };
 
 SI.unitCanInterrupt = {
@@ -519,19 +520,26 @@ function SexyInterrupter:InitOptions()
     function SexyInterrupter:SendOverridePrioInfos()
         local interrupters = SexyInterrupter:GetCurrentInterrupters();
         local msg = "overrideprio:";
+        local hits = 0;
 
         for i, interrupter in pairs(interrupters) do
-            msg = msg .. tostring(interrupter.name) .. '+' .. tostring(interrupter.realm) .. '+' .. tostring(interrupter.fullname) .. '+' .. tostring(interrupter.overrideprio) .. '+' .. tostring(interrupter.overridedprio) .. ';';
+            if interrupter.overrideprio then
+                hits = hits + 1;
+
+                msg = msg .. tostring(interrupter.name) .. '+' .. tostring(interrupter.realm) .. '+' .. tostring(interrupter.fullname) .. '+' .. tostring(interrupter.overrideprio) .. '+' .. tostring(interrupter.overridedprio) .. ';';
+            end
         end
 
-        SexyInterrupter:SendAddonMessage(msg);
+        if hits > 0 then
+            SexyInterrupter:SendAddonMessage(msg);
+        end
     end
 
     function SexyInterrupter:UpdateInterrupterSettings() 
         local interrupters = SexyInterrupter:GetCurrentInterrupters();
 
         SI.optionsTable.args.assignments.args.priority.args = {};
-        SI.optionsTable.args.assignments.args.spell.args = {};
+        -- SI.optionsTable.args.assignments.args.spell.args = {};
 
         for i, interrupter in pairs(interrupters) do
             SI.optionsTable.args.assignments.args.priority.args['partymember_header' .. i] = {
@@ -582,47 +590,47 @@ function SexyInterrupter:InitOptions()
                 hidden = function() return UnitName('player') == interrupter.name or UnitIsGroupLeader("player") end
             }
 
-            SI.optionsTable.args.assignments.args.spell.args['partymember_header' .. i] = {
-                name = interrupter.name,
-                type = "header",
-                order = 100 * i,
-                width = "full"
-            }
+            -- SI.optionsTable.args.assignments.args.spell.args['partymember_header' .. i] = {
+            --     name = interrupter.name,
+            --     type = "header",
+            --     order = 100 * i,
+            --     width = "full"
+            -- }
 
-            SI.optionsTable.args.assignments.args.spell.args['partymember_spells_icon' .. i] = {
-                name = "",
-                type = "execute",
-                width = "half",
-                order = 102 * i,
-                hidden = function() 
-                    return not interrupter.spells;
-                end,
-                image = function() 
-                    local _, _, icon = GetSpellInfo(interrupter.spells);
+            -- SI.optionsTable.args.assignments.args.spell.args['partymember_spells_icon' .. i] = {
+            --     name = "",
+            --     type = "execute",
+            --     width = "half",
+            --     order = 102 * i,
+            --     hidden = function() 
+            --         return not interrupter.spells;
+            --     end,
+            --     image = function() 
+            --         local _, _, icon = GetSpellInfo(interrupter.spells);
                     
-                    return icon and tostring(icon) or "", 18, 18;
-                end,
-                disabled = function() return UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player") end
-            }
+            --         return icon and tostring(icon) or "", 18, 18;
+            --     end,
+            --     disabled = function() return UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player") end
+            -- }
 
-            SI.optionsTable.args.assignments.args.spell.args['partymember_spells' .. i] = {
-                name = L["Spell"],
-                desc = L["Spell assignment to the player"],
-                type = "input",
-                width = "double",
-                order = 101 * i,
-                get = function() 
-                    local name = GetSpellInfo(interrupter.spells);
+            -- SI.optionsTable.args.assignments.args.spell.args['partymember_spells' .. i] = {
+            --     name = L["Spell"],
+            --     desc = L["Spell assignment to the player"],
+            --     type = "input",
+            --     width = "double",
+            --     order = 101 * i,
+            --     get = function() 
+            --         local name = GetSpellInfo(interrupter.spells);
 
-                    if name then
-                        return name;
-                    else
-                        return L["Invalid Spell Name/ID/Link"];
-                    end                
-                end,
-                set = function(self, val) interrupter.spells = val end,
-                disabled = function() return UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player") end
-            }
+            --         if name then
+            --             return name;
+            --         else
+            --             return L["Invalid Spell Name/ID/Link"];
+            --         end                
+            --     end,
+            --     set = function(self, val) interrupter.spells = val end,
+            --     disabled = function() return UnitName('player') ~= interrupter.name and not UnitIsGroupLeader("player") end
+            -- }
         end
         
 	    LibStub("AceConfigRegistry-3.0"):NotifyChange("SexyInterrupter");
