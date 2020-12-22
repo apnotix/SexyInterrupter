@@ -24,6 +24,7 @@ L["Show in combat only"] = "Nur im Kampf anzeigen";
 L["Lock window"] = "Fenster sperren";
 L["Look"] = "Aussehen";
 L["Interrupted"] = "Unterbrochen";
+L["interrupted"] = "unterbrochen";
 L["Interrupts"] = "Unterbrechungen";
 L["Interrupt now"] = "Unterbrich jetzt";
 L["Left click to toggle Frame"] = "Linksklick: Sperrt/entsperrt die Frames";

@@ -29,9 +29,9 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 					cooldownLeft = cooldownLeft - 15;
 				end
 
-				if interrupter.talents ~= nil then
-					print('SPELL_CAST_SUCCESS', spellId, strfind(interrupter.talents, '263716'), cooldownLeft);
-				end
+				-- if interrupter.talents ~= nil then
+				-- 	print('SPELL_CAST_SUCCESS', spellId, strfind(interrupter.talents, '263716'), cooldownLeft);
+				-- end
 
 				interrupter.cooldown = cooldownLeft;
 				interrupter.readyTime = GetTime() + cooldownLeft;
@@ -39,9 +39,11 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 				SexyInterrupter:UpdateInterrupterStatus();
 			end
         end
-    elseif event == 'SPELL_INTERRUPT' then
+	elseif event == 'SPELL_INTERRUPT' then
+		--print('SPELL_INTERRUPT', sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, extraArg1, extraArg2, extraArg3, extraArg4, extraArg5, extraArg6, extraArg7, extraArg8, extraArg9, extraArg10);
+
 		if self.db.profile.notification.interruptmessage and (sourceGUID == UnitGUID('player') or sourceGUID == UnitGUID('pet')) then
-			SexyInterrupter:ShowInterruptMessage(destName, spellId, spellName);
+			SexyInterrupter:ShowInterruptMessage(destName, extraArg4, extraArg5);
 		end
 	end
 end

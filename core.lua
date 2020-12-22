@@ -68,6 +68,12 @@ function SexyInterrupter:OnInitialize()
 		icon:Register("SexyInterrupter", dataobj, self.db.profile.icon)
 	end
 
+	self.icon = icon;
+
+	if self.db.profile.general.minimapIcon ~= true then
+		self.icon:Hide("SexyInterrupter");
+	end
+
 	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. self.Version .. ' loaded', 1, 0.5, 0);  
 end
 
@@ -308,10 +314,8 @@ function SexyInterrupter:UpdateUI()
 		local maxRows = 0;
 
 		for cx, value in pairs(SI_Globals.interrupters) do 
-			if value.active then
-				if value.offline ~= true then
-					maxRows = maxRows + 1;
-				end
+			if value.active and value.canInterrupt and value.offline ~= true then
+				maxRows = maxRows + 1;
 			end
 		end
 

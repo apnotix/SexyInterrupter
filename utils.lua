@@ -123,7 +123,7 @@ function SexyInterrupter:UpdateInterrupters()
 		
 		if not UnitExists(unit) then	
 			unit = 'player';
-		end;	
+		end
 		
 		local name, realm = UnitName(unit);
 		local fullname = name;
@@ -156,7 +156,16 @@ function SexyInterrupter:UpdateInterrupters()
 				
 		interrupter.lastseen = time();
 		interrupter.active = true;
-		interrupter.role = UnitGroupRolesAssigned(unit);
+		
+		if unit == 'player' then
+			interrupter.role = GetSpecializationRole(GetSpecialization());
+		else
+			interrupter.role = GetSpecializationRoleByID(GetInspectSpecialization(fullname));
+		end
+
+		if not interrupter.role then
+			interrupter.role = UnitGroupRolesAssigned(unit);
+		end
 
 		if not interrupter.classEN then
 			interrupter.classEN = englishClass;
@@ -218,7 +227,7 @@ function SexyInterrupter:ShowInterruptMessage(destName, spellId, spellName)
 	local output = self.db.profile.notification.outputchannel;
 	local channel;
 	local inGroup, inRaid, inPartyLFG = IsInGroup(), IsInRaid(), IsPartyLFG();
-	local msg = L["Interrupted"] .. string.format(" %s's %s!", destName, GetSpellLink(spellId));
+	local msg = string.format("%s's \124cff71d5ff\124Hspell:%d:0\124h[%s]\124h\124r %s!", destName, spellId, spellName, L["interrupted"]);
 
 	if not inGroup then return end;
 

@@ -24,6 +24,7 @@ L["Show in combat only"] = "Show in combat only";
 L["Lock window"] = "Lock window";
 L["Look"] = "Look";
 L["Interrupted"] = "Interrupted";
+L["interrupted"] = "interrupted";
 L["Interrupts"] = "Interrupts";
 L["Interrupt now"] = "Interrupt now";
 L["Left click to toggle Frame"] = "Left click to toggle Frame";

@@ -101,7 +101,8 @@ local defaults = {
 		general = {
 			modeincombat = false,
             lock = true,
-            maxrows = 5		
+            maxrows = 5,
+            minimapIcon = true
 		},
 		ui = {            
 			anchorPosition = {
@@ -256,6 +257,22 @@ function SexyInterrupter:InitOptions()
                         name = L["Show in combat only"],
                         width = "full",
                         order = 1
+                    },
+                    minimapIcon = {
+                        type = "toggle",
+                        name = 'Show minimap icon',
+                        width = "full",
+                        order = 1,
+                        get = function(info) return self.db.profile.general.minimapIcon end,
+                        set = function(info, value) 
+                            self.db.profile.general.minimapIcon = value; 
+                            
+                            if value then
+                                self.icon:Show("SexyInterrupter");
+                            else 
+                                self.icon:Hide("SexyInterrupter");                            
+                            end 
+                        end,
                     },
                     maxrows = {
                         step = 1,
