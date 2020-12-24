@@ -137,7 +137,9 @@ function SexyInterrupter:OnUpdate()
 				if (value.readyTime - GetTime() <= 0) then
 					bar.cooldownText:SetText('');
 					value.readyTime = 0;
-					bar:SetValue(0);
+					
+					bar:SetMinMaxValues(0, 100);
+					bar:SetValue(100);
 					return;
 				end
 

@@ -64,7 +64,8 @@ function SexyInterrupter:ReceiveTalents(msg, sender)
     local infos = { strsplit(';', msg) };
     local interrupter = SexyInterrupter:GetInterrupter(infos[1]);
     
-    if interrupter then        
+    if interrupter then    
+        interrupter.active = true;    
         interrupter.talents = infos[2];
     end
 end

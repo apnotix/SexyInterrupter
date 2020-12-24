@@ -155,9 +155,10 @@ function SexyInterrupter:UpdateInterrupters()
 		interrupter = SexyInterrupter:GetInterrupter(fullname);
 				
 		interrupter.lastseen = time();
-		interrupter.active = true;
+		interrupter.active = interrupter.talents ~= nil;
 		
 		if unit == 'player' then
+			interrupter.active = true;
 			interrupter.role = GetSpecializationRole(GetSpecialization());
 		else
 			interrupter.role = GetSpecializationRoleByID(GetInspectSpecialization(fullname));

@@ -125,7 +125,8 @@ local defaults = {
 				r = 1,
 				g = 1, 
 				b = 1
-			},
+            },
+            useclasscolor = false,
 			window = {
 				lock = true,
 				background = {
@@ -145,6 +146,7 @@ local defaults = {
 			},
 			bars = {
                 showclassicon = true,
+                useclasscolor = true,
 				barheight = 25,
 				barcolor = {
 					r = 0.451,
@@ -370,6 +372,11 @@ function SexyInterrupter:InitOptions()
                         bigStep = 1,
                         order = 5
                     },
+                    useclasscolor = {
+                        type = "toggle",
+                        name = 'Use class color',
+                        order = 1
+                    },
                     fontcolor = {
                         type = "color",
                         name = L["Font color"],
@@ -390,6 +397,11 @@ function SexyInterrupter:InitOptions()
                             showclassicon = {
                                 type = "toggle",
                                 name = L["Show class icon"],
+                                order = 1
+                            },
+                            useclasscolor = {
+                                type = "toggle",
+                                name = 'Use class color',
                                 order = 1
                             },
                             texture = {

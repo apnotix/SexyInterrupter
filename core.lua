@@ -267,22 +267,22 @@ function SexyInterrupter:UpdateUI()
 			t:SetAllPoints(f)
 			t:SetTexture(0, 0, 0, 0.4)
 			
-			f.nr = f:CreateFontString("SexyInterrupterNrText" .. cx, nil, "GameFontNormal")
-			f.nr:SetPoint("CENTER", "SexyInterrupterRow" .. cx, "CENTER")
-			f.nr:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
-			f.nr:SetText(cx);
-			f.nr:SetSize(12*3, 12);
-			f.nr:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
+			-- f.nr = f:CreateFontString("SexyInterrupterNrText" .. cx, nil, "GameFontNormal")
+			-- f.nr:SetPoint("CENTER", "SexyInterrupterRow" .. cx, "CENTER")
+			-- f.nr:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
+			-- f.nr:SetText(cx);
+			-- f.nr:SetSize(12*3, 12);
+			-- f.nr:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
 		
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
-			f:SetSize(170, 20)
-			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "RIGHT")
+			f:SetSize(self.db.profile.ui.window.width - 10, 20)
+			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "LEFT")
 			f:SetOrientation("HORIZONTAL")
 			f:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.profile.ui.bars.texture));
 			f:SetStatusBarColor(self.db.profile.ui.bars.barcolor.r, self.db.profile.ui.bars.barcolor.g, self.db.profile.ui.bars.barcolor.b, self.db.profile.ui.bars.barcolor.a)
 			f:SetFrameLevel(3)
-			f:SetMinMaxValues(0, 1)
-			f:SetValue(0)
+			f:SetMinMaxValues(0, 100)
+			f:SetValue(100)
 			
 			f.classicon = f:CreateTexture(nil, "OVERLAY");
 			f.classicon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES");
@@ -307,6 +307,15 @@ function SexyInterrupter:UpdateUI()
 			f.cooldownText:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", 3, 0)
 			f.cooldownText:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
 			f.cooldownText:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
+
+			-- f:SetMinMaxValues(0, 25);
+			-- f.cooldownText:Show();
+
+			-- 	-- if interrupter.readyTime - GetTime() > 0 then
+			-- f.cooldownText:SetText(25);
+			-- f:SetValue(25);
+			-- f:Show();
+				-- end
 		end
 	end
 
@@ -355,16 +364,21 @@ function SexyInterrupter:UpdateInterrupterStatus()
 		if currentplayer.sortpos > self.db.profile.general.maxrows and self.db.profile.general.maxrows == cx then
 			interrupter = currentplayer;
 
-			rowParent.nr:SetText(currentplayer.sortpos);
+			-- rowParent.nr:SetText(currentplayer.sortpos);
 			rowParent:SetAlpha(0.5);
 		else 
-			rowParent.nr:SetText(cx);
+			-- rowParent.nr:SetText(cx);
 			rowParent:SetAlpha(1);
 		end
 
 		if row and rowParent then
-			row:SetValue(0);
+			row:SetMinMaxValues(0, 100);
+			row:SetValue(100);
 			row.cooldownText:SetText();
+
+			if self.db.profile.ui.bars.useclasscolor then
+				row:SetStatusBarColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
+			end
 
 			if interrupter.offline then
 				rowParent:Hide();
@@ -375,8 +389,10 @@ function SexyInterrupter:UpdateInterrupterStatus()
 			elseif not interrupter.inrange then
 				row.text:SetTextColor(1, 1, 1, 0.3);
 			else 		
-				if interrupter.classColor then	
+				if interrupter.classColor and self.db.profile.ui.useclasscolor then
             		row.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
+				else 
+					row.text:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, 1);
 				end
 			end
 
