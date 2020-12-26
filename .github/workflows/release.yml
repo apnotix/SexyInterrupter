@@ -1,0 +1,23 @@
+name: Release
+on:
+  push:
+    tags:
+      - '*.*.*'
+      - '!*.*.*-*'
+
+jobs:
+  package:
+    name: Package Releases
+    runs-on: ubuntu-latest
+
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
+      GITHUB_OAUTH: ${{ secrets.HUB_TOKEN }}
+
+    steps:
+      - name: Clone Project
+        uses: actions/checkout@v1
+
+      - name: Package Release for Retail
+        uses: BigWigsMods/packager@master
