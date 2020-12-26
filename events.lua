@@ -29,14 +29,15 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 					cooldownLeft = cooldownLeft - 15;
 				end
 
-				-- if interrupter.talents ~= nil then
-				-- 	print('SPELL_CAST_SUCCESS', spellId, strfind(interrupter.talents, '263716'), cooldownLeft);
-				-- end
-
 				interrupter.cooldown = cooldownLeft;
 				interrupter.readyTime = GetTime() + cooldownLeft;
-
+				
 				SexyInterrupter:UpdateInterrupterStatus();
+
+				if UnitName("player") == interrupter.name then
+					SexyInterrupter:SendInterrupt(interrupter.name, GetTime() + cooldownLeft);
+				end
+
 			end
         end
 	elseif event == 'SPELL_INTERRUPT' then

@@ -35,6 +35,10 @@ function SexyInterrupter:AddonMessageReceived(msg, sender)
         msg = gsub(msg, "talents:", "");
 
 		SexyInterrupter:ReceiveTalents(msg, sender);
+    elseif (strfind(msg, "interrupt:")) then
+        msg = gsub(msg, "interrupt:", "");
+
+		SexyInterrupter:ReceiveInterrupt(msg, sender);
     end
 end
 
@@ -57,6 +61,26 @@ function SexyInterrupter:SendTalents(msg, sender)
         end
 
         SexyInterrupter:SendAddonMessage(msg:sub(1, -2));
+    end
+end
+
+function SexyInterrupter:SendInterrupt(player, readyTime)
+    local msg = "interrupt:";
+
+    msg = msg .. player .. ';' .. readyTime;
+
+    SexyInterrupter:SendAddonMessage(msg);
+end
+
+function SexyInterrupter:ReceiveInterrupt(msg, sender) 
+    local infos = { strsplit(';', msg) };
+    local interrupter = SexyInterrupter:GetInterrupter(infos[1]);
+    
+    if interrupter then 
+        interrupter.readyTime = tonumber(infos[2]);
+        interrupter.cooldown = interrupter.readyTime - GetTime();
+
+        SexyInterrupter:UpdateInterrupterStatus();
     end
 end
 
