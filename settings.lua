@@ -268,6 +268,10 @@ function SexyInterrupter:InitOptions()
                         get = function(info) return self.db.profile.general.minimapIcon end,
                         set = function(info, value) 
                             self.db.profile.general.minimapIcon = value; 
+
+                            if not self.icon:IsRegistered("SexyInterrupter") then
+                                SexyInterrupter:AddIcon();
+                            end
                             
                             if value then
                                 self.icon:Show("SexyInterrupter");

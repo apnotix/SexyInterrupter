@@ -78,7 +78,7 @@ function SexyInterrupter:ReceiveInterrupt(msg, sender)
     
     if interrupter then 
         interrupter.readyTime = tonumber(infos[2]);
-        interrupter.cooldown = interrupter.readyTime - GetTime();
+        interrupter.cooldown = interrupter.readyTime - time();
 
         SexyInterrupter:UpdateInterrupterStatus();
     end

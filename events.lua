@@ -30,12 +30,12 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 				end
 
 				interrupter.cooldown = cooldownLeft;
-				interrupter.readyTime = GetTime() + cooldownLeft;
+				interrupter.readyTime = time() + cooldownLeft;
 				
 				SexyInterrupter:UpdateInterrupterStatus();
 
 				if UnitName("player") == interrupter.name then
-					SexyInterrupter:SendInterrupt(interrupter.name, GetTime() + cooldownLeft);
+					SexyInterrupter:SendInterrupt(interrupter.name, interrupter.readyTime);
 				end
 
 			end
@@ -135,7 +135,7 @@ function SexyInterrupter:OnUpdate()
 			local bar = _G["SexyInterrupterStatusBar" .. cx];
 
 			if bar then			
-				if (value.readyTime - GetTime() <= 0) then
+				if (value.readyTime - time() <= 0) then
 					bar.cooldownText:SetText('');
 					value.readyTime = 0;
 					
@@ -144,8 +144,8 @@ function SexyInterrupter:OnUpdate()
 					return;
 				end
 
-				bar:SetValue(value.readyTime - GetTime());
-				bar.cooldownText:SetText(string.format('%.1f', value.readyTime - GetTime()));
+				bar:SetValue(value.readyTime - time());
+				bar.cooldownText:SetText(string.format('%.1f', value.readyTime - time()));
 			end
 		end
 	end

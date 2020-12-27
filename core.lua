@@ -3,26 +3,6 @@ local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 local icon = LibStub("LibDBIcon-1.0", true);
 
-local dataobj = LibStub("LibDataBroker-1.1"):NewDataObject("SexyInterrupter", {
-	 label = "SexyInterrupter",
-	 type = "launcher",
-	 icon = "Interface\\Icons\\achievement_bg_defendxtowers_av",
-	 text = "SexyInterrupter",
-	 OnClick = function(self,btn)
-		if btn == "RightButton" then
-			LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
-		else
-			SexyInterrupter:LockFrame();
-		end
-	end,
-	OnTooltipShow = function(self)
-		if not self or not self.AddLine then return end
-		self:AddLine("SexyInterrupter");
-		self:AddLine(L["Left click to toggle Frame"],1,1,1);
-		self:AddLine(L["Right click to open settings"],1,1,1);
-	end
-})
-
 function SexyInterrupter:OnInitialize()
 	Mixin(self, BackdropTemplateMixin);
 
@@ -64,15 +44,11 @@ function SexyInterrupter:OnInitialize()
 	-- self:NotifyOnce(self.versions)
 
 	-- Minimap button.
-	if icon and not icon:IsRegistered("SexyInterrupter") then
-		icon:Register("SexyInterrupter", dataobj, self.db.profile.icon)
-	end
-
 	self.icon = icon;
 
-	if self.db.profile.general.minimapIcon ~= true then
-		self.icon:Hide("SexyInterrupter");
-	end
+	if icon and not icon:IsRegistered("SexyInterrupter") and self.db.profile.general.minimapIcon then
+		SexyInterrupter:AddIcon();
+	end	
 
 	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. self.Version .. ' loaded', 1, 0.5, 0);  
 end
@@ -237,8 +213,19 @@ function SexyInterrupter:UpdateFrames()
 				-- TODO: Font, fontcolor
 
 				if string.find(subchild:GetName(), "SexyInterrupterStatusBar") then
+					subchild:SetSize(self.db.profile.ui.window.width - 10, self.db.profile.ui.bars.barheight)
 					subchild:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.profile.ui.bars.texture));
 					subchild:SetStatusBarColor(self.db.profile.ui.bars.barcolor.r, self.db.profile.ui.bars.barcolor.g, self.db.profile.ui.bars.barcolor.b, self.db.profile.ui.bars.barcolor.a);
+
+					if not self.db.profile.ui.bars.showclassicon then
+						subchild.classicon:Hide();
+					else 
+						subchild.classicon:Show();
+					end
+
+					subchild.text:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE");
+					subchild.cooldownText:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
+					subchild.cooldownText:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
 				end
 			end
 		end
@@ -275,7 +262,7 @@ function SexyInterrupter:UpdateUI()
 			-- f.nr:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
 		
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
-			f:SetSize(self.db.profile.ui.window.width - 10, 20)
+			f:SetSize(self.db.profile.ui.window.width - 10, self.db.profile.ui.bars.barheight)
 			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "LEFT")
 			f:SetOrientation("HORIZONTAL")
 			f:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.profile.ui.bars.texture));
@@ -289,10 +276,6 @@ function SexyInterrupter:UpdateUI()
 			f.classicon:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", 2, 0);
 			f.classicon:SetTexCoord(unpack(self.role_icon_tcoords.DAMAGER));
 			f.classicon:SetSize(16, 16);
-
-			if not self.db.profile.ui.bars.showclassicon then
-				f.classicon:Hide();
-			end
 			
 			f.text = f:CreateFontString("SexyInterrupterStatusBarText" .. cx, nil, "GameFontNormal")
 			f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", self.db.profile.ui.bars.showclassicon and 25 or 5, 0)
@@ -307,15 +290,6 @@ function SexyInterrupter:UpdateUI()
 			f.cooldownText:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", 3, 0)
 			f.cooldownText:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
 			f.cooldownText:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
-
-			-- f:SetMinMaxValues(0, 25);
-			-- f.cooldownText:Show();
-
-			-- 	-- if interrupter.readyTime - GetTime() > 0 then
-			-- f.cooldownText:SetText(25);
-			-- f:SetValue(25);
-			-- f:Show();
-				-- end
 		end
 	end
 
@@ -406,9 +380,9 @@ function SexyInterrupter:UpdateInterrupterStatus()
 				row:SetMinMaxValues(0, interrupter.cooldown);
 				row.cooldownText:Show();
 
-				if interrupter.readyTime - GetTime() > 0 then
-					row.cooldownText:SetText(interrupter.readyTime - GetTime());
-					row:SetValue(interrupter.readyTime - GetTime());
+				if interrupter.readyTime - time() > 0 then
+					row.cooldownText:SetText(interrupter.readyTime - time());
+					row:SetValue(interrupter.readyTime - time());
 				end
 			else 
 				row.cooldownText:Hide();

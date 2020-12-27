@@ -9,6 +9,30 @@ SexyInterrupter.role_icon_tcoords = {
 	NONE    = ""
 };
 
+function SexyInterrupter:AddIcon()
+	local dataobj = LibStub("LibDataBroker-1.1"):NewDataObject("SexyInterrupter", {
+		label = "SexyInterrupter",
+		type = "launcher",
+		icon = "Interface\\Icons\\achievement_bg_defendxtowers_av",
+		text = "SexyInterrupter",
+		OnClick = function(self,btn)
+		   if btn == "RightButton" then
+			   LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
+		   else
+			   SexyInterrupter:LockFrame();
+		   end
+	   end,
+	   OnTooltipShow = function(self)
+		   if not self or not self.AddLine then return end
+		   self:AddLine("SexyInterrupter");
+		   self:AddLine(L["Left click to toggle Frame"],1,1,1);
+		   self:AddLine(L["Right click to open settings"],1,1,1);
+	   end
+   })
+
+   self.icon:Register("SexyInterrupter", dataobj, self.db.profile.icon);
+end
+
 function SexyInterrupter:GetInterrupter(name)
 	local retVal = nil;
 
@@ -353,7 +377,7 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 
 		local interrupter = SexyInterrupter:GetInterrupter(fullname);
 
-		if interrupter.sortpos == 1 then
+		if interrupter.sortpos == 1 and interrupter.cooldown == 0 then
 			local timeVisible = 10;
 
 			if (startTime and endTime and endTime/1000 - startTime/1000 < 10) then
