@@ -1,6 +1,6 @@
 ## Interface: 90002
 ## X-Min-Interface: 90002
-## Version: 2.4
+## Version: 2.41
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
