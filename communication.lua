@@ -76,9 +76,11 @@ function SexyInterrupter:ReceiveInterrupt(msg, sender)
     local infos = { strsplit(';', msg) };
     local interrupter = SexyInterrupter:GetInterrupter(infos[1]);
     
-    if interrupter then 
-        interrupter.readyTime = tonumber(infos[2]);
-        interrupter.cooldown = interrupter.readyTime - time();
+    if interrupter and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then 
+        local cooldown = tonumber(infos[2]);
+
+        interrupter.readyTime = cooldown + GetTime();
+        interrupter.cooldown = cooldown;
 
         SexyInterrupter:UpdateInterrupterStatus();
     end

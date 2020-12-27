@@ -30,12 +30,12 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 				end
 
 				interrupter.cooldown = cooldownLeft;
-				interrupter.readyTime = time() + cooldownLeft;
+				interrupter.readyTime = GetTime() + cooldownLeft;
 				
 				SexyInterrupter:UpdateInterrupterStatus();
 
 				if UnitName("player") == interrupter.name then
-					SexyInterrupter:SendInterrupt(interrupter.name, interrupter.readyTime);
+					SexyInterrupter:SendInterrupt(interrupter.name, interrupter.cooldown);
 				end
 
 			end
@@ -73,7 +73,7 @@ function SexyInterrupter:UNIT_SPELLCAST_START(...)
 	local event, unitTag, castGUID, spellID = ...;
 
 	if (unitTag == "target" and SI_Globals.numInterrupters > 0) then
-		local spell, rank, displayName, icon, startTime, endTime, isTradeSkill, castID, notInterruptible = UnitCastingInfo("target");
+		local name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible, spellId = UnitCastingInfo("target");
 
 		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime);
 	end
@@ -135,7 +135,7 @@ function SexyInterrupter:OnUpdate()
 			local bar = _G["SexyInterrupterStatusBar" .. cx];
 
 			if bar then			
-				if (value.readyTime - time() <= 0) then
+				if (value.readyTime - GetTime() <= 0) then
 					bar.cooldownText:SetText('');
 					value.readyTime = 0;
 					
@@ -144,8 +144,10 @@ function SexyInterrupter:OnUpdate()
 					return;
 				end
 
-				bar:SetValue(value.readyTime - time());
-				bar.cooldownText:SetText(string.format('%.1f', value.readyTime - time()));
+				local cooldownText = value.readyTime - GetTime();
+
+				bar:SetValue(cooldownText);
+				bar.cooldownText:SetText(string.format('%.1f', cooldownText));
 			end
 		end
 	end

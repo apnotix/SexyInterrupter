@@ -377,7 +377,7 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 
 		local interrupter = SexyInterrupter:GetInterrupter(fullname);
 
-		if interrupter.sortpos == 1 and interrupter.cooldown == 0 then
+		if interrupter.sortpos == 1 and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then
 			local timeVisible = 10;
 
 			if (startTime and endTime and endTime/1000 - startTime/1000 < 10) then

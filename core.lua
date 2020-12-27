@@ -380,9 +380,11 @@ function SexyInterrupter:UpdateInterrupterStatus()
 				row:SetMinMaxValues(0, interrupter.cooldown);
 				row.cooldownText:Show();
 
-				if interrupter.readyTime - time() > 0 then
-					row.cooldownText:SetText(interrupter.readyTime - time());
-					row:SetValue(interrupter.readyTime - time());
+				if interrupter.readyTime - GetTime() > 0 then
+					local readyTime = interrupter.readyTime - GetTime();
+
+					row.cooldownText:SetText(readyTime);
+					row:SetValue(readyTime);
 				end
 			else 
 				row.cooldownText:Hide();
