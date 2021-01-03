@@ -357,6 +357,11 @@ function SexyInterrupter:OnMouseUp(self, button)
 		end
 
 		a.point, a.region, a.relativePoint, a.x, a.y = self:GetPoint();
+
+		if frameName == 'SexyInterrupterDummyAnchorFrame' then
+			SexyInterrupterAnchor:SetPoint(SexyInterrupter.db.profile.ui.anchorPosition.point, SexyInterrupter.db.profile.ui.anchorPosition.region, SexyInterrupter.db.profile.ui.anchorPosition.relativePoint, SexyInterrupter.db.profile.ui.anchorPosition.x, SexyInterrupter.db.profile.ui.anchorPosition.y)
+			SexyInterrupterAnchor:Hide();
+		end
 	end
 end
 
