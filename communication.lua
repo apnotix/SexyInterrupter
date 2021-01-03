@@ -101,8 +101,9 @@ function SexyInterrupter:ReceiveVersionInfo(msg, sender)
 	local receivedVersion = tonumber(msg);
 
 	if receivedVersion > currentVersion and not SexyInterrupter.newVersionNoticed then
-        self:SetNotifyIcon("Interface\\Icons\\achievement_bg_defendxtowers_av")
-        self:Notify("SexyInterrupter: " .. L["New Update"], L["An update is available v"] .. receivedVersion .. ". " .. L["Please update to the latest version!"], nil, receivedVersion);
+        -- self:SetNotifyIcon("Interface\\Icons\\achievement_bg_defendxtowers_av")
+        -- self:Notify("SexyInterrupter: " .. L["New Update"], L["An update is available v"] .. receivedVersion .. ". " .. L["Please update to the latest version!"], nil, receivedVersion);
+        DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: ' .. L["An update is available v"] .. receivedVersion .. ". " .. L["Please update to the latest version!"], 1, 0.5, 0);
 
 		SexyInterrupter.newVersionNoticed = true;
 	end
