@@ -160,6 +160,7 @@ function SexyInterrupter:UpdateInterrupters()
 		local class, englishClass = UnitClass(unit);			
 		local color = RAID_CLASS_COLORS[englishClass];
 
+		
 		if interrupter == nil then
 			interrupter = {};
 			
@@ -172,9 +173,10 @@ function SexyInterrupter:UpdateInterrupters()
 			interrupter.cooldown = 0;
 			interrupter.readyTime = 0;
 			interrupter.overrideprio = false;
-
+			
 			tinsert(SI_Globals.interrupters, interrupter);
 		end
+		--print('UpdateInterrupters', name, fullname, interrupter)
 
 		interrupter = SexyInterrupter:GetInterrupter(fullname);
 				

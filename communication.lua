@@ -87,12 +87,20 @@ function SexyInterrupter:ReceiveInterrupt(msg, sender)
 end
 
 function SexyInterrupter:ReceiveTalents(msg, sender)
-    local infos = { strsplit(';', msg) };
-    local interrupter = SexyInterrupter:GetInterrupter(sender);
+    local senderName, talents = strsplit(';', msg, 2 )
+    local player, realm = strsplit( "-", sender, 2 )
+    local ownPlayer, serverShortName = UnitFullName("player")
+    local user = sender;
+
+    if realm == serverShortName then
+        user = senderName;
+    end
+
+    local interrupter = SexyInterrupter:GetInterrupter(user);
     
     if interrupter then    
         interrupter.active = true;    
-        interrupter.talents = infos[2];
+        interrupter.talents = talents;
     end
 end
 
