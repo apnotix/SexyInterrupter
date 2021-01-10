@@ -24,4 +24,5 @@ settings.lua
 events.lua
 utils.lua
 communication.lua
+ui.lua
 SexyInterrupter.xml

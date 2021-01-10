@@ -2,11 +2,56 @@ local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
 function SexyInterrupter:GROUP_ROSTER_UPDATE()
-	SexyInterrupter:UpdateInterrupters();
-	SexyInterrupter:UpdateUI();
-	SexyInterrupter:UpdateInterrupterStatus();
+    for i = 1, GetNumGroupMembers() do
+		local unit = "party" .. i;
 
-	SexyInterrupter:UpdateInterrupterSettings();
+		if IsInRaid() then
+			unit = "raid" .. i;
+		end
+		
+		if not UnitExists(unit) then	
+			unit = 'player';
+		end
+		
+		local name, realm = UnitName(unit);
+		local fullname = name;
+
+		if realm ~= "" and realm ~= nil then 
+			fullname = name .. '-' .. realm;
+        end
+
+        local interrupter = SexyInterrupter:GetInterrupter(fullname);
+
+        if interrupter ~= nil then
+            if not UnitIsConnected(unit) then
+                interrupter.offline = true;
+            else 
+                interrupter.offline = false;
+            end
+            
+            if UnitIsAFK(unit) then
+                interrupter.afk = true;
+            else
+                interrupter.afk = false;
+            end
+            
+            if UnitIsDeadOrGhost(unit) then
+                interrupter.dead = true;
+            else
+                interrupter.dead = false;
+            end
+            
+            if UnitInRange(unit) then
+                interrupter.inrange = true;
+            else
+                interrupter.inrange = false;
+            end
+        end
+
+        SexyInterrupter:SendMessage("requestuser", fullname);
+    end
+
+    SexyInterrupter:SendMessage("versioninfo", SexyInterrupter.Version);
 end
 
 function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
@@ -49,20 +94,10 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 	end
 end
 
-function SexyInterrupter:UPDATE_INSTANCE_INFO() 
-	local name, type, difficulty, difficultyName, maxPlayers, playerDifficulty, isDynamicInstance, mapID, instanceGroupSize = GetInstanceInfo();
-	local isInstance, instanceType = IsInInstance();
-
-	if isInstance then
-		-- print('UPDATE_INSTANCE_INFO', name, type, difficulty, difficultyName, maxPlayers, playerDifficulty, isDynamicInstance, mapID, instanceGroupSize);
-		-- print('UPDATE_INSTANCE_INFO', isInstance, instanceType);
-	end
-end
-
 function SexyInterrupter:UNIT_SPELLCAST_CHANNEL_START(...) 
 	local event, unitTag, castGUID, spellID = ...;
 
-	if (unitTag == "target" and SI_Globals.numInterrupters > 0) then
+	if unitTag == "target" and SI_Globals.numInterrupters > 0 then
 		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID = UnitChannelInfo("target");
 
 		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime);
@@ -72,7 +107,7 @@ end
 function SexyInterrupter:UNIT_SPELLCAST_START(...)
 	local event, unitTag, castGUID, spellID = ...;
 
-	if (unitTag == "target" and SI_Globals.numInterrupters > 0) then
+	if unitTag == "target" and SI_Globals.numInterrupters > 0 then
 		local name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible, spellId = UnitCastingInfo("target");
 
 		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime);
@@ -90,14 +125,6 @@ function SexyInterrupter:UNIT_SPELLCAST_STOP(...)
 end
 
 function SexyInterrupter:PLAYER_TARGET_CHANGED()
-	local targetName = UnitName("target");
-	
-	if targetName then
-		--local encounterId = self:GetEntcounterId(targetName);
-		
-		--print('PLAYER_TARGET_CHANGED', encounterId);
-	end
-
     if SexyInterrupterInterruptNowText:IsVisible() then
         SexyInterrupterInterruptNowText:SetTimeVisible(0);
 		
@@ -114,41 +141,5 @@ end
 function SexyInterrupter:PLAYER_REGEN_ENABLED() 
 	if self.db.profile.general.modeincombat then
 		SexyInterrupterAnchor:Hide();
-	end
-end
-
-function SexyInterrupter:CHAT_MSG_ADDON(event, prefix, msg, channel, sender)
-    if prefix == "SexyInterrupter" and not strfind(sender, select(1, UnitName("player"))) then
-        SexyInterrupter:AddonMessageReceived(msg, sender)
-    end
-end
-
-function SexyInterrupter:OnUpdate()
-	local currentplayer = SexyInterrupter:GetInterrupter(select(1, UnitName("player")));
-
-	for cx, value in pairs(SexyInterrupter:GetCurrentInterrupters()) do
-		if currentplayer and currentplayer.sortpos > SexyInterrupter.db.profile.general.maxrows and SexyInterrupter.db.profile.general.maxrows == cx then
-			value = currentplayer;
-		end
-
-        if value.readyTime > 0 then
-			local bar = _G["SexyInterrupterStatusBar" .. cx];
-
-			if bar then			
-				if (value.readyTime - GetTime() <= 0) then
-					bar.cooldownText:SetText('');
-					value.readyTime = 0;
-					
-					bar:SetMinMaxValues(0, 100);
-					bar:SetValue(100);
-					return;
-				end
-
-				local cooldownText = value.readyTime - GetTime();
-
-				bar:SetValue(cooldownText);
-				bar.cooldownText:SetText(string.format('%.1f', cooldownText));
-			end
-		end
 	end
 end
