@@ -33,8 +33,12 @@ function SexyInterrupter:AddIcon()
    self.icon:Register("SexyInterrupter", dataobj, self.db.profile.icon);
 end
 
-function SexyInterrupter:GetInterrupter(name)
+function SexyInterrupter:GetInterrupter(name, realm)
 	local retVal = nil;
+
+	if realm then
+		name = name .. '-' .. realm;
+	end
 
 	for cx, value in pairs(SI_Globals.interrupters) do
 		if value.fullname == name or value.name == name then
@@ -68,12 +72,8 @@ function SexyInterrupter:GetCurrentInterrupters()
 	for cx, value in pairs(SI_Globals.interrupters) do
 		value.pos = cx;
 
-		if not value.lastseen or value.lastseen < (time() - 1209600) then
-			tremove(SI_Globals.interrupters, cx);
-		else
-			if value.active and value.canInterrupt then
-				tinsert(interrupters, value);	
-			end
+		if value.active and value.canInterrupt then
+			tinsert(interrupters, value);	
 		end
 	end
 
@@ -176,7 +176,6 @@ function SexyInterrupter:UpdateInterrupters()
 			
 			tinsert(SI_Globals.interrupters, interrupter);
 		end
-		--print('UpdateInterrupters', name, fullname, interrupter)
 
 		interrupter = SexyInterrupter:GetInterrupter(fullname);
 				
@@ -410,9 +409,3 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 		end
 	end
 end 
-
-function SexyInterrupter:CHAT_MSG_ADDON(event, prefix, msg, channel, sender)
-    if prefix == "SexyInterrupter" and not strfind(sender, select(1, UnitName("player"))) then
-        SexyInterrupter:AddonMessageReceived(msg, sender)
-    end
-end

@@ -13,27 +13,40 @@ function SexyInterrupter:SendMessage(prefix, ...)
         channel = IsPartyLFG() and "INSTANCE_CHAT" or"PARTY";
     end
     
-	if channel then
+    if channel then
         SexyInterrupter:SendCommMessage("SexyInterrupter", SexyInterrupter:Serialize(prefix, UnitName ("player"), GetRealmName(), ...), channel);
     end
 end
 
 function SexyInterrupter:CommReceived(commPrefix, data, channel, source)
-    local prefix, player, realm, message = select(2, SexyInterrupter:Deserialize(data));
+    if commPrefix == 'SexyInterrupter' and data ~= nil then
+        local prefix, player, realm, message = select(2, SexyInterrupter:Deserialize(data));
 
-    if prefix == 'versioninfo' then
-        SexyInterrupter:ReceiveVersionInfo(player, realm, message);
-    elseif prefix == 'requestuser' then
-        SexyInterrupter:SendUserInformation(player, realm, message);
-    elseif prefix == 'userinfos' then
-        SexyInterrupter:ReceiveUserInformation(player, realm, message);
-    elseif prefix == 'interrupt' then
-        SexyInterrupter:ReceiveInterrupt(player, realm, message);
+        if prefix == 'versioninfo' then
+            SexyInterrupter:ReceiveVersionInfo(player, realm, message);
+        elseif prefix == 'requestuser' then
+            SexyInterrupter:SendUserInformation(player, realm, message);
+        elseif prefix == 'userinfos' then
+            SexyInterrupter:ReceiveUserInformation(player, realm, message);
+        elseif prefix == 'interrupt' then
+            SexyInterrupter:ReceiveInterrupt(player, realm, message);
+        end
     end
 end
 
-function SexyInterrupter:SendUserInformation(player, realm, message)
+function SexyInterrupter:SendUserInformation(player, realm, target)
     local infos = {};
+    local ownName, ownRealm = UnitName("player");
+    local ownFullname = ownName;
+
+    if ownRealm then
+        ownFullname = ownFullname .. '-' .. ownRealm;
+    end
+
+    if ownFullname ~= target then
+        return;
+    end
+
     local class, englishClass = UnitClass("player");
 
     infos.class = class;
@@ -44,14 +57,14 @@ function SexyInterrupter:SendUserInformation(player, realm, message)
         infos.role = UnitGroupRolesAssigned("player");
     end
 
-    local talents = {};
+    local talents = '';
 
     for talentRow = 1, 7 do
         for talentCol = 1, 3 do
             local talentID, name, texture, selected, available = GetTalentInfo(talentRow, talentCol, 1);
 
             if selected then
-                tinsert (talents, talentID);
+                talents = talents .. '+' .. talentID;
                 break;
             end
         end
@@ -63,13 +76,25 @@ function SexyInterrupter:SendUserInformation(player, realm, message)
 end
 
 function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
-    local interrupter = infos;
+    local interrupter = SexyInterrupter:GetInterrupter(player, realm);
+    local interrupterExists = true;
+
+    if interrupter == nil then
+        interrupterExists = false;
+
+        interrupter = {};
+    end
+
+    interrupter.class = infos.class;
+    interrupter.classEN = infos.classEN;
+    interrupter.role = infos.role;
+    interrupter.talents = infos.talents;
 
     interrupter.active = true;
     interrupter.cooldown = 0;
     interrupter.readyTime = 0;
     
-    interrupter.color = RAID_CLASS_COLORS[interrupter.classEN];
+    interrupter.classColor = RAID_CLASS_COLORS[interrupter.classEN];
     interrupter.name = player;
     interrupter.realm = realm;
     interrupter.fullname = player;
@@ -92,9 +117,10 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
         interrupter.prio = 1;
     end
 
-    tinsert(SI_Globals.interrupters, interrupter);
+    if interrupterExists == false then
+        tinsert(SI_Globals.interrupters, interrupter);
+    end
 
-    SexyInterrupter:UpdateInterrupters();
     SexyInterrupter:UpdateUI();
 	SexyInterrupter:UpdateInterrupterStatus();
 end
@@ -115,13 +141,7 @@ function SexyInterrupter:SendInterrupt(player, cooldown)
 end
 
 function SexyInterrupter:ReceiveInterrupt(player, realm, cooldown)
-    local sender = player;
-
-    if realm then
-        sender = sender .. '-' .. realm;
-    end
-
-    local interrupter = SexyInterrupter:GetInterrupter(sender);
+    local interrupter = SexyInterrupter:GetInterrupter(player, realm);
     
     if interrupter and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then 
         cooldown = tonumber(cooldown);
@@ -137,109 +157,26 @@ end
 
 
 
+-- function SexyInterrupter:ReceiveOverridePrioInfos(msg, sender) 
+--     local fullinfos = { strsplit(';', msg) };
+--     local infos;
+--     local interrupter;
+--     local name, realm, fullname, overrideprio, overridedprio;
 
+--     for cx, info in pairs(fullinfos) do
+--         infos = { strsplit('+', info) };
 
-function SexyInterrupter:SendAddonMessage(msg)
-    local channel;
-    local inInstance, instanceType = IsInInstance()
+--         name = infos[1];
+--         realm = infos[2];
+--         fullname = infos[3];
+--         overrideprio = infos[4];
+--         overridedprio = infos[5];
 
-    if instanceType == "pvp" then
-        channel = "INSTANCE_CHAT";
-    elseif IsInRaid() then
-        channel = IsPartyLFG() and "INSTANCE_CHAT" or "RAID";
-    elseif IsInGroup() then
-        channel = IsPartyLFG() and "INSTANCE_CHAT" or"PARTY";
-    end
-    
-	if channel then
-    	C_ChatInfo.SendAddonMessage("SexyInterrupter", msg, channel);
-	end
-end
+--         interrupter = SexyInterrupter:GetInterrupter(fullname);
 
-function SexyInterrupter:AddonMessageReceived(msg, sender)
-    if strfind(msg, "overrideprio:") then
-        msg = gsub(msg, "overrideprio:", "");
-
-        SexyInterrupter:ReceiveOverridePrioInfos(msg, sender);
-    elseif strfind(msg, "versioninfo:") then
-        msg = gsub(msg, "versioninfo:", "");
-
-        SexyInterrupter:ReceiveVersionInfo(msg, sender);
-    elseif strfind(msg, "requesttalents:") then
-        msg = gsub(msg, "requesttalents:", "");
-
-        SexyInterrupter:SendTalents(msg, sender);
-    elseif strfind(msg, "talents:") then
-        msg = gsub(msg, "talents:", "");
-
-        SexyInterrupter:ReceiveTalents(msg, sender);
-    elseif strfind(msg, "interrupt:") then
-        msg = gsub(msg, "interrupt:", "");
-
-        SexyInterrupter:ReceiveInterrupt(msg, sender);
-    end
-end
-
-function SexyInterrupter:SendTalents(msg, sender)
-    local player = UnitName("player");
-
-    if (strfind(msg, player)) then
-        local msg = "talents:";
-
-        msg = msg .. player .. ';';
-
-        for talentRow = 1, 7 do
-            for talentCol = 1, 3 do
-                local _, name, _, sel, _, id = GetTalentInfo(talentRow, talentCol, 1);
-
-                if sel then
-                    msg = msg .. tostring(id) .. '+';
-                end
-            end
-        end
-
-        SexyInterrupter:SendAddonMessage(msg:sub(1, -2));
-    end
-end
-
-function SexyInterrupter:ReceiveTalents(msg, sender)
-    local senderName, talents = strsplit(';', msg, 2 )
-    local player, realm = strsplit( "-", sender, 2 )
-    local ownPlayer, serverShortName = UnitFullName("player")
-    local user = sender;
-
-    if realm == serverShortName then
-        user = senderName;
-    end
-
-    local interrupter = SexyInterrupter:GetInterrupter(user);
-    
-    if interrupter then    
-        interrupter.active = true;    
-        interrupter.talents = talents;
-    end
-end
-
-function SexyInterrupter:ReceiveOverridePrioInfos(msg, sender) 
-    local fullinfos = { strsplit(';', msg) };
-    local infos;
-    local interrupter;
-    local name, realm, fullname, overrideprio, overridedprio;
-
-    for cx, info in pairs(fullinfos) do
-        infos = { strsplit('+', info) };
-
-        name = infos[1];
-        realm = infos[2];
-        fullname = infos[3];
-        overrideprio = infos[4];
-        overridedprio = infos[5];
-
-        interrupter = SexyInterrupter:GetInterrupter(fullname);
-
-        if interrupter then
-            interrupter.overrideprio = overrideprio == "true" and true or false;
-            interrupter.overridedprio = overridedprio == nil and overridedprio or tonumber(overridedprio);
-        end
-    end
-end
+--         if interrupter then
+--             interrupter.overrideprio = overrideprio == "true" and true or false;
+--             interrupter.overridedprio = overridedprio == nil and overridedprio or tonumber(overridedprio);
+--         end
+--     end
+-- end

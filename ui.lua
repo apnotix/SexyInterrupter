@@ -1,3 +1,6 @@
+local LSM = LibStub("LibSharedMedia-3.0");
+local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
+
 function SexyInterrupter:CreateUi()
 	-- Frame: Anchor
 	local f = CreateFrame("Frame", "SexyInterrupterAnchor", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil);	
@@ -121,6 +124,7 @@ function SexyInterrupter:CreateUi()
 	dummyMessageFrameText:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a);
 
 	dummyMessageFrame:Hide();
+	SexyInterrupterAnchor:Hide();
 end
 
 function SexyInterrupter:UpdateFrames()
@@ -146,8 +150,6 @@ function SexyInterrupter:UpdateFrames()
 	for _, child in ipairs({ SexyInterrupterAnchor:GetChildren() }) do
 		if string.find(child:GetName(), "SexyInterrupterRow") then
 			for _, subchild in ipairs({ child:GetChildren() }) do
-				-- TODO: Font, fontcolor
-
 				if string.find(subchild:GetName(), "SexyInterrupterStatusBar") then
 					subchild:SetSize(self.db.profile.ui.window.width - 10, self.db.profile.ui.bars.barheight)
 					subchild:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.profile.ui.bars.texture));
@@ -189,13 +191,6 @@ function SexyInterrupter:UpdateUI()
 			local t = f:CreateTexture()
 			t:SetAllPoints(f)
 			t:SetTexture(0, 0, 0, 0.4)
-			
-			-- f.nr = f:CreateFontString("SexyInterrupterNrText" .. cx, nil, "GameFontNormal")
-			-- f.nr:SetPoint("CENTER", "SexyInterrupterRow" .. cx, "CENTER")
-			-- f.nr:SetFont(self.db.profile.ui.font, self.db.profile.ui.fontsize, "OUTLINE")
-			-- f.nr:SetText(cx);
-			-- f.nr:SetSize(12*3, 12);
-			-- f.nr:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
 		
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
 			f:SetSize(self.db.profile.ui.window.width - 10, self.db.profile.ui.bars.barheight)
@@ -274,10 +269,8 @@ function SexyInterrupter:UpdateInterrupterStatus()
 		if currentplayer.sortpos > self.db.profile.general.maxrows and self.db.profile.general.maxrows == cx then
 			interrupter = currentplayer;
 
-			-- rowParent.nr:SetText(currentplayer.sortpos);
 			rowParent:SetAlpha(0.5);
 		else 
-			-- rowParent.nr:SetText(cx);
 			rowParent:SetAlpha(1);
 		end
 
@@ -359,4 +352,27 @@ function SexyInterrupter:OnUpdate()
 			end
 		end
 	end
+
+	for i = 1, GetNumGroupMembers() do
+		local unit = "party" .. i;
+
+		if IsInRaid() then
+			unit = "raid" .. i;
+		end
+		
+		if not UnitExists(unit) then	
+			unit = 'player';
+		end
+		
+		local name, realm = UnitName(unit);
+        local interrupter = SexyInterrupter:GetInterrupter(name, realm);
+
+        if interrupter ~= nil then            
+            if UnitInRange(unit) then
+                interrupter.inrange = true;
+            else
+                interrupter.inrange = false;
+            end
+		end
+    end
 end
