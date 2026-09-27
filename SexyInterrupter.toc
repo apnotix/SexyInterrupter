@@ -1,9 +1,9 @@
-## Interface: 90002
-## X-Min-Interface: 90002
+## Interface: 120100, 16001
 ## Version: 3
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
+## Category: Party & Raid
 ## DefaultState: Enabled
 ## LoadOnDemand: 0
 ## SavedVariables: SexyInterrupterDB, SI_Globals

@@ -20,16 +20,16 @@ end
 
 function SexyInterrupter:CommReceived(commPrefix, data, channel, source)
     if commPrefix == 'SexyInterrupter' and data ~= nil then
-        local prefix, player, realm, message = select(2, SexyInterrupter:Deserialize(data));
+        local prefix, player, realm, arg1, arg2 = select(2, SexyInterrupter:Deserialize(data));
 
         if prefix == 'versioninfo' then
-            SexyInterrupter:ReceiveVersionInfo(player, realm, message);
+            SexyInterrupter:ReceiveVersionInfo(player, realm, arg1);
         elseif prefix == 'requestuser' then
-            SexyInterrupter:SendUserInformation(player, realm, message);
+            SexyInterrupter:SendUserInformation(player, realm, arg1);
         elseif prefix == 'userinfos' then
-            SexyInterrupter:ReceiveUserInformation(player, realm, message);
+            SexyInterrupter:ReceiveUserInformation(player, realm, arg1);
         elseif prefix == 'interrupt' then
-            SexyInterrupter:ReceiveInterrupt(player, realm, message);
+            SexyInterrupter:ReceiveInterrupt(player, realm, arg1, arg2);
         end
     end
 end
@@ -51,7 +51,7 @@ function SexyInterrupter:SendUserInformation(player, realm, target)
 
     infos.class = class;
     infos.classEN = englishClass;
-    infos.role = GetSpecializationRole(GetSpecialization());
+    infos.role = SexyInterrupter:GetSpecializationRoleCompat();
 
     if infos.role == nil then        
         infos.role = UnitGroupRolesAssigned("player");
@@ -59,13 +59,21 @@ function SexyInterrupter:SendUserInformation(player, realm, target)
 
     local talents = '';
 
-    for talentRow = 1, 7 do
-        for talentCol = 1, 3 do
-            local talentID, name, texture, selected, available = GetTalentInfo(talentRow, talentCol, 1);
+    -- GetTalentInfo (the old per-point talent tree API) doesn't exist either
+    -- on Forever's beta client, same situation as GetSpecializationRole/
+    -- GetSpecialization above - skip it instead of erroring. talents just
+    -- stays '' (still non-nil, so the "active" mirror below keeps working);
+    -- the only thing lost is the Shadowpriest cooldown-adjustment lookup
+    -- (talent 263716) in events.lua, which simply never matches.
+    if GetTalentInfo then
+        for talentRow = 1, 7 do
+            for talentCol = 1, 3 do
+                local talentID, name, texture, selected, available = GetTalentInfo(talentRow, talentCol, 1);
 
-            if selected then
-                talents = talents .. '+' .. talentID;
-                break;
+                if selected then
+                    talents = talents .. '+' .. talentID;
+                    break;
+                end
             end
         end
     end
@@ -90,6 +98,18 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
     interrupter.role = infos.role;
     interrupter.talents = infos.talents;
 
+    -- UpdateInterrupters() (utils.lua) ist der einzige Code, der inrange für
+    -- ANDERE Spieler per UnitInRangeCompat() setzt, wird aber laut eigenem
+    -- Kommentar in core.lua nirgends mehr aufgerufen (toter Code seit dem
+    -- events.lua-Rewrite). Ohne diese Zeile bleibt interrupter.inrange
+    -- dauerhaft nil (= falsy), wodurch ui.lua's "not interrupter.inrange"-
+    -- Zweig IMMER greift und der Name-Text permanent mit 30% Alpha (statt der
+    -- eigentlichen fontcolor/Klassenfarbe) gezeichnet wird - sichtbar als
+    -- bräunlich wirkender, mit dem Leisten-Hintergrund verschmelzender Text.
+    -- Wie bei UpdateOwnInterrupter() (dort ebenfalls immer true, keine echte
+    -- Prüfung) einfach als "in Reichweite" annehmen statt fälschlich zu dimmen.
+    interrupter.inrange = true;
+
     interrupter.active = true;
     interrupter.cooldown = 0;
     interrupter.readyTime = 0;
@@ -109,6 +129,29 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
         interrupter.canInterrupt = true;
     end
 
+    -- This class/role guess is the best we can do for OTHER players (their
+    -- spellbook isn't queryable). But if this 'userinfos' broadcast turns
+    -- out to be about the LOCAL player (e.g. a comm loopback on this client
+    -- - GetCurrentInterrupters/UpdateOwnInterrupter already know better via
+    -- IsSpellKnown), don't let this overwrite that with the cruder guess.
+    --
+    -- Compare the RAW `player` name (exactly as UnitName("player") returns
+    -- it, unsuffixed) instead of the locally-built `interrupter.fullname` -
+    -- that fullname was just built as `player .. '-' .. realm` above using
+    -- the DESERIALIZED realm (always GetRealmName(), never nil/empty, see
+    -- SendMessage). UpdateOwnInterrupter(), meanwhile, builds its own
+    -- fullname from UnitName("player")'s realm return, which IS nil/empty
+    -- for same-realm units. Comparing the suffixed fullname strings against
+    -- each other silently mismatches for same-realm players ("Name" vs
+    -- "Name-RealmName") even though it's the exact same person - which is
+    -- exactly why this check previously failed to catch a real self-loopback
+    -- (and left a second, wrongly-keyed duplicate entry with the cruder
+    -- canInterrupt guess sitting in SI_Globals.interrupters, still shown as
+    -- its own bar even though the correctly-keyed entry was fixed).
+    if player == UnitName("player") then
+        interrupter.canInterrupt = SexyInterrupter:PlayerKnowsAnyInterruptSpell();
+    end
+
     if interrupter.role == 'HEALER' then
         interrupter.prio = 3;
     elseif interrupter.role == 'DAMAGER' then
@@ -123,6 +166,7 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
 
     SexyInterrupter:UpdateUI();
 	SexyInterrupter:UpdateInterrupterStatus();
+	SexyInterrupter:UpdateInterrupterSettings();
 end
 
 function SexyInterrupter:ReceiveVersionInfo(player, realm, version)
@@ -136,20 +180,30 @@ function SexyInterrupter:ReceiveVersionInfo(player, realm, version)
 	end
 end
 
-function SexyInterrupter:SendInterrupt(player, cooldown)
-    SexyInterrupter:SendMessage('interrupt', cooldown);
+function SexyInterrupter:SendInterrupt(player, spellId, cooldown)
+    SexyInterrupter:SendMessage('interrupt', spellId, cooldown);
 end
 
-function SexyInterrupter:ReceiveInterrupt(player, realm, cooldown)
+function SexyInterrupter:ReceiveInterrupt(player, realm, spellId, cooldown)
     local interrupter = SexyInterrupter:GetInterrupter(player, realm);
-    
-    if interrupter and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then 
+
+    if interrupter then
+        spellId = tonumber(spellId);
         cooldown = tonumber(cooldown);
 
-        interrupter.readyTime = cooldown + GetTime();
-        interrupter.cooldown = cooldown;
+        local existing = interrupter.abilities and interrupter.abilities[spellId];
 
-        SexyInterrupter:UpdateInterrupterStatus();
+        -- Same "don't overwrite a fresher cooldown" guard the old single-ability
+        -- code had, just scoped per ability now instead of per player.
+        if not existing or existing.readyTime == 0 or existing.readyTime == nil then
+            interrupter.abilities = interrupter.abilities or {};
+            interrupter.abilities[spellId] = {
+                cooldown = cooldown,
+                readyTime = cooldown + GetTime(),
+            };
+
+            SexyInterrupter:UpdateInterrupterStatus();
+        end
     end
 end
 

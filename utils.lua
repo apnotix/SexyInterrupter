@@ -1,5 +1,6 @@
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
+local LibDD = LibStub("LibUIDropDownMenuQuestie-4.0");
 
 SexyInterrupter.role_icon_tcoords = {
 	DAMAGER = {0.3125, 0.63, 0.3125, 0.63},
@@ -33,6 +34,64 @@ function SexyInterrupter:AddIcon()
    self.icon:Register("SexyInterrupter", dataobj, self.db.profile.icon);
 end
 
+-- GetSpecializationRole/GetSpecialization/GetSpecializationRoleByID/
+-- GetInspectSpecialization are Retail-only (the single-specialization
+-- system). World of Warcraft: Forever's beta client is built on the Classic
+-- client line (talents are still read via the old per-point GetTalentInfo
+-- below), where these globals don't exist at all - calling a nil global
+-- throws immediately, so the pre-existing "if not interrupter.role then
+-- fall back to UnitGroupRolesAssigned" never even got a chance to run.
+-- Guard the calls so that fallback actually triggers instead of erroring.
+function SexyInterrupter:GetSpecializationRoleCompat()
+	if GetSpecializationRole and GetSpecialization then
+		return GetSpecializationRole(GetSpecialization());
+	end
+
+	return nil;
+end
+
+function SexyInterrupter:GetSpecializationRoleByIDCompat(fullname)
+	if GetSpecializationRoleByID and GetInspectSpecialization then
+		return GetSpecializationRoleByID(GetInspectSpecialization(fullname));
+	end
+
+	return nil;
+end
+
+-- UnitInRange(unit) can return a "secret" boolean (Blizzard's newer combat/
+-- protected-info guard, same family as the spellId secrecy noted for
+-- UNIT_SPELLCAST_SUCCEEDED in events.lua) that addon code is not allowed to
+-- branch on directly - doing so throws "attempt to perform boolean test on a
+-- secret boolean value". issecretvalue() is the sanctioned way to detect
+-- that case without tainting/erroring. Returns nil (meaning "unknown, leave
+-- the previous inrange state alone") instead of a real boolean when secret.
+function SexyInterrupter:UnitInRangeCompat(unit)
+	local inRange = UnitInRange(unit);
+
+	if issecretvalue and issecretvalue(inRange) then
+		return nil;
+	end
+
+	return inRange and true or false;
+end
+
+-- True if the player actually has at least one of SI.interruptSpells
+-- trained (IsSpellKnown), regardless of what the static class+role table in
+-- settings.lua guesses is possible for their class/role.
+function SexyInterrupter:PlayerKnowsAnyInterruptSpell()
+	if not IsSpellKnown then
+		return true;
+	end
+
+	for _, spellId in pairs(self.interruptSpells) do
+		if IsSpellKnown(spellId) then
+			return true;
+		end
+	end
+
+	return false;
+end
+
 function SexyInterrupter:GetInterrupter(name, realm)
 	local retVal = nil;
 
@@ -48,6 +107,86 @@ function SexyInterrupter:GetInterrupter(name, realm)
 	end
 
 	return retVal;
+end
+
+-- Creates/refreshes the local player's own SI_Globals.interrupters entry
+-- directly, independent of comm (SendUserInformation/ReceiveUserInformation
+-- in communication.lua only run inside a group - a solo player never sends
+-- or receives anything there, see SendMessage's channel check) and
+-- independent of UpdateInterrupters() (dead code - not called by any loaded
+-- file since the events.lua rewrite, see communication.lua's
+-- ReceiveUserInformation for the actual live equivalent for OTHER players).
+-- Without this, a stale entry from an earlier group session (active=true,
+-- canInterrupt=true from before the player ever had an interrupt trained)
+-- would keep showing in the bar and triggering the interrupt-now flash/
+-- message forever, since nothing ever re-evaluated it once solo.
+function SexyInterrupter:UpdateOwnInterrupter()
+	local name, realm = UnitName("player");
+
+	-- Always suffix with GetRealmName(), matching exactly what
+	-- ReceiveUserInformation's fullname ends up as (it deserializes
+	-- GetRealmName() from the comm payload, see SendMessage - never nil).
+	-- UnitName("player")'s own realm return is nil/empty for same-realm
+	-- units, so using it here (as this used to) produces a DIFFERENT key
+	-- ("Name" vs "Name-RealmName") for the exact same character, which
+	-- created a second, wrongly-keyed duplicate entry the moment any
+	-- 'userinfos' comm message about yourself was processed.
+	local fullname = name .. '-' .. GetRealmName();
+
+	local interrupter = SexyInterrupter:GetInterrupter(fullname);
+
+	if interrupter == nil then
+		interrupter = {
+			name = name,
+			realm = GetRealmName(),
+			fullname = fullname,
+			cooldown = 0,
+			readyTime = 0,
+			overrideprio = false,
+		};
+
+		tinsert(SI_Globals.interrupters, interrupter);
+	end
+
+	local class, englishClass = UnitClass("player");
+
+	interrupter.class = class;
+	interrupter.classEN = englishClass;
+	interrupter.classColor = RAID_CLASS_COLORS[englishClass];
+	interrupter.lastseen = time();
+	interrupter.active = true;
+	interrupter.role = SexyInterrupter:GetSpecializationRoleCompat();
+
+	if not interrupter.role then
+		interrupter.role = UnitGroupRolesAssigned("player");
+	end
+
+	if interrupter.classEN and interrupter.role ~= 'NONE' then
+		interrupter.canInterrupt = self.unitCanInterrupt[strlower(interrupter.classEN)][strlower(interrupter.role)];
+	else
+		interrupter.canInterrupt = true;
+	end
+
+	if interrupter.canInterrupt then
+		interrupter.canInterrupt = SexyInterrupter:PlayerKnowsAnyInterruptSpell();
+	end
+
+	if interrupter.overrideprio == nil then
+		interrupter.overrideprio = false;
+	end
+
+	if interrupter.role == 'HEALER' then
+		interrupter.prio = 3;
+	elseif interrupter.role == 'DAMAGER' then
+		interrupter.prio = 2;
+	elseif interrupter.role == 'TANK' then
+		interrupter.prio = 1;
+	end
+
+	interrupter.offline = false;
+	interrupter.afk = UnitIsAFK("player") and true or false;
+	interrupter.dead = UnitIsDeadOrGhost("player") and true or false;
+	interrupter.inrange = true;
 end
 
 function SexyInterrupter:GetEntcounterId(targetName)
@@ -66,41 +205,70 @@ function SexyInterrupter:GetEntcounterId(targetName)
 	return 0;
 end
 
-function SexyInterrupter:GetCurrentInterrupters() 
-	local interrupters = {};
+-- Returns one row per (player, known interrupt ability) pair - a player with
+-- several dynamically-learned interrupt abilities (see UNIT_SPELLCAST_SUCCEEDED
+-- in events.lua) gets one row per ability, each with its own icon/cooldown.
+-- Players with no ability learned yet still get a single placeholder row so
+-- they don't disappear from the rotation before their first known kick.
+function SexyInterrupter:GetCurrentInterrupters()
+	local rows = {};
 
-	for cx, value in pairs(SI_Globals.interrupters) do
-		value.pos = cx;
+	for cx, interrupter in pairs(SI_Globals.interrupters) do
+		interrupter.pos = cx;
+		interrupter.sortpos = nil;
 
-		if value.active and value.canInterrupt then
-			tinsert(interrupters, value);	
+		if interrupter.active and interrupter.canInterrupt then
+			local hasAbilities = false;
+
+			if interrupter.abilities then
+				for spellId, ability in pairs(interrupter.abilities) do
+					hasAbilities = true;
+
+					tinsert(rows, {
+						interrupter = interrupter,
+						spellId = spellId,
+						cooldown = ability.cooldown,
+						readyTime = ability.readyTime,
+					});
+				end
+			end
+
+			if not hasAbilities then
+				tinsert(rows, {
+					interrupter = interrupter,
+					spellId = nil,
+					cooldown = interrupter.cooldown or 0,
+					readyTime = interrupter.readyTime or 0,
+				});
+			end
 		end
 	end
 
-	table.sort(interrupters, function(a,b) 
+	table.sort(rows, function(a, b)
+		local ia, ib = a.interrupter, b.interrupter;
 		local retVal = false;
 
-		if a.offline then
+		if ia.offline then
 			retVal = false;
 		else
-			if b.offline then
+			if ib.offline then
 				retVal = true;
 			else
-				if not a.inrange then
+				if not ia.inrange then
 					retVal = false;
 				else
-					if not b.inrange then
+					if not ib.inrange then
 						retVal = true;
 					else
-						if a.dead then
+						if ia.dead then
 							retVal = false
-						else 
-							if b.dead then
+						else
+							if ib.dead then
 								retVal = true;
 							else
 								if a.readyTime > 0 then
 									if a.readyTime == b.readyTime then
-										retVal = (a.overridedprio or a.prio) < (b.overridedprio or b.prio);
+										retVal = (ia.overridedprio or ia.prio) < (ib.overridedprio or ib.prio);
 									else
 										retVal = a.readyTime < b.readyTime;
 									end
@@ -108,7 +276,7 @@ function SexyInterrupter:GetCurrentInterrupters()
 									if b.readyTime > 0 then
 										retVal = true;
 									else
-										retVal = (a.overridedprio or a.prio) < (b.overridedprio or b.prio);
+										retVal = (ia.overridedprio or ia.prio) < (ib.overridedprio or ib.prio);
 									end
 								end
 							end
@@ -121,13 +289,22 @@ function SexyInterrupter:GetCurrentInterrupters()
 		return retVal;
 	end)
 
-	for cx, value in pairs(interrupters) do
-		value.sortpos = cx;
-	end
-	
-	SI_Globals.numInterrupters = table.getn(interrupters);
+	for cx, row in pairs(rows) do
+		row.sortpos = cx;
 
-	return interrupters;
+		-- Mirror the player's best (earliest-ready) row back onto the shared
+		-- interrupter object, for code that still reads player-level
+		-- sortpos/readyTime/cooldown directly (e.g. ShowInterruptWarning).
+		if not row.interrupter.sortpos then
+			row.interrupter.sortpos = cx;
+			row.interrupter.cooldown = row.cooldown;
+			row.interrupter.readyTime = row.readyTime;
+		end
+	end
+
+	SI_Globals.numInterrupters = table.getn(rows);
+
+	return rows;
 end
 
 function SexyInterrupter:UpdateInterrupters()
@@ -184,9 +361,9 @@ function SexyInterrupter:UpdateInterrupters()
 		
 		if unit == 'player' then
 			interrupter.active = true;
-			interrupter.role = GetSpecializationRole(GetSpecialization());
+			interrupter.role = SexyInterrupter:GetSpecializationRoleCompat();
 		else
-			interrupter.role = GetSpecializationRoleByID(GetInspectSpecialization(fullname));
+			interrupter.role = SexyInterrupter:GetSpecializationRoleByIDCompat(fullname);
 		end
 
 		if not interrupter.role then
@@ -202,7 +379,19 @@ function SexyInterrupter:UpdateInterrupters()
 		else
 			interrupter.canInterrupt = true;
 		end
-		
+
+		-- unitCanInterrupt is a static class+role guess ("this class/role
+		-- COULD interrupt"), with no idea whether the interrupt spell is
+		-- actually trained yet (e.g. a fresh leveling character below the
+		-- level where they learn it). We can verify that for real for the
+		-- local player via IsSpellKnown - not for teammates (no reliable
+		-- spellbook access to other units), so this only tightens the
+		-- player's own row; teammates keep showing as placeholders until
+		-- their first confirmed kick, as designed.
+		if unit == 'player' and interrupter.canInterrupt then
+			interrupter.canInterrupt = SexyInterrupter:PlayerKnowsAnyInterruptSpell();
+		end
+
 		if interrupter.overrideprio == nil then
 			interrupter.overrideprio = false;
 		end
@@ -233,10 +422,10 @@ function SexyInterrupter:UpdateInterrupters()
 			interrupter.dead = false;
 		end
 		
-		if UnitInRange(unit) then
-			interrupter.inrange = true;
-		else
-			interrupter.inrange = false;
+		local inRange = SexyInterrupter:UnitInRangeCompat(unit);
+
+		if inRange ~= nil then
+			interrupter.inrange = inRange;
 		end
 
 		SexyInterrupter:SendAddonMessage("requesttalents:" .. interrupter.fullname);
@@ -312,78 +501,73 @@ function SexyInterrupter:CreateFlasher(color)
     end
  end
 
- function SexyInterrupter:LockFrame()
-    self.db.profile.general.lock = not self.db.profile.general.lock;
-
-    if self.db.profile.general.lock then
-        DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s.", L["Addon name"], L["Frame locked"]), 1, 0.5, 0);
-
-        SexyInterrupterAnchor:Show();
-        SexyInterrupterDummyAnchorFrame:Hide();
-        SexyInterrupterDummyMessageFrame:Hide();
-
-        SexyInterrupter:UpdateFrames();
-    else 
-        DEFAULT_CHAT_FRAME:AddMessage(string.format("%s: %s.", L["Addon name"], L["Frame unlocked"]), 1, 0.5, 0);
-
-        SexyInterrupterAnchor:Hide();
-        SexyInterrupterDummyAnchorFrame:Show();
-        SexyInterrupterDummyMessageFrame:Show();
-    end
+-- true while Blizzard's real Edit Mode is open (SexyInterrupterAnchor/
+-- SexyInterrupterInterruptNowText are registered with it via the vendored
+-- EditModeExpanded-1.0 library, see ui.lua's CreateUi - it owns all
+-- dragging/positioning now). Only used to decide whether to show test data
+-- instead of the live roster while the user is repositioning things.
+function SexyInterrupter:IsEditingUi()
+	return EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive() or false;
 end
 
-function SexyInterrupter:SaveAnchorPosition()
-	SexyInterrupterAnchor:StopMovingOrSizing();
-
-	local a = self.db.profile.ui.anchorPosition;
-
-    a.point, a.region, a.relativePoint, a.x, a.y = SexyInterrupterAnchor:GetPoint();
+-- Opens Blizzard's real Edit Mode (bound to the "Lock window"/"Open Edit
+-- Mode to reposition" option, the minimap icon left click, and `/si lock`).
+-- Positioning itself is handled entirely by EditModeExpanded-1.0 from here.
+function SexyInterrupter:LockFrame()
+	if EditModeManagerFrame then
+		ShowUIPanel(EditModeManagerFrame);
+	end
 end
 
-function SexyInterrupter:OnMouseUp(self, button) 
+-- Right-click menu only; dragging is handled by EditModeExpanded-1.0's own
+-- Selection overlay while Edit Mode is open, not by these frames' own mouse
+-- scripts anymore.
+function SexyInterrupter:OnMouseUp(self, button)
 	if button == "RightButton" then
-		EasyMenu(SexyInterrupter.menu, SexyInterrupterMenu, "cursor", nil, nil);
-	end
-
-	if not SexyInterrupter.db.profile.general.lock then
-		local frameName = self:GetName();
-		local a;
-		
-		self:StopMovingOrSizing();
-
-		if frameName == 'SexyInterrupterDummyAnchorFrame' then
-			a = SexyInterrupter.db.profile.ui.anchorPosition;
-		elseif frameName == 'SexyInterrupterDummyMessageFrame' then
-			a = SexyInterrupter.db.profile.ui.messagePosition;
-		end
-
-		a.point, a.region, a.relativePoint, a.x, a.y = self:GetPoint();
-
-		if frameName == 'SexyInterrupterDummyAnchorFrame' then
-			SexyInterrupterAnchor:SetPoint(SexyInterrupter.db.profile.ui.anchorPosition.point, SexyInterrupter.db.profile.ui.anchorPosition.region, SexyInterrupter.db.profile.ui.anchorPosition.relativePoint, SexyInterrupter.db.profile.ui.anchorPosition.x, SexyInterrupter.db.profile.ui.anchorPosition.y)
-			SexyInterrupterAnchor:Hide();
-		end
-	end
-end
-
-function SexyInterrupter:OnMouseDown(self, button)
-	if not SexyInterrupter.db.profile.general.lock then
-		self:StartMoving();
+		LibDD:EasyMenu(SexyInterrupter.menu or {}, SexyInterrupterMenu, "cursor", nil, nil);
 	end
 end
 
 function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime)
-	if not notInterruptible and UnitCanAttack('player', 'target') then
-		local name, realm = UnitName('player');
-		local fullname = name;
+	-- notInterruptible (from UnitCastingInfo/UnitChannelInfo) can come through
+	-- as a "secret" value under the same protected-info guard as spellID
+	-- elsewhere - can't be used in a boolean test. When we can't tell, assume
+	-- the cast IS interruptible (fail open) so the prompt still fires; the
+	-- worst case is one unnecessary "interrupt now" hint, not a missed one.
+	if issecretvalue and issecretvalue(notInterruptible) then
+		notInterruptible = false;
+	end
 
-		if realm ~= nil then
-			fullname = name .. '-' .. realm;
+	-- startTime/endTime (also from UnitCastingInfo/UnitChannelInfo) can be
+	-- secret too - not just booleans, any value from those calls apparently.
+	-- Can't do arithmetic on a secret number, so drop down to nil (same as
+	-- "this client didn't give us a cast length") and let the existing
+	-- fallback below use the default timeVisible.
+	if issecretvalue and issecretvalue(startTime) then
+		startTime = nil;
+	end
+
+	if issecretvalue and issecretvalue(endTime) then
+		endTime = nil;
+	end
+
+	if not notInterruptible and UnitCanAttack('player', 'target') then
+		-- Gleicher Bug wie in events.lua's UNIT_SPELLCAST_SUCCEEDED: UnitName()s
+		-- Realm-Rückgabe ist für "player" auf diesem Client NICHT zuverlässig
+		-- leer (liefert einen internen Token statt nil), wodurch die gebaute
+		-- fullname weder mit dem gespeicherten bloßen Namen noch mit dem über
+		-- GetRealmName() gebauten "Name-Realm" übereinstimmt - GetInterrupter
+		-- lieferte dadurch nil und der Zugriff auf interrupter.sortpos direkt
+		-- danach crashte. Erst bloßen Namen probieren, dann GetRealmName()-
+		-- Fallback, und (falls beides fehlschlägt) nicht mehr crashen.
+		local name = UnitName('player');
+		local interrupter = SexyInterrupter:GetInterrupter(name);
+
+		if not interrupter then
+			interrupter = SexyInterrupter:GetInterrupter(name .. '-' .. GetRealmName());
 		end
 
-		local interrupter = SexyInterrupter:GetInterrupter(fullname);
-
-		if interrupter.sortpos == 1 and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then
+		if interrupter and interrupter.sortpos == 1 and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then
 			local timeVisible = 10;
 
 			if (startTime and endTime and endTime/1000 - startTime/1000 < 10) then

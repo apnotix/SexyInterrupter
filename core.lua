@@ -5,7 +5,7 @@ local icon = LibStub("LibDBIcon-1.0", true);
 
 function SexyInterrupter:OnInitialize()
 	Mixin(self, BackdropTemplateMixin);
-	
+
 	self:InitializeSavedVariables();
 
 	self:InitOptions();
@@ -13,7 +13,7 @@ function SexyInterrupter:OnInitialize()
 	self:CreateFlasher('Blue');
 
 	self:RegisterEvents();
-	
+
 	C_ChatInfo.RegisterAddonMessagePrefix("SexyInterrupter");
 
 	-- Minimap button.
@@ -21,17 +21,25 @@ function SexyInterrupter:OnInitialize()
 
 	if icon and not icon:IsRegistered("SexyInterrupter") and self.db.profile.general.minimapIcon then
 		SexyInterrupter:AddIcon();
-	end	
+	end
 
-	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. self.Version .. ' loaded', 1, 0.5, 0);  
+	DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter ' .. self.Version .. ' loaded', 1, 0.5, 0);
 end
 
 function SexyInterrupter:RegisterEvents()
-	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", "COMBAT_LOG_EVENT_UNFILTERED");
+	-- COMBAT_LOG_EVENT_UNFILTERED: as of WoW patch 12.0.0, addons are no longer
+	-- allowed to register this event at all (a protected/forbidden action,
+	-- surfaced as "blocked from an action only available to the Blizzard UI").
+	-- This is the event our interrupt-cooldown detection (SPELL_CAST_SUCCESS /
+	-- SPELL_INTERRUPT parsing in events.lua) relied on; it currently no-ops.
+	-- self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", "COMBAT_LOG_EVENT_UNFILTERED");
     self:RegisterEvent("UNIT_SPELLCAST_START", "UNIT_SPELLCAST_START");
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_CHANNEL_START");
     self:RegisterEvent("UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_STOP");
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_STOP");
+    -- Not combat-log-gated (same event family as the above) - see events.lua
+    -- for why this replaces COMBAT_LOG_EVENT_UNFILTERED for cooldown detection.
+    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_SUCCEEDED");
 	self:RegisterEvent("PLAYER_TARGET_CHANGED", "PLAYER_TARGET_CHANGED");
 	self:RegisterEvent("PLAYER_REGEN_DISABLED", "PLAYER_REGEN_DISABLED");
 	self:RegisterEvent("PLAYER_REGEN_ENABLED", "PLAYER_REGEN_ENABLED");

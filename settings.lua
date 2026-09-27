@@ -3,7 +3,21 @@ local SI = SexyInterrupter;
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
-SI.Version = GetAddOnMetadata("SexyInterrupter", "Version");
+local function GetSIAddOnMetadata(name, field)
+	if C_AddOns and C_AddOns.GetAddOnMetadata then
+		local ok, result = pcall(C_AddOns.GetAddOnMetadata, name, field)
+		if ok then return result end
+	end
+
+	if GetAddOnMetadata then
+		local ok, result = pcall(GetAddOnMetadata, name, field)
+		if ok then return result end
+	end
+
+	return nil
+end
+
+SI.Version = GetSIAddOnMetadata("SexyInterrupter", "Version") or "3";
 
 SI.outputchannels = {
     ['SAY'] = 'SAY',    
@@ -43,7 +57,9 @@ SI.interruptSpells = {
     147362, 	-- Hunter Counter Shot
     171138,		-- Warlock Shadow Lock,
     183752,     -- DH Consume Magic
-    115750      -- Paladin Blinding Light
+    115750,     -- Paladin Blinding Light
+    351338,     -- Evoker Quell
+    72          -- Warrior Shield Bash
 };
 
 SI.unitCanInterrupt = {
@@ -92,6 +108,9 @@ SI.unitCanInterrupt = {
     demonhunter = {
         damager = true,
         tank = true
+    },
+    evoker = {
+        damager = true -- Quell: Devastation/Augmentation; Preservation has no interrupt
     }
 };
 
@@ -105,21 +124,31 @@ local defaults = {
             minimapIcon = true
 		},
 		ui = {            
+			-- Standardposition: links neben dem Blizzard-PlayerFrame (eigene
+			-- rechte obere Ecke an dessen linke obere Ecke, kleiner Abstand).
 			anchorPosition = {
-				point = 'CENTER',
-				region = nil,
-				relativePoint = 'CENTER',
-				x = 0,
-				y = -300
+				point = 'TOPRIGHT',
+				region = 'PlayerFrame',
+				relativePoint = 'TOPLEFT',
+				x = -10,
+				y = 0
 			},
+			-- Standardposition: oben mittig auf dem Bildschirm (wie Boss-Emotes/
+			-- Raid-Warnungen), statt in der Bildschirmmitte.
 			messagePosition = {
-				point = 'CENTER',
-				region = UIParent,
-				relativePoint = 'CENTER',
+				point = 'TOP',
+				relativePoint = 'TOP',
 				x = 0,
-				y = 80
+				y = -150
 			},
-			font = 'Accidental Presidency',
+			-- Position/size storage owned entirely by the EditModeExpanded-1.0
+			-- library (see ui.lua's CreateUi) once a frame is registered with
+			-- it - anchorPosition/messagePosition above stop being written to
+			-- after that point, kept only so an existing saved position isn't
+			-- lost/reset for players upgrading from the pre-Edit-Mode version.
+			editModeAnchorDB = {},
+			editModeMessageDB = {},
+			font = '2002',
 			fontsize = 13,
 			fontcolor = {
 				r = 1,
@@ -136,13 +165,19 @@ local defaults = {
 					a = 0.453
 				},
                 backgroundtexture = "Solid",
-				border = 'NONE',
+				border = 'Blizzard Tooltip',
 				bordercolor = {
 					r = 0,
 					g = 0, 
 					b = 0
                 },
-                width = 200
+                width = 200,
+                -- false = wächst nach unten (obere Kante bleibt fix), true =
+                -- wächst nach oben (untere Kante bleibt fix, so hat es sich
+                -- bisher automatisch verhalten). "Nach unten" als Standard,
+                -- da das eher der Erwartung entspricht (neue Zeilen kommen
+                -- unten dazu, wie z. B. bei einer Buff-Liste).
+                growUp = false
 			},
 			bars = {
                 showclassicon = true,
@@ -206,19 +241,24 @@ function SexyInterrupter:InitOptions()
         name = L["Addon name"],
         args = {
             lock = {
-                type = "toggle",
-                name = L["Lock window"],
+                type = "execute",
+                name = L["Open Edit Mode to reposition"],
                 desc = L["Lock this bar to prevent resizing or moving"],
                 order = 1,
-                get = function() return self.db.profile.general.lock end,
-                set = function() 
+                func = function()
                     SexyInterrupter:LockFrame();
                 end
             },
             assignments = {
                 name = L["Assignments"],
                 type = "group",
-                childGroups = "tab",                                
+                childGroups = "tab",
+                hidden = function()
+                    -- "priority" is currently the only child tab, so an empty
+                    -- group here would hand AceGUI's TabGroup a zero-tab row
+                    -- and crash it with a division by zero (see priority.hidden below)
+                    return not IsInGroup();
+                end,
                 args = {
                     -- raids = {
                     --     name = L["Spell assignment"],
@@ -339,7 +379,7 @@ function SexyInterrupter:InitOptions()
                         name = L["Ouput channel"],
                         order = 5,
                         values = function () return SI.outputchannels end,
-                        style = "dropdown",
+                        style = "radio", -- "dropdown" uses AceGUI's Dropdown widget, which creates a frame with the native "UIDropDownMenuTemplate" that addons have been blocked from using since WoW 11.0 (Forever inherits this restriction)
                         disabled = function() return not self.db.profile.notification.interruptmessage end
                     }
                 }
@@ -441,25 +481,38 @@ function SexyInterrupter:InitOptions()
                         type = "group",
                         get = function(info) return self.db.profile.ui.window[info[#info]] end,
                         set = function(info, value) self.db.profile.ui.window[info[#info]] = value; SexyInterrupter:UpdateFrames(); end,
-                        args = {  
+                        args = {
+                            -- Positioning is now handled by Blizzard's real Edit Mode
+                            -- (via the vendored EditModeExpanded-1.0 library, see
+                            -- ui.lua's CreateUi) instead of these manual point/x/y
+                            -- controls, which would otherwise silently do nothing.
+                            openEditMode = {
+                                name = L["Open Edit Mode to reposition"],
+                                type = "execute",
+                                order = 0.5,
+                                width = "full",
+                                func = function() SexyInterrupter:LockFrame(); end,
+                            },
                             point = {
                                 name = "point",
                                 type = "select",
                                 order = 5,
                                 values = function () return SI.positions end,
-                                style = "dropdown",
+                                style = "radio", -- "dropdown" uses AceGUI's Dropdown widget, which creates a frame with the native "UIDropDownMenuTemplate" that addons have been blocked from using since WoW 11.0 (Forever inherits this restriction)
                                 get = function(info) return self.db.profile.ui.anchorPosition.point end,
                                 set = function(info, value) self.db.profile.ui.anchorPosition.point = value; SexyInterrupter:UpdateFrames(); end,
-                            },  
+                                hidden = true,
+                            },
                             relativePoint = {
                                 name = "relativePoint",
                                 type = "select",
                                 order = 5,
                                 values = function () return SI.positions end,
-                                style = "dropdown",
+                                style = "radio", -- "dropdown" uses AceGUI's Dropdown widget, which creates a frame with the native "UIDropDownMenuTemplate" that addons have been blocked from using since WoW 11.0 (Forever inherits this restriction)
                                 get = function(info) return self.db.profile.ui.anchorPosition.relativePoint end,
                                 set = function(info, value) self.db.profile.ui.anchorPosition.relativePoint = value; SexyInterrupter:UpdateFrames(); end,
-                            },    
+                                hidden = true,
+                            },
                             width = {
                                 type = "range",
                                 name = 'Width',
@@ -468,7 +521,7 @@ function SexyInterrupter:InitOptions()
                                 step = 1,
                                 bigStep = 1,
                                 order = 1
-                            },                    
+                            },
                             x = {
                                 type = "range",
                                 name = 'X',
@@ -479,8 +532,9 @@ function SexyInterrupter:InitOptions()
                                 order = 1.5,
                                 get = function(info) return self.db.profile.ui.anchorPosition.x end,
                                 set = function(info, value) self.db.profile.ui.anchorPosition.x = value; SexyInterrupter:UpdateFrames(); end,
+                                hidden = true,
                             },
-                            
+
                             y = {
                                 type = "range",
                                 name = 'Y',
@@ -491,7 +545,7 @@ function SexyInterrupter:InitOptions()
                                 order = 1.6,
                                 get = function(info) return self.db.profile.ui.anchorPosition.y end,
                                 set = function(info, value) self.db.profile.ui.anchorPosition.y = value; SexyInterrupter:UpdateFrames(); end,
-                            
+                                hidden = true,
                             },
                             headline_frame = {
                                 type = "header",
@@ -551,25 +605,51 @@ function SexyInterrupter:InitOptions()
     SI.optionsTable.args.profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(self.db);
 
     function SexyInterrupter:SendOverridePrioInfos()
-        local interrupters = SexyInterrupter:GetCurrentInterrupters();
+        -- Collapse ability-rows back down to unique players (see
+        -- UpdateInterrupterSettings above for why).
+        local seen = {};
         local msg = "overrideprio:";
         local hits = 0;
 
-        for i, interrupter in pairs(interrupters) do
-            if interrupter.overrideprio then
-                hits = hits + 1;
+        for _, row in pairs(SexyInterrupter:GetCurrentInterrupters()) do
+            local interrupter = row.interrupter;
 
-                msg = msg .. tostring(interrupter.name) .. '+' .. tostring(interrupter.realm) .. '+' .. tostring(interrupter.fullname) .. '+' .. tostring(interrupter.overrideprio) .. '+' .. tostring(interrupter.overridedprio) .. ';';
+            if not seen[interrupter] then
+                seen[interrupter] = true;
+
+                if interrupter.overrideprio then
+                    hits = hits + 1;
+
+                    msg = msg .. tostring(interrupter.name) .. '+' .. tostring(interrupter.realm) .. '+' .. tostring(interrupter.fullname) .. '+' .. tostring(interrupter.overrideprio) .. '+' .. tostring(interrupter.overridedprio) .. ';';
+                end
             end
         end
 
         if hits > 0 then
-            SexyInterrupter:SendAddonMessage(msg);
+            -- NOTE: SexyInterrupter:SendAddonMessage(...) doesn't exist anywhere
+            -- in this codebase (a pre-existing bug); routed through the real
+            -- comm channel instead. There's currently no handler for this
+            -- 'overrideprio' prefix on the receiving end either (see the
+            -- commented-out ReceiveOverridePrioInfos in communication.lua) -
+            -- this just stops it from throwing, it doesn't finish the feature.
+            SexyInterrupter:SendMessage('overrideprio', msg);
         end
     end
 
-    function SexyInterrupter:UpdateInterrupterSettings() 
-        local interrupters = SexyInterrupter:GetCurrentInterrupters();
+    function SexyInterrupter:UpdateInterrupterSettings()
+        -- GetCurrentInterrupters() now returns one row per known ability, not
+        -- per player (see utils.lua) - collapse back down to unique players
+        -- for the priority-assignment tab, since priority is a per-player
+        -- concept, not a per-ability one.
+        local seen = {};
+        local interrupters = {};
+
+        for _, row in pairs(SexyInterrupter:GetCurrentInterrupters()) do
+            if not seen[row.interrupter] then
+                seen[row.interrupter] = true;
+                tinsert(interrupters, row.interrupter);
+            end
+        end
 
         SI.optionsTable.args.assignments.args.priority.args = {};
         -- SI.optionsTable.args.assignments.args.spell.args = {};
@@ -720,6 +800,8 @@ function SexyInterrupter:InitOptions()
             SexyInterrupter:LockFrame();
         elseif msg == 'version' then
             DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Version " .. SI.Version, 1, 0.5, 0);
+        elseif msg == 'kick' then
+            SexyInterrupter:MarkOwnInterrupt();
         else
             LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
         end
