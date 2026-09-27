@@ -237,6 +237,27 @@ function SexyInterrupter:CreateUi()
 		EME:RegisterFrame(f, L["Addon name"] .. " " .. L["Window"], self.db.profile.ui.editModeAnchorDB, UIParent, "BOTTOMLEFT", true);
 		EME:RegisterFrame(c, L["Addon name"] .. " " .. L["Interrupt now"], self.db.profile.ui.editModeMessageDB, UIParent, "BOTTOMLEFT", true);
 
+		-- "autoSeeded" markiert nur einen von UNS berechneten Default-Wert (siehe
+		-- Kommentare weiter oben) und muss geloescht werden, sobald der Spieler
+		-- die Position tatsaechlich selbst per Drag setzt - sonst haelt der
+		-- Login-Korrekturtimer (2s-Timer unten) den vom Spieler gezogenen Wert
+		-- faelschlich weiter fuer "unsere Berechnung" und ueberschreibt ihn bei
+		-- jedem /reload wieder mit der Default-Position (Bug: Fenster springt
+		-- nach jedem Reload zurueck zum Charakterfenster). Die Library setzt
+		-- db.x/db.y in ihrem EIGENEN OnDragStop-Handler auf frame.Selection -
+		-- per HookScript haengen wir uns dort mit an, ohne den bestehenden
+		-- Handler zu ersetzen.
+		if f.Selection then
+			f.Selection:HookScript("OnDragStop", function()
+				self.db.profile.ui.editModeAnchorDB.autoSeeded = nil
+			end)
+		end
+		if c.Selection then
+			c.Selection:HookScript("OnDragStop", function()
+				self.db.profile.ui.editModeMessageDB.autoSeeded = nil
+			end)
+		end
+
 		SexyInterrupter:RegisterEditModeSettings(EME, f, c);
 	end
 
@@ -266,8 +287,12 @@ function SexyInterrupter:CreateUi()
 	-- Nur "autoSeeded"-Werte (von uns berechnet, nicht vom Spieler per Drag
 	-- gesetzt) werden hier neu berechnet und angewendet.
 	C_Timer.After(2, function()
+		-- Siehe Kommentar bei UpdateUI()'s Wachstumsrichtung-Kompensation:
+		-- ClearAllPoints()/SetPoint() nicht während eines laufenden Drags
+		-- desselben Frames aufrufen (Kollision mit Blizzards geschützter
+		-- Drag-Logik, beobachtet als Client-Absturz).
 		local anchorDB = self.db.profile.ui.editModeAnchorDB
-		if anchorDB.autoSeeded then
+		if anchorDB.autoSeeded and not f.isDragging then
 			local x, y = ComputeBottomLeft(
 				self.db.profile.ui.anchorPosition.point, anchorRegion, self.db.profile.ui.anchorPosition.relativePoint,
 				self.db.profile.ui.anchorPosition.x, self.db.profile.ui.anchorPosition.y,
@@ -280,7 +305,7 @@ function SexyInterrupter:CreateUi()
 		end
 
 		local messageDB = self.db.profile.ui.editModeMessageDB
-		if messageDB.autoSeeded then
+		if messageDB.autoSeeded and not c.isDragging then
 			local mx, my = ComputeBottomLeft(
 				self.db.profile.ui.messagePosition.point, UIParent, self.db.profile.ui.messagePosition.relativePoint,
 				self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, 500, c:GetHeight())
@@ -862,7 +887,17 @@ function SexyInterrupter:UpdateUI(rows)
 		local newHeight = (self.db.profile.ui.bars.barheight * maxRows) + 10;
 		SexyInterrupterAnchor:SetSize(self.db.profile.ui.window.width, newHeight);
 
-		if not self.db.profile.ui.window.growUp then
+		-- WICHTIG: NICHT per ClearAllPoints()/SetPoint() eingreifen, während der
+		-- Spieler das Fenster gerade per Maus zieht (frame.isDragging, von
+		-- EditModeExpanded/Blizzards geschütztem Drag-Template gesetzt) - diese
+		-- Funktion kann jederzeit durch andere Trigger (Gruppen-Update,
+		-- Zauber-Events, Einstellungsänderungen) ausgelöst werden, auch mitten
+		-- in einem laufenden Drag. Gleichzeitiges Umpositionieren desselben
+		-- Frames kollidiert dann mit Blizzards eigener (geschützter) Drag-
+		-- Logik - beobachtet als "Access denied"-Fehler mit Client-Absturz beim
+		-- Verschieben. Die Kompensation wird einfach beim NÄCHSTEN UpdateUI()
+		-- nach Drag-Ende nachgeholt (kein dauerhafter Datenverlust).
+		if not self.db.profile.ui.window.growUp and not SexyInterrupterAnchor.isDragging then
 			local anchorDB = self.db.profile.ui.editModeAnchorDB;
 			if anchorDB.x and anchorDB.y and oldHeight and oldHeight > 0 then
 				anchorDB.y = anchorDB.y - (newHeight - oldHeight);
@@ -988,7 +1023,12 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 				if dataRow.readyTime - GetTime() > 0 then
 					local readyTime = dataRow.readyTime - GetTime();
 
-					row.cooldownText:SetText(readyTime);
+					-- Unformatierte Fließkommazahl (z. B. "15.347293847...")
+					-- sprengte das nur 36px breite cooldownText-Feld und wurde
+					-- als "15..." abgeschnitten dargestellt. OnUpdate() weiter
+					-- unten macht es an der entsprechenden Stelle bereits
+					-- richtig (string.format '%.1f') - hier genauso.
+					row.cooldownText:SetText(string.format('%.1f', readyTime));
 					row:SetValue(readyTime);
 				end
 			else

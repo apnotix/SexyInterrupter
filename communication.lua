@@ -191,11 +191,31 @@ function SexyInterrupter:ReceiveInterrupt(player, realm, spellId, cooldown)
         spellId = tonumber(spellId);
         cooldown = tonumber(cooldown);
 
+        -- Plausibilitätsprüfung: kein bekannter Interrupt hat annähernd eine
+        -- so lange Abklingzeit - eine (aus welchem Grund auch immer) korrupt
+        -- übertragene riesige Zahl (z. B. 13719s statt 12s beobachtet) wurde
+        -- ohne diese Prüfung sonst dauerhaft als "readyTime" gespeichert und
+        -- blockierte durch die "nicht überschreiben, wenn noch nicht
+        -- abgelaufen"-Sperre unten stundenlang JEDE weitere, korrekte
+        -- Aktualisierung - der Cooldown blieb für den Rest der Session hängen.
+        local MAX_PLAUSIBLE_COOLDOWN = 180;
+
+        if not cooldown or cooldown <= 0 or cooldown > MAX_PLAUSIBLE_COOLDOWN then
+            return;
+        end
+
         local existing = interrupter.abilities and interrupter.abilities[spellId];
+
+        -- Gleiche Plausibilitätsprüfung auch auf einen bereits gespeicherten
+        -- (evtl. selbst schon korrupten) Wert anwenden, statt ihm blind zu
+        -- vertrauen - sonst bleibt ein einmal falsch gesetzter Wert für immer
+        -- "frischer" als jedes künftige echte Update und blockiert es weiter.
+        local existingIsPlausible = existing and existing.readyTime
+            and (existing.readyTime - GetTime()) <= MAX_PLAUSIBLE_COOLDOWN;
 
         -- Same "don't overwrite a fresher cooldown" guard the old single-ability
         -- code had, just scoped per ability now instead of per player.
-        if not existing or existing.readyTime == 0 or existing.readyTime == nil then
+        if not existing or existing.readyTime == 0 or existing.readyTime == nil or not existingIsPlausible then
             interrupter.abilities = interrupter.abilities or {};
             interrupter.abilities[spellId] = {
                 cooldown = cooldown,

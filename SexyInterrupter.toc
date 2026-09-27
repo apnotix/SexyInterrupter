@@ -3,8 +3,6 @@
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
-## X-Curse-Project-ID: 255069
-## X-WoWI-ID: 24320
 ## Category: Party & Raid
 ## DefaultState: Enabled
 ## LoadOnDemand: 0

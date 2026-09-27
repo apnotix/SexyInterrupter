@@ -1,10 +1,10 @@
 -- Widget created by Yssaril
---@debug@
+--[===[@debug@
 local DataVersion = 9001 -- dev version always overwrites everything else :)
---@end-debug@
---[===[@non-debug@
-local DataVersion = @project-revision@
---@end-non-debug@]===]
+--@end-debug@]===]
+--@non-debug@
+local DataVersion = c02c070ec390771213ef408d80758f1e4e25a673
+--@end-non-debug@
 local AGSMW = LibStub:NewLibrary("AceGUISharedMediaWidgets-1.0", DataVersion)
 
 if not AGSMW then

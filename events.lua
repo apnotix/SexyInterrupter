@@ -37,6 +37,16 @@ function SexyInterrupter:GROUP_ROSTER_UPDATE()
 			local interrupter = SexyInterrupter:GetInterrupter(fullname);
 
 			if interrupter ~= nil then
+				-- Sofort wieder aktiv setzen: der Spieler ist laut aktueller
+				-- Gruppen-Iteration JETZT nachweislich noch in der Gruppe, es
+				-- muss nicht auf die asynchrone 'requestuser'-Comm-Antwort
+				-- unten gewartet werden. Ohne dies blieb active=false (vom
+				-- Reset oben) bis die Antwort eintrifft - sichtbar als kurzes
+				-- Verschwinden/Neu-Rendern aller Mitspieler-Balken bei JEDEM
+				-- GROUP_ROSTER_UPDATE, u.a. bei jedem Gebietswechsel/Ladebild-
+				-- schirm (PLAYER_ENTERING_WORLD loest denselben Handler aus).
+				interrupter.active = true;
+
 				if not UnitIsConnected(unit) then
 					interrupter.offline = true;
 				else 
@@ -184,10 +194,21 @@ function SexyInterrupter:PLAYER_SPECIALIZATION_CHANGED(...)
 	local interrupter = SexyInterrupter:GetInterrupter(name, realm);
 
 	if interrupter ~= nil then
-		interrupter.role = SexyInterrupter:GetSpecializationRoleCompat();
+		-- GetSpecializationRoleCompat() fragt (wie ihr Name andeutet, aber wie
+		-- es hier vorher NICHT beachtet wurde) immer den EIGENEN Charakter ab,
+		-- unabhaengig von unitTarget - fuer den eigenen unitTarget also korrekt,
+		-- fuer JEDEN anderen aber falsch (dessen Rolle wurde faelschlich mit der
+		-- eigenen ueberschrieben). Nur fuer unitTarget=='player' verwenden, sonst
+		-- direkt UnitGroupRolesAssigned(unitTarget) - vorher stand hier ebenfalls
+		-- hart "player" statt unitTarget, derselbe Bug ein zweites Mal.
+		if unitTarget == 'player' then
+			interrupter.role = SexyInterrupter:GetSpecializationRoleCompat();
+		else
+			interrupter.role = nil;
+		end
 
-		if interrupter.role == nil then        
-			interrupter.role = UnitGroupRolesAssigned("player");
+		if interrupter.role == nil then
+			interrupter.role = UnitGroupRolesAssigned(unitTarget);
 		end
 
 		if interrupter.classEN and interrupter.role ~= 'NONE' then
@@ -207,7 +228,24 @@ function SexyInterrupter:PLAYER_SPECIALIZATION_CHANGED(...)
 		elseif interrupter.role == 'TANK' then
 			interrupter.prio = 1;
 		end
-	end	
+
+		-- Eigene Rollenaenderung an die Gruppe broadcasten - sonst erfahren
+		-- Mitspieler davon erst beim naechsten vollstaendigen Roster-Sync
+		-- (Gruppe verlassen/beitreten, Gebietswechsel). SendUserInformation()
+		-- erwartet einen exakt passenden "target"-Namen (intern per erneutem,
+		-- eigenem UnitName("player")-Abgleich) - hier reicht es, direkt dieselbe
+		-- 'userinfos'-Nachricht zu bauen und ohne den Zielabgleich zu senden,
+		-- da wir bereits wissen dass es um uns selbst geht.
+		if unitTarget == 'player' then
+			local infos = { class = interrupter.class, classEN = interrupter.classEN, role = interrupter.role, talents = '' };
+			SexyInterrupter:SendMessage('userinfos', infos);
+		end
+
+		-- Und lokal sofort neu rendern (Sortierung nach Prio haengt von der
+		-- Rolle ab).
+		SexyInterrupter:UpdateUI();
+		SexyInterrupter:UpdateInterrupterStatus();
+	end
 end
 
 function SexyInterrupter:PARTY_MEMBER_DISABLE(...)
