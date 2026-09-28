@@ -169,12 +169,35 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
 	SexyInterrupter:UpdateInterrupterSettings();
 end
 
-function SexyInterrupter:ReceiveVersionInfo(player, realm, version)
-	local currentVersion = tonumber(SexyInterrupter.Version);
-	local receivedVersion = tonumber(version);
+-- tonumber("3.0.1") is nil (more than one ".", not a valid Lua number
+-- literal) - since SI.Version moved from a plain integer ("3") to a
+-- dotted release version, comparing via tonumber() silently turned both
+-- sides into nil and crashed on the "nil > nil" comparison below. Compare
+-- dot-separated numeric parts instead, left to right.
+local function VersionIsNewer(a, b)
+	if not a or not b then
+		return false;
+	end
 
-	if receivedVersion > currentVersion and not SexyInterrupter.newVersionNoticed then
-        DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: ' .. L["An update is available v"] .. receivedVersion .. ". " .. L["Please update to the latest version!"], 1, 0.5, 0);
+	local partsA, partsB = {}, {};
+
+	for part in a:gmatch("%d+") do tinsert(partsA, tonumber(part)); end
+	for part in b:gmatch("%d+") do tinsert(partsB, tonumber(part)); end
+
+	for i = 1, math.max(table.getn(partsA), table.getn(partsB)) do
+		local x, y = partsA[i] or 0, partsB[i] or 0;
+
+		if x ~= y then
+			return x > y;
+		end
+	end
+
+	return false;
+end
+
+function SexyInterrupter:ReceiveVersionInfo(player, realm, version)
+	if VersionIsNewer(version, SexyInterrupter.Version) and not SexyInterrupter.newVersionNoticed then
+        DEFAULT_CHAT_FRAME:AddMessage('SexyInterrupter: ' .. L["An update is available v"] .. version .. ". " .. L["Please update to the latest version!"], 1, 0.5, 0);
 
 		SexyInterrupter.newVersionNoticed = true;
 	end
