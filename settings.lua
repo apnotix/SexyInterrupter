@@ -26,18 +26,6 @@ SI.outputchannels = {
     ['RAID'] = 'RAID'
 };
 
-SI.positions = {
-    ['TOP'] = 'TOP',    
-    ['TOPRIGHT'] = 'TOPRIGHT',
-    ['TOPLEFT'] = 'TOPLEFT',
-    ['RIGHT'] = 'RIGHT',
-    ['BOTTOM'] = 'BOTTOM',
-    ['BOTTOMLEFT'] = 'BOTTOMLEFT',
-    ['BOTTOMRIGHT'] = 'BOTTOMRIGHT',
-    ['LEFT'] = 'LEFT',
-    ['CENTER'] = 'BOTTOM',
-};
-
 SI.interruptSpells = { 
     1766, 		-- Roque Kick
     2139, 		-- Mage Counterspell
@@ -203,36 +191,6 @@ local defaults = {
 	}
 }
 
-local function helperColourGet( v )	
-	assert( v, "bad code: missing parameter" )
-	assert( type( v ) == "table", "bad code: parameter is not a table" )
-	
-	local f = "%.3f"
-	
-	local r = tonumber( string.format( f, v.r or 1 ) )
-	local g = tonumber( string.format( f, v.g or 1 ) )
-	local b = tonumber( string.format( f, v.b or 1 ) )
-	local a = tonumber( string.format( f, v.a or 1 ) )
-	
-	return r, g, b, a
-	
-end
-
-local function helperColourSet( v, r, g, b, a )	
-	assert( v, "bad code: missing parameter" )
-	assert( type( v ) == "table", "bad code: parameter is not a table" )
-	
-	local f = "%.3f"
-	
-	v.r = tonumber( string.format( f, r or 1 ) )
-	v.g = tonumber( string.format( f, g or 1 ) )
-	v.b = tonumber( string.format( f, b or 1 ) )
-	if a then
-		v.a = tonumber( string.format( f, a or 1 ) )
-	end
-	
-end
-
 function SexyInterrupter:InitOptions() 
     self.db = LibStub('AceDB-3.0'):New(addonName.."DB", defaults, true);
 
@@ -288,64 +246,24 @@ function SexyInterrupter:InitOptions()
                     -- },
                 }
             },                 
-            general = {
-                name = L["General"],
-                type = "group",
-                get = function(info) return self.db.profile.general[info[#info]] end,
-                set = function(info, value) self.db.profile.general[info[#info]] = value end,
-                args = {
-                    modeincombat = {
-                        type = "toggle",
-                        name = L["Show in combat only"],
-                        width = "full",
-                        order = 1
-                    },
-                    minimapIcon = {
-                        type = "toggle",
-                        name = 'Show minimap icon',
-                        width = "full",
-                        order = 1,
-                        get = function(info) return self.db.profile.general.minimapIcon end,
-                        set = function(info, value) 
-                            self.db.profile.general.minimapIcon = value; 
-
-                            if not self.icon:IsRegistered("SexyInterrupter") then
-                                SexyInterrupter:AddIcon();
-                            end
-                            
-                            if value then
-                                self.icon:Show("SexyInterrupter");
-                            else 
-                                self.icon:Hide("SexyInterrupter");                            
-                            end 
-                        end,
-                    },
-                    maxrows = {
-                        step = 1,
-                        type = "range",
-                        name = L["Max rows of interrupters"],
-                        width = "full",
-                        order = 2,
-                        min = 3,
-                        max = 30
-                    },
-                }
-            },
+            -- "general" (Show in combat only / Show minimap icon / Max rows)
+            -- moved entirely to the Edit Mode dialog - see
+            -- SexyInterrupter:RegisterEditModeSettings in ui.lua.
             notification = {
                 type = "group",
                 name = L["Notification"],
                 get = function(info) return self.db.profile.notification[info[#info]] end,
                 set = function(info, value) self.db.profile.notification[info[#info]] = value end,
                 args = {
+                    -- "Play sound"/"Flash display"/"Show message"/"Show chat
+                    -- message" moved to the Edit Mode dialog - see
+                    -- SexyInterrupter:RegisterEditModeSettings in ui.lua.
+                    -- soundFile has no Edit Mode equivalent (LSM sound
+                    -- picker, not a plain checkbox/slider/dropdown value).
                     headline_notification = {
                         type = "header",
                         name = L["Notification"],
                         order = 2
-                    },
-                    sound = {
-                        type = "toggle",
-                        name = L["Play sound"],
-                        order = 3
                     },
                     soundFile = {
                         type = "select",
@@ -354,25 +272,10 @@ function SexyInterrupter:InitOptions()
                         values = LSM:HashTable("sound"),
                         order = 5
                     },
-                    flash = {
-                        type = "toggle",
-                        name = L["Flash display"],
-                        order = 3
-                    },
-                    message = {
-                        type = "toggle",
-                        name = L["Show message"],
-                        order = 3
-                    },
                     headline_interrupt = {
                         type = "header",
                         name = L["Interrupts"],
                         order = 4
-                    },
-                    interruptmessage = {
-                        type = "toggle",
-                        name = L["Show chat message"],
-                        order = 5
                     },
                     outputchannel = {
                         type = "select",
@@ -394,125 +297,25 @@ function SexyInterrupter:InitOptions()
 
                     SexyInterrupter:UpdateFrames();
                  end,
-                args = {                    
-                    headline_font = {
-                        type = "header",
-                        name = L["Font"],
-                        order = 4
-                    },              
-                    font = {
-                        type = "select",
-                        name = L["Font art"],
-                        dialogControl = 'LSM30_Font',
-                        values = LSM:HashTable("font"),
-                        order = 5
-                    },
-                    fontsize = {
-                        type = "range",
-                        name = L["Font size"],
-                        min = 4,
-                        max = 30,
-                        step = 1,
-                        bigStep = 1,
-                        order = 5
-                    },
-                    useclasscolor = {
-                        type = "toggle",
-                        name = 'Use class color',
-                        order = 1
-                    },
-                    fontcolor = {
-                        type = "color",
-                        name = L["Font color"],
-                        hasAlpha = false,
-                        order = 6,
-                        get = function() return helperColourGet(self.db.profile.ui.fontcolor) end,
-                        set = function(self, r, g, b) 
-                            helperColourSet(SexyInterrupter.db.profile.ui.fontcolor, r, g, b);
-                            SexyInterrupter:UpdateFrames();
-                        end
-                    },
-                    bars = {
-                        name = L["Bars"],
-                        type = "group",
-                        get = function(info) return self.db.profile.ui.bars[info[#info]] end,
-                        set = function(info, value) self.db.profile.ui.bars[info[#info]] = value; SexyInterrupter:UpdateFrames(); end,
-                        args = {
-                            showclassicon = {
-                                type = "toggle",
-                                name = L["Show class icon"],
-                                order = 1
-                            },
-                            useclasscolor = {
-                                type = "toggle",
-                                name = 'Use class color',
-                                order = 1
-                            },
-                            texture = {
-                                type = "select",
-                                name = L["Statusbar"],
-                                dialogControl = 'LSM30_Statusbar',
-                                values = LSM:HashTable("statusbar"),
-                                order = 2.1
-                            },
-                            barcolor = {
-                                type = "color",
-                                name = L["Bar color"],
-                                hasAlpha = true,
-                                order = 2.1,
-                                get = function() return helperColourGet(self.db.profile.ui.bars.barcolor) end,
-                                set = function(self, r, g, b, a) 
-                                    helperColourSet(SexyInterrupter.db.profile.ui.bars.barcolor, r, g, b, a);
-                                    SexyInterrupter:UpdateFrames();
-                                end
-                            },
-                            barheight = {
-                                type = "range",
-                                name = L["Bar height"],
-                                min = 4,
-                                step = 1,
-                                bigStep = 1,
-                                order = 3
-                            },
-                        }
-                    },
+                args = {
+                    -- Font art/size/color, class-color toggle, and the whole
+                    -- "Bars" tab (class icon, bar color-by-class, statusbar
+                    -- texture, bar color, bar height) moved to the Edit Mode
+                    -- dialog - see SexyInterrupter:RegisterEditModeSettings
+                    -- in ui.lua.
+                    -- Point/relativePoint/x/y (manual positioning), the
+                    -- "Open Edit Mode" button (duplicate of the top-level
+                    -- "lock" entry above), background/border texture and
+                    -- color all moved to the Edit Mode dialog - see
+                    -- SexyInterrupter:RegisterEditModeSettings in ui.lua.
+                    -- Width has no Edit Mode equivalent, so this group stays
+                    -- just for that.
                     window = {
                         name = L["Window"],
                         type = "group",
                         get = function(info) return self.db.profile.ui.window[info[#info]] end,
                         set = function(info, value) self.db.profile.ui.window[info[#info]] = value; SexyInterrupter:UpdateFrames(); end,
                         args = {
-                            -- Positioning is now handled by Blizzard's real Edit Mode
-                            -- (via the vendored EditModeExpanded-1.0 library, see
-                            -- ui.lua's CreateUi) instead of these manual point/x/y
-                            -- controls, which would otherwise silently do nothing.
-                            openEditMode = {
-                                name = L["Open Edit Mode to reposition"],
-                                type = "execute",
-                                order = 0.5,
-                                width = "full",
-                                func = function() SexyInterrupter:LockFrame(); end,
-                            },
-                            point = {
-                                name = "point",
-                                type = "select",
-                                order = 5,
-                                values = function () return SI.positions end,
-                                style = "radio", -- "dropdown" uses AceGUI's Dropdown widget, which creates a frame with the native "UIDropDownMenuTemplate" that addons have been blocked from using since WoW 11.0 (Forever inherits this restriction)
-                                get = function(info) return self.db.profile.ui.anchorPosition.point end,
-                                set = function(info, value) self.db.profile.ui.anchorPosition.point = value; SexyInterrupter:UpdateFrames(); end,
-                                hidden = true,
-                            },
-                            relativePoint = {
-                                name = "relativePoint",
-                                type = "select",
-                                order = 5,
-                                values = function () return SI.positions end,
-                                style = "radio", -- "dropdown" uses AceGUI's Dropdown widget, which creates a frame with the native "UIDropDownMenuTemplate" that addons have been blocked from using since WoW 11.0 (Forever inherits this restriction)
-                                get = function(info) return self.db.profile.ui.anchorPosition.relativePoint end,
-                                set = function(info, value) self.db.profile.ui.anchorPosition.relativePoint = value; SexyInterrupter:UpdateFrames(); end,
-                                hidden = true,
-                            },
                             width = {
                                 type = "range",
                                 name = 'Width',
@@ -522,81 +325,8 @@ function SexyInterrupter:InitOptions()
                                 bigStep = 1,
                                 order = 1
                             },
-                            x = {
-                                type = "range",
-                                name = 'X',
-                                min = -9999,
-                                max = 9999,
-                                step = 1,
-                                bigStep = 1,
-                                order = 1.5,
-                                get = function(info) return self.db.profile.ui.anchorPosition.x end,
-                                set = function(info, value) self.db.profile.ui.anchorPosition.x = value; SexyInterrupter:UpdateFrames(); end,
-                                hidden = true,
-                            },
-
-                            y = {
-                                type = "range",
-                                name = 'Y',
-                                min = -9999,
-                                max = 9999,
-                                step = 1,
-                                bigStep = 1,
-                                order = 1.6,
-                                get = function(info) return self.db.profile.ui.anchorPosition.y end,
-                                set = function(info, value) self.db.profile.ui.anchorPosition.y = value; SexyInterrupter:UpdateFrames(); end,
-                                hidden = true,
-                            },
-                            headline_frame = {
-                                type = "header",
-                                name = "Frame",
-                                order = 2
-                            },
-                            backgroundtexture = {
-                                type = "select",
-                                name = L["Background"],
-                                dialogControl = "LSM30_Background",
-                                values = LSM:HashTable("background"),
-                                order = 2.2,
-                                width = "full"
-                            },
-                            backgroundcolor = {
-                                type = "color",
-                                name = L["Background color"],
-                                hasAlpha = true,
-                                order = 2.3,
-                                get = function() return helperColourGet(self.db.profile.ui.window.background) end,
-                                set = function(self, r, g, b, a) 
-                                    helperColourSet(SexyInterrupter.db.profile.ui.window.background, r, g, b, a);
-                                    SexyInterrupter:UpdateFrames();
-                                end
-                            },
-                            headline_border = {
-                                type = "header",
-                                name = L["Border"],
-                                order = 3
-                            },
-                            border = {
-                                name = L["Border"],
-                                type = "select",
-                                dialogControl = 'LSM30_Border',
-                                values = LSM:HashTable("border"),
-                                order = 3.1,
-                                width = "full"
-                            },
-                            bordercolor = {
-                                type = "color",
-                                name = L["Border color"],
-                                hasAlpha = false,
-                                order = 3.2,
-                                get = function() return helperColourGet(self.db.profile.ui.window.bordercolor) end,
-                                set = function(self, r, g, b, a) 
-                                    helperColourSet(SexyInterrupter.db.profile.ui.window.bordercolor, r, g, b, a);
-                                    SexyInterrupter:UpdateFrames();
-                                end
-                            },
                         }
-                    }   
+                    }
                 }
             }
         }

@@ -2,6 +2,13 @@ local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 local LibDD = LibStub("LibUIDropDownMenuQuestie-4.0");
 
+-- Declared here (not next to RegisterEditModeCheckbox/Slider further down)
+-- because CreateUi()'s EnterEditMode hook, which drains this list, is
+-- defined earlier in the file - a local's closures can only capture it if
+-- the local is already in lexical scope at the point the closure literal is
+-- written, regardless of when either piece of code actually RUNS.
+local pendingEditModeResyncs = {};
+
 -- Berechnet die BOTTOMLEFT-Bildschirmkoordinaten, die EditModeExpanded-1.0 für
 -- seinen (BOTTOMLEFT-)Ankerpunkt in db.x/db.y erwartet, rein rechnerisch aus
 -- der Zielregion (target) - OHNE uns auf frame:GetRect() unseres eigenen,
@@ -266,7 +273,18 @@ function SexyInterrupter:CreateUi()
 	-- our own "Open Edit Mode" button, the minimap icon, /si lock, or
 	-- Blizzard's own ESC menu / the in-Edit-Mode "Exit" button.
 	if EditModeManagerFrame then
-		hooksecurefunc(EditModeManagerFrame, "EnterEditMode", function() SexyInterrupter:UpdateFrames(); end);
+		hooksecurefunc(EditModeManagerFrame, "EnterEditMode", function()
+			-- Re-seed every custom checkbox/slider from our real AceDB values
+			-- right before the user can open a per-system dialog - see
+			-- pendingEditModeResyncs above for why a one-time seed at addon
+			-- load isn't enough (per-layout-profile migration inside the
+			-- library, and switching Edit Mode layouts entirely).
+			for _, resync in ipairs(pendingEditModeResyncs) do
+				resync();
+			end
+
+			SexyInterrupter:UpdateFrames();
+		end);
 		hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() SexyInterrupter:UpdateFrames(); end);
 	end
 
@@ -319,26 +337,47 @@ function SexyInterrupter:CreateUi()
 end
 
 -- EditModeExpanded-1.0's custom checkbox/slider settings store their own
--- checked/value state in the SAME db table passed to RegisterFrame, under
--- db.settings[<setting type number>][<internalName>] - not in our own
--- AceDB fields directly, and not documented (no public getter, no
--- initial-value parameter). The setting-type numbers below (12 = Custom
--- checkbox, 18 = Slider) are the vendored library's own local constants
--- (see lib/EditModeExpanded-1.0/EditModeExpanded-1.0.lua, ENUM_EDITMODE-
--- ACTIONBARSETTING_CUSTOM/SLIDER) - re-check them if that file is ever
--- re-vendored from a newer upstream version. Seeding db.settings with our
--- current AceDB value BEFORE registering is what makes the checkbox/slider
--- show the right state the first time the dialog opens, instead of always
--- starting unchecked/at zero; onChecked/onUnchecked/onChanged then write
--- back into our own AceDB (the actual source of truth the rest of the addon
--- reads) and refresh the display.
+-- checked/value state in db.settings[<setting type number>][<internalName>]
+-- on the library's OWN db table - not in our AceDB fields directly, and not
+-- documented (no public getter, no initial-value parameter). The setting-
+-- type numbers below (12 = Custom checkbox, 18 = Slider) are the vendored
+-- library's own local constants (see lib/EditModeExpanded-1.0/
+-- EditModeExpanded-1.0.lua, ENUM_EDITMODEACTIONBARSETTING_CUSTOM/SLIDER) -
+-- re-check them if that file is ever re-vendored from a newer upstream
+-- version.
+--
+-- EditModeExpanded also moves that db.settings into a NESTED per-layout-
+-- profile table (db.profiles[<name>].settings) the first time the user ever
+-- opens Edit Mode, and framesDB[systemID] then points at that nested copy
+-- from then on (see the library's refreshCurrentProfile) - so seeding once
+-- at CreateUi() time (ADDON_LOADED, before that migration has necessarily
+-- happened) only works for a brand-new profile; on every later login the
+-- migration already happened in a PRIOR session, so a one-time seed lands on
+-- the now-abandoned outer table and is invisible. This is why "Show minimap
+-- icon" kept showing unchecked despite the icon being on, and would also
+-- desync if the user switches Edit Mode layouts. Fix: re-seed every time
+-- Edit Mode is opened (CreateUi's EnterEditMode hook drains
+-- pendingEditModeResyncs below), writing through EME.framesDB[frame.system]
+-- (the library's own live/current reference for this system, migrated or
+-- not) instead of our own db table. onChecked/onUnchecked/onChanged still
+-- write back into our own AceDB - the actual, single source of truth the
+-- rest of the addon reads, regardless of Edit Mode layout.
 local EME_SETTING_TYPE_CUSTOM = 12;
 local EME_SETTING_TYPE_SLIDER = 18;
 
-local function RegisterEditModeCheckbox(EME, frame, db, internalName, label, getFn, setFn)
-	db.settings = db.settings or {};
-	db.settings[EME_SETTING_TYPE_CUSTOM] = db.settings[EME_SETTING_TYPE_CUSTOM] or {};
-	db.settings[EME_SETTING_TYPE_CUSTOM][internalName] = getFn() and 1 or 0;
+local function RegisterEditModeCheckbox(EME, frame, internalName, label, getFn, setFn)
+	local function Resync()
+		local liveDB = EME.framesDB and EME.framesDB[frame.system];
+
+		if liveDB then
+			liveDB.settings = liveDB.settings or {};
+			liveDB.settings[EME_SETTING_TYPE_CUSTOM] = liveDB.settings[EME_SETTING_TYPE_CUSTOM] or {};
+			liveDB.settings[EME_SETTING_TYPE_CUSTOM][internalName] = getFn() and 1 or 0;
+		end
+	end
+
+	Resync();
+	tinsert(pendingEditModeResyncs, Resync);
 
 	EME:RegisterCustomCheckbox(frame, label,
 		function() setFn(true); SexyInterrupter:UpdateFrames(); end,
@@ -346,10 +385,19 @@ local function RegisterEditModeCheckbox(EME, frame, db, internalName, label, get
 		internalName);
 end
 
-local function RegisterEditModeSlider(EME, frame, db, internalName, label, min, max, step, getFn, setFn)
-	db.settings = db.settings or {};
-	db.settings[EME_SETTING_TYPE_SLIDER] = db.settings[EME_SETTING_TYPE_SLIDER] or {};
-	db.settings[EME_SETTING_TYPE_SLIDER][internalName] = getFn();
+local function RegisterEditModeSlider(EME, frame, internalName, label, min, max, step, getFn, setFn)
+	local function Resync()
+		local liveDB = EME.framesDB and EME.framesDB[frame.system];
+
+		if liveDB then
+			liveDB.settings = liveDB.settings or {};
+			liveDB.settings[EME_SETTING_TYPE_SLIDER] = liveDB.settings[EME_SETTING_TYPE_SLIDER] or {};
+			liveDB.settings[EME_SETTING_TYPE_SLIDER][internalName] = getFn();
+		end
+	end
+
+	Resync();
+	tinsert(pendingEditModeResyncs, Resync);
 
 	EME:RegisterSlider(frame, label, internalName, function(value)
 		setFn(value);
@@ -600,14 +648,11 @@ end
 -- single value) have no sane equivalent here and stay in the normal
 -- options panel.
 function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame)
-	local anchorDB = self.db.profile.ui.editModeAnchorDB;
-	local messageDB = self.db.profile.ui.editModeMessageDB;
-
-	RegisterEditModeCheckbox(EME, anchorFrame, anchorDB, "modeincombat", L["Show in combat only"],
+	RegisterEditModeCheckbox(EME, anchorFrame, "modeincombat", L["Show in combat only"],
 		function() return self.db.profile.general.modeincombat end,
 		function(value) self.db.profile.general.modeincombat = value; end);
 
-	RegisterEditModeCheckbox(EME, anchorFrame, anchorDB, "minimapIcon", L["Show minimap icon"] or "Show minimap icon",
+	RegisterEditModeCheckbox(EME, anchorFrame, "minimapIcon", L["Show minimap icon"] or "Show minimap icon",
 		function() return self.db.profile.general.minimapIcon end,
 		function(value)
 			self.db.profile.general.minimapIcon = value;
@@ -623,19 +668,19 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 			end
 		end);
 
-	RegisterEditModeCheckbox(EME, anchorFrame, anchorDB, "showclassicon", L["Show class icon"],
+	RegisterEditModeCheckbox(EME, anchorFrame, "showclassicon", L["Show class icon"],
 		function() return self.db.profile.ui.bars.showclassicon end,
 		function(value) self.db.profile.ui.bars.showclassicon = value; end);
 
-	RegisterEditModeCheckbox(EME, anchorFrame, anchorDB, "barsuseclasscolor", L["Bar color by class"],
+	RegisterEditModeCheckbox(EME, anchorFrame, "barsuseclasscolor", L["Bar color by class"],
 		function() return self.db.profile.ui.bars.useclasscolor end,
 		function(value) self.db.profile.ui.bars.useclasscolor = value; end);
 
-	RegisterEditModeCheckbox(EME, anchorFrame, anchorDB, "textuseclasscolor", L["Text color by class"],
+	RegisterEditModeCheckbox(EME, anchorFrame, "textuseclasscolor", L["Text color by class"],
 		function() return self.db.profile.ui.useclasscolor end,
 		function(value) self.db.profile.ui.useclasscolor = value; end);
 
-	RegisterEditModeSlider(EME, anchorFrame, anchorDB, "maxrows", L["Max rows of interrupters"], 3, 30, 1,
+	RegisterEditModeSlider(EME, anchorFrame, "maxrows", L["Max rows of interrupters"], 3, 30, 1,
 		function() return self.db.profile.general.maxrows end,
 		function(value) self.db.profile.general.maxrows = value; end);
 
@@ -651,11 +696,11 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 		function() return self.db.profile.ui.window.growUp end,
 		function(value) self.db.profile.ui.window.growUp = value; end);
 
-	RegisterEditModeSlider(EME, anchorFrame, anchorDB, "barheight", L["Bar height"], 4, 60, 1,
+	RegisterEditModeSlider(EME, anchorFrame, "barheight", L["Bar height"], 4, 60, 1,
 		function() return self.db.profile.ui.bars.barheight end,
 		function(value) self.db.profile.ui.bars.barheight = value; end);
 
-	RegisterEditModeSlider(EME, anchorFrame, anchorDB, "fontsize", L["Font size"], 4, 30, 1,
+	RegisterEditModeSlider(EME, anchorFrame, "fontsize", L["Font size"], 4, 30, 1,
 		function() return self.db.profile.ui.fontsize end,
 		function(value) self.db.profile.ui.fontsize = value; end);
 
@@ -715,19 +760,19 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 			c.r, c.g, c.b = r, g, b;
 		end);
 
-	RegisterEditModeCheckbox(EME, messageFrame, messageDB, "message", L["Show message"],
+	RegisterEditModeCheckbox(EME, messageFrame, "message", L["Show message"],
 		function() return self.db.profile.notification.message end,
 		function(value) self.db.profile.notification.message = value; end);
 
-	RegisterEditModeCheckbox(EME, messageFrame, messageDB, "sound", L["Play sound"],
+	RegisterEditModeCheckbox(EME, messageFrame, "sound", L["Play sound"],
 		function() return self.db.profile.notification.sound end,
 		function(value) self.db.profile.notification.sound = value; end);
 
-	RegisterEditModeCheckbox(EME, messageFrame, messageDB, "flash", L["Flash display"],
+	RegisterEditModeCheckbox(EME, messageFrame, "flash", L["Flash display"],
 		function() return self.db.profile.notification.flash end,
 		function(value) self.db.profile.notification.flash = value; end);
 
-	RegisterEditModeCheckbox(EME, messageFrame, messageDB, "interruptmessage", L["Show chat message"],
+	RegisterEditModeCheckbox(EME, messageFrame, "interruptmessage", L["Show chat message"],
 		function() return self.db.profile.notification.interruptmessage end,
 		function(value) self.db.profile.notification.interruptmessage = value; end);
 end
