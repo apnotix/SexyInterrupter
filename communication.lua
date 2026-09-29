@@ -84,6 +84,12 @@ function SexyInterrupter:SendUserInformation(player, realm, target)
 end
 
 function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
+    -- Comm payloads come from other clients (possibly other addon versions or
+    -- garbled) - never index into something that isn't the expected shape.
+    if type(player) ~= "string" or type(infos) ~= "table" then
+        return;
+    end
+
     local interrupter = SexyInterrupter:GetInterrupter(player, realm);
     local interrupterExists = true;
 
@@ -108,7 +114,13 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
     -- bräunlich wirkender, mit dem Leisten-Hintergrund verschmelzender Text.
     -- Wie bei UpdateOwnInterrupter() (dort ebenfalls immer true, keine echte
     -- Prüfung) einfach als "in Reichweite" annehmen statt fälschlich zu dimmen.
-    interrupter.inrange = true;
+    -- Nur für neue Einträge: ein bereits bekannter Wert (von OnUpdate per
+    -- UnitInRange gepflegt) darf nicht bei jeder 'userinfos'-Nachricht auf
+    -- "in Reichweite" zurückspringen - das ließ entfernte Spieler kurz in
+    -- voller Farbe aufflackern.
+    if interrupter.inrange == nil then
+        interrupter.inrange = true;
+    end
 
     interrupter.active = true;
     interrupter.cooldown = 0;
@@ -124,7 +136,7 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
     end
 
     if interrupter.classEN and interrupter.role ~= 'NONE' then
-        interrupter.canInterrupt = self.unitCanInterrupt[strlower(interrupter.classEN)][strlower(interrupter.role)];
+        interrupter.canInterrupt = SexyInterrupter:CanClassRoleInterrupt(interrupter.classEN, interrupter.role);
     else
         interrupter.canInterrupt = true;
     end
@@ -223,7 +235,7 @@ function SexyInterrupter:ReceiveInterrupt(player, realm, spellId, cooldown)
         -- Aktualisierung - der Cooldown blieb für den Rest der Session hängen.
         local MAX_PLAUSIBLE_COOLDOWN = 180;
 
-        if not cooldown or cooldown <= 0 or cooldown > MAX_PLAUSIBLE_COOLDOWN then
+        if not spellId or not cooldown or cooldown <= 0 or cooldown > MAX_PLAUSIBLE_COOLDOWN then
             return;
         end
 
@@ -237,8 +249,11 @@ function SexyInterrupter:ReceiveInterrupt(player, realm, spellId, cooldown)
             and (existing.readyTime - GetTime()) <= MAX_PLAUSIBLE_COOLDOWN;
 
         -- Same "don't overwrite a fresher cooldown" guard the old single-ability
-        -- code had, just scoped per ability now instead of per player.
-        if not existing or existing.readyTime == 0 or existing.readyTime == nil or not existingIsPlausible then
+        -- code had, just scoped per ability now instead of per player. An
+        -- already EXPIRED readyTime (in the past, but never reset to 0 in the
+        -- stored ability) must not count as "still running", otherwise every
+        -- kick after the first one from that player would be ignored.
+        if not existing or not existing.readyTime or existing.readyTime <= GetTime() or not existingIsPlausible then
             interrupter.abilities = interrupter.abilities or {};
             interrupter.abilities[spellId] = {
                 cooldown = cooldown,

@@ -1,5 +1,10 @@
 SexyInterrupter.versions = {
     {
+        id = "3.0.5",
+        title = "SexyInterrupter v3.0.5",
+        message = "<br />- Most settings now live in Blizzard's Edit Mode dialog (incl. window width and output channel)<br />- Fixed Edit Mode defaults being reset for new layouts<br />- Fixed other players' interrupt cooldowns not updating after their first kick<br />- Fixed several Lua errors and reduced addon traffic/CPU usage<br />- Default status bar texture is now the built-in \"Blizzard\" one"
+    },
+    {
         id = "3.0.1",
         title = "SexyInterrupter v3.0.1",
         message = "<br />- Fixed a client crash (\"Access denied\") when dragging the Edit Mode window<br />- Fixed the window resetting to its default position after /reload<br />- Fixed group member bars briefly disappearing on zone change<br />- Fixed role changes not syncing immediately to the group"

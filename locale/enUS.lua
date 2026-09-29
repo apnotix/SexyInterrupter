@@ -67,3 +67,5 @@ L["Spell assignment to the player"] = "Spell assignment to the player";
 L["Overwrite the predefined priority (1-3)"] = "Overwrite the predefined priority (1-3)";
 
 L["Could not detect an active interrupt cooldown."] = "Could not detect an active interrupt cooldown.";
+L["Width"] = "Width";
+L["Sound file"] = "Sound file";

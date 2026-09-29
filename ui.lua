@@ -44,6 +44,17 @@ local function ComputeBottomLeft(point, target, relativePoint, x, y, width, heig
 	return (relX + x) - ownX, (relY + y) - ownY;
 end
 
+-- EditModeExpanded-1.0 moves x/y/settings out of the db table we hand it into
+-- a nested per-Edit-Mode-layout table on its first profile init and keeps only
+-- that one current - the table we passed in (editModeAnchorDB/MessageDB)
+-- silently stops being the live position store. Always go through the
+-- library's own live reference when reading or writing position.
+local function GetLiveDB(frame, fallback)
+	local EME = LibStub("EditModeExpanded-1.0", true);
+
+	return (EME and frame and frame.system and EME.framesDB and EME.framesDB[frame.system]) or fallback;
+end
+
 local function GetSpellTextureCompat(spellId)
 	if C_Spell and C_Spell.GetSpellTexture then
 		return C_Spell.GetSpellTexture(spellId);
@@ -124,6 +135,10 @@ function SexyInterrupter:CreateUi()
 	-- Frame: Anchor
 	local f = CreateFrame("Frame", "SexyInterrupterAnchor", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil);
 
+    -- The old options panel allowed any width (-9999..9999); the Edit Mode
+    -- slider only covers 100-400, so bring stored values into that range once.
+    self.db.profile.ui.window.width = math.max(100, math.min(400, self.db.profile.ui.window.width))
+
     f:SetSize(self.db.profile.ui.window.width, 100)
     -- anchorPosition.region ist ein Frame-NAME (String, SavedVariables können
     -- keine Frame-Referenzen speichern) und muss selbst aufgelöst werden -
@@ -171,12 +186,8 @@ function SexyInterrupter:CreateUi()
 	f:SetBackdropBorderColor(self.db.profile.ui.window.bordercolor.r, self.db.profile.ui.window.bordercolor.g, self.db.profile.ui.window.bordercolor.b, self.db.profile.ui.window.bordercolor.a);
 	f:SetScript("OnUpdate", SexyInterrupter.OnUpdate);
 
-	f:SetScript("OnMouseUp", function(self, button)
-		SexyInterrupter:OnMouseUp(self, button);
-	end);
-
     local t = f:CreateTexture()
-    t:SetTexture(0, 0, 0, 0.2)
+    t:SetColorTexture(0, 0, 0, 0.2)
     t:SetAllPoints(f);
 
 	-- Frame: InterruptMessage
@@ -217,16 +228,6 @@ function SexyInterrupter:CreateUi()
         self.db.profile.ui.editModeMessageDB.autoSeeded = true
     end
 
-	c:SetScript("OnMouseUp", function(self, button)
-		SexyInterrupter:OnMouseUp(self, button);
-	end);
-
-	-- Frame: RightClickMenu
-	-- Built through LibUIDropDownMenu instead of the native "UIDropDownMenuTemplate":
-	-- Blizzard blocks addons from creating frames with that template directly
-	-- ("...blocked from an action only available to the Blizzard UI").
-	LibDD:Create_UIDropDownMenu("SexyInterrupterMenu", SexyInterrupterAnchor);
-
 	-- Hand both frames to Blizzard's real Edit Mode instead of our own custom
 	-- drag/lock system - see https://github.com/teelolws/EditModeExpanded.
 	-- Register AFTER the SetPoint calls above: EditModeExpanded seeds a
@@ -266,6 +267,24 @@ function SexyInterrupter:CreateUi()
 		end
 
 		SexyInterrupter:RegisterEditModeSettings(EME, f, c);
+
+		-- The library's dialog builds its sliders from ITS per-layout db (100
+		-- when a value is missing, e.g. after switching to a layout it hasn't
+		-- seen). Re-seed from AceDB right before a frame's dialog is built, so
+		-- it never shows - or lets the user drag from - a bogus default.
+		for _, frame in ipairs({ f, c }) do
+			local originalSelectSystem = frame.SelectSystem;
+
+			if originalSelectSystem then
+				frame.SelectSystem = function(...)
+					for _, resync in ipairs(pendingEditModeResyncs) do
+						resync();
+					end
+
+					return originalSelectSystem(...);
+				end
+			end
+		end
 	end
 
 	-- Keep the test-data preview (UpdateFrames() below, driven by
@@ -317,6 +336,8 @@ function SexyInterrupter:CreateUi()
 				self.db.profile.ui.window.width, 100)
 			if x and y then
 				anchorDB.x, anchorDB.y = x, y
+				local liveDB = GetLiveDB(f, anchorDB)
+				liveDB.x, liveDB.y = x, y
 				f:ClearAllPoints()
 				f:SetPoint(f.EMEanchorPoint or "BOTTOMLEFT", f.EMEanchorTo or UIParent, f.EMEanchorPoint or "BOTTOMLEFT", x, y)
 			end
@@ -329,6 +350,8 @@ function SexyInterrupter:CreateUi()
 				self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, 500, c:GetHeight())
 			if mx and my then
 				messageDB.x, messageDB.y = mx, my
+				local liveDB = GetLiveDB(c, messageDB)
+				liveDB.x, liveDB.y = mx, my
 				c:ClearAllPoints()
 				c:SetPoint(c.EMEanchorPoint or "BOTTOMLEFT", c.EMEanchorTo or UIParent, c.EMEanchorPoint or "BOTTOMLEFT", mx, my)
 			end
@@ -380,8 +403,36 @@ local function RegisterEditModeCheckbox(EME, frame, internalName, label, getFn, 
 	tinsert(pendingEditModeResyncs, Resync);
 
 	EME:RegisterCustomCheckbox(frame, label,
-		function() setFn(true); SexyInterrupter:UpdateFrames(); end,
-		function() setFn(false); SexyInterrupter:UpdateFrames(); end,
+		function()
+			-- onChecked() has no marker for "automatic re-run" (unlike
+			-- onUnchecked(true)), but a real click can only happen while the
+			-- library's settings dialog is open - the library hides it before
+			-- re-running the callbacks on a profile/layout change. Outside of
+			-- that, a stale per-layout value must not overwrite our AceDB.
+			if not (EditModeExpandedSystemSettingsDialog and EditModeExpandedSystemSettingsDialog:IsShown()) then
+				Resync();
+				return;
+			end
+
+			setFn(true);
+			SexyInterrupter:UpdateFrames();
+		end,
+		function(isAutomaticInit)
+			-- EditModeExpanded-1.0 re-runs every checkbox callback on each profile
+			-- init and EDIT_MODE_LAYOUTS_UPDATED using ITS OWN per-layout db, which
+			-- is empty for a layout it hasn't seen yet - so it reports "unchecked"
+			-- (onUnchecked(true)) for every box and would overwrite our real AceDB
+			-- values (e.g. the default "Play sound" = true) with false. Only that
+			-- automatic call passes `true`; a real click passes `false`. Push our
+			-- AceDB value into the library's db instead of writing it back.
+			if isAutomaticInit then
+				Resync();
+				return;
+			end
+
+			setFn(false);
+			SexyInterrupter:UpdateFrames();
+		end,
 		internalName);
 end
 
@@ -399,7 +450,17 @@ local function RegisterEditModeSlider(EME, frame, internalName, label, min, max,
 	Resync();
 	tinsert(pendingEditModeResyncs, Resync);
 
+	-- The library also re-runs this callback with ITS per-layout value on every
+	-- profile refresh (Edit Mode layout switch / layouts update). Only real
+	-- slider input - which requires the library's settings dialog to be open,
+	-- it is hidden before the refresh - may change our AceDB value; otherwise
+	-- push the AceDB value into the library instead.
 	EME:RegisterSlider(frame, label, internalName, function(value)
+		if not (EditModeExpandedSystemSettingsDialog and EditModeExpandedSystemSettingsDialog:IsShown()) then
+			Resync();
+			return;
+		end
+
 		setFn(value);
 		SexyInterrupter:UpdateFrames();
 	end, min, max, step);
@@ -408,7 +469,7 @@ end
 -- LSM-backed selects (font/statusbar-texture/background-texture/border) have
 -- no ready-made Edit Mode widget, but RegisterDropdown hands back a raw
 -- dropdown frame built with LibUIDropDownMenu (same fork this addon already
--- uses for the right-click menu, see LibDD above) that we populate ourselves.
+-- uses for the Edit Mode dropdowns, see LibDD above) that we populate ourselves.
 -- Each entry gets a real preview: a texture swatch of the media itself for
 -- statusbar/background/border, or the entry's own text rendered in that font
 -- for font entries - not just a plain name in a list.
@@ -431,6 +492,7 @@ end
 local function RegisterEditModeMediaDropdown(EME, frame, internalName, label, mediaType, getFn, setFn)
 	local dropdown = EME:RegisterDropdown(frame, LibDD, internalName);
 	local isFont = (mediaType == "font");
+	local isSound = (mediaType == "sound");
 
 	-- Unlike RegisterCustomCheckbox/RegisterSlider/RegisterCustomButton,
 	-- RegisterDropdown takes no `name` parameter at all - there's no built-in
@@ -471,12 +533,18 @@ local function RegisterEditModeMediaDropdown(EME, frame, internalName, label, me
 
 			if isFont then
 				info.fontObject = GetPreviewFontObject(LSM:Fetch(mediaType, name));
-			else
+			elseif not isSound then
 				info.icon = LSM:Fetch(mediaType, name);
 			end
 
 			info.func = function()
 				setFn(name);
+
+				-- Sounds have no visual preview - play the picked one instead.
+				if isSound then
+					PlaySoundFile(LSM:Fetch(mediaType, name), "Master");
+				end
+
 				SexyInterrupter:UpdateFrames();
 				RefreshText();
 			end
@@ -657,6 +725,12 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 		function(value)
 			self.db.profile.general.minimapIcon = value;
 
+			-- self.icon is only assigned in OnInitialize AFTER CreateUi(), and the
+			-- library may call this callback that early.
+			if not self.icon then
+				return;
+			end
+
 			if not self.icon:IsRegistered("SexyInterrupter") then
 				SexyInterrupter:AddIcon();
 			end
@@ -695,6 +769,10 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 		},
 		function() return self.db.profile.ui.window.growUp end,
 		function(value) self.db.profile.ui.window.growUp = value; end);
+
+	RegisterEditModeSlider(EME, anchorFrame, "width", L["Width"], 100, 400, 1,
+		function() return self.db.profile.ui.window.width end,
+		function(value) self.db.profile.ui.window.width = value; end);
 
 	RegisterEditModeSlider(EME, anchorFrame, "barheight", L["Bar height"], 4, 60, 1,
 		function() return self.db.profile.ui.bars.barheight end,
@@ -768,6 +846,22 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 		function() return self.db.profile.notification.sound end,
 		function(value) self.db.profile.notification.sound = value; end);
 
+	-- soundFile may hold a LibSharedMedia NAME (what the picker stores) or a raw
+	-- file path (the default) - show the matching name either way.
+	RegisterEditModeMediaDropdown(EME, messageFrame, "soundfile", L["Sound file"], "sound",
+		function()
+			local current = self.db.profile.notification.soundFile;
+
+			for name, path in pairs(LSM:HashTable("sound")) do
+				if name == current or path == current then
+					return name;
+				end
+			end
+
+			return current;
+		end,
+		function(value) self.db.profile.notification.soundFile = value; end);
+
 	RegisterEditModeCheckbox(EME, messageFrame, "flash", L["Flash display"],
 		function() return self.db.profile.notification.flash end,
 		function(value) self.db.profile.notification.flash = value; end);
@@ -775,6 +869,16 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 	RegisterEditModeCheckbox(EME, messageFrame, "interruptmessage", L["Show chat message"],
 		function() return self.db.profile.notification.interruptmessage end,
 		function(value) self.db.profile.notification.interruptmessage = value; end);
+
+	local outputChannelOptions = {};
+
+	for _, channel in ipairs({ 'SAY', 'YELL', 'PARTY', 'RAID' }) do
+		tinsert(outputChannelOptions, { value = channel, label = SexyInterrupter.outputchannels[channel] });
+	end
+
+	RegisterEditModeSelectDropdown(EME, messageFrame, "outputchannel", L["Ouput channel"], outputChannelOptions,
+		function() return self.db.profile.notification.outputchannel end,
+		function(value) self.db.profile.notification.outputchannel = value; end);
 end
 
 function SexyInterrupter:UpdateFrames()
@@ -848,7 +952,7 @@ function SexyInterrupter:UpdateUI(rows)
 
 			local t = f:CreateTexture()
 			t:SetAllPoints(f)
-			t:SetTexture(0, 0, 0, 0.4)
+			t:SetColorTexture(0, 0, 0, 0.4)
 
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
 			f:SetSize(self.db.profile.ui.window.width - 10, self.db.profile.ui.bars.barheight)
@@ -943,7 +1047,7 @@ function SexyInterrupter:UpdateUI(rows)
 		-- Verschieben. Die Kompensation wird einfach beim NÄCHSTEN UpdateUI()
 		-- nach Drag-Ende nachgeholt (kein dauerhafter Datenverlust).
 		if not self.db.profile.ui.window.growUp and not SexyInterrupterAnchor.isDragging then
-			local anchorDB = self.db.profile.ui.editModeAnchorDB;
+			local anchorDB = GetLiveDB(SexyInterrupterAnchor, self.db.profile.ui.editModeAnchorDB);
 			if anchorDB.x and anchorDB.y and oldHeight and oldHeight > 0 then
 				anchorDB.y = anchorDB.y - (newHeight - oldHeight);
 				SexyInterrupterAnchor:ClearAllPoints();
@@ -963,6 +1067,16 @@ end
 
 function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 	rows = rows or SexyInterrupter:GetCurrentInterrupters();
+
+	-- Event handlers (new ability learned, incoming interrupt, ...) call this
+	-- directly with possibly MORE rows than frames exist yet - the frames are
+	-- only created in UpdateUI().
+	for cx in pairs(rows) do
+		if not _G["SexyInterrupterRow" .. cx] then
+			SexyInterrupter:UpdateUI(rows);
+			break;
+		end
+	end
 
 	-- Hide every row frame that could conceivably have been created before
 	-- (by count, not by the current roster size - e.g. switching from a full
@@ -999,12 +1113,17 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 
 		local interrupter = dataRow.interrupter;
 
+		-- Out of range: dim the whole row (bar included), not just the name.
+		if interrupter.inrange == false then
+			rowParent:SetAlpha(0.4);
+		end
+
 		if row and rowParent then
 			row:SetMinMaxValues(0, 100);
 			row:SetValue(100);
 			row.cooldownText:SetText();
 
-			if self.db.profile.ui.bars.useclasscolor then
+			if self.db.profile.ui.bars.useclasscolor and interrupter.classColor then
 				row:SetStatusBarColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
 			end
 
@@ -1085,38 +1204,55 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 	end
 end
 
-function SexyInterrupter:OnUpdate()
+-- Runs as the anchor frame's OnUpdate script (self = the frame). Throttled:
+-- rebuilding + sorting the roster every rendered frame is wasted work for a
+-- countdown text with one decimal.
+local ON_UPDATE_INTERVAL = 0.1;
+
+function SexyInterrupter:OnUpdate(elapsed)
+	self.siElapsed = (self.siElapsed or 0) + (elapsed or 0);
+
+	if self.siElapsed < ON_UPDATE_INTERVAL then
+		return;
+	end
+
+	self.siElapsed = 0;
+
 	local editing = SexyInterrupter:IsEditingUi();
 	local rows = editing and GetPreviewRows() or SexyInterrupter:GetCurrentInterrupters();
 	local currentplayer = not editing and SexyInterrupter:GetInterrupter(select(1, UnitName("player"))) or nil;
+	local now = GetTime();
 
 	for cx, value in pairs(rows) do
 		if currentplayer and currentplayer.sortpos and currentplayer.sortpos > SexyInterrupter.db.profile.general.maxrows and SexyInterrupter.db.profile.general.maxrows == cx then
 			value = currentplayer;
 		end
 
-        if value.readyTime > 0 then
+		if value.readyTime > 0 then
 			local bar = _G["SexyInterrupterStatusBar" .. cx];
 
 			if bar then
-				if (value.readyTime - GetTime() <= 0) then
+				local remaining = value.readyTime - now;
+
+				-- No early return anymore: it skipped every remaining row and the
+				-- range refresh below for the whole frame.
+				if remaining <= 0 then
 					bar.cooldownText:SetText('');
 					value.readyTime = 0;
 
 					bar:SetMinMaxValues(0, 100);
 					bar:SetValue(100);
-					return;
+				else
+					bar:SetValue(remaining);
+					bar.cooldownText:SetText(string.format('%.1f', remaining));
 				end
-
-				local cooldownText = value.readyTime - GetTime();
-
-				bar:SetValue(cooldownText);
-				bar.cooldownText:SetText(string.format('%.1f', cooldownText));
 			end
 		end
 	end
 
 	if not editing then
+		local rangeChanged = false;
+
 		for i = 1, GetNumGroupMembers() do
 			local unit = "party" .. i;
 
@@ -1128,16 +1264,23 @@ function SexyInterrupter:OnUpdate()
 				unit = 'player';
 			end
 
-			local name, realm = UnitName(unit);
-			local interrupter = SexyInterrupter:GetInterrupter(name, realm);
+			local interrupter = SexyInterrupter:GetInterrupterByUnit(unit);
 
 			if interrupter ~= nil then
 				local inRange = SexyInterrupter:UnitInRangeCompat(unit);
 
-				if inRange ~= nil then
+				if inRange ~= nil and interrupter.inrange ~= inRange then
 					interrupter.inrange = inRange;
+					rangeChanged = true;
 				end
 			end
+		end
+
+		-- The flag alone changes nothing on screen (the row colours are only
+		-- applied while rendering) - re-render when someone crossed the range
+		-- boundary, otherwise the dimming never showed up.
+		if rangeChanged then
+			SexyInterrupter:UpdateInterrupterStatus();
 		end
 	end
 end

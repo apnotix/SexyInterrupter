@@ -67,3 +67,5 @@ L["Spell assignment to the player"] = "Zauberzuweisung für diesen Spieler";
 L["Overwrite the predefined priority (1-3)"] = "Überschreibt die vordefinierte Priorität (1-3)";
 
 L["Could not detect an active interrupt cooldown."] = "Kein aktiver Interrupt-Cooldown erkannt.";
+L["Width"] = "Breite";
+L["Sound file"] = "Sounddatei";

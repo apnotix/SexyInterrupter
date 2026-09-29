@@ -50,6 +50,13 @@ SI.interruptSpells = {
     72          -- Warrior Shield Bash
 };
 
+-- Set keyed by spell ID for O(1) lookups in the (very frequent) cast events.
+SI.interruptSpellSet = {};
+
+for _, spellId in ipairs(SI.interruptSpells) do
+    SI.interruptSpellSet[spellId] = true;
+end
+
 SI.unitCanInterrupt = {
     priest = {
         healer = false,
@@ -105,9 +112,10 @@ SI.unitCanInterrupt = {
 local defaults = {
 	profile = {
         versions = {},
+        -- LibDBIcon stores the minimap button position in this table.
+        icon = {},
 		general = {
 			modeincombat = false,
-            lock = true,
             maxrows = 5,
             minimapIcon = true
 		},
@@ -141,11 +149,11 @@ local defaults = {
 			fontcolor = {
 				r = 1,
 				g = 1, 
-				b = 1
+				b = 1,
+				a = 1
             },
             useclasscolor = false,
 			window = {
-				lock = true,
 				background = {
 					r = 0,
 					g = 0,
@@ -157,7 +165,8 @@ local defaults = {
 				bordercolor = {
 					r = 0,
 					g = 0, 
-					b = 0
+					b = 0,
+					a = 1
                 },
                 width = 200,
                 -- false = wächst nach unten (obere Kante bleibt fix), true =
@@ -177,7 +186,7 @@ local defaults = {
 					b = 0.435,
 					a = 1
 				},
-				texture = 'BantoBar'
+				texture = 'Blizzard'
 			}
 		},
 		notification = {
@@ -246,89 +255,9 @@ function SexyInterrupter:InitOptions()
                     -- },
                 }
             },                 
-            -- "general" (Show in combat only / Show minimap icon / Max rows)
-            -- moved entirely to the Edit Mode dialog - see
+            -- Everything else (general, look, notification incl. sound file and
+            -- output channel) lives in the Edit Mode dialog - see
             -- SexyInterrupter:RegisterEditModeSettings in ui.lua.
-            notification = {
-                type = "group",
-                name = L["Notification"],
-                get = function(info) return self.db.profile.notification[info[#info]] end,
-                set = function(info, value) self.db.profile.notification[info[#info]] = value end,
-                args = {
-                    -- "Play sound"/"Flash display"/"Show message"/"Show chat
-                    -- message" moved to the Edit Mode dialog - see
-                    -- SexyInterrupter:RegisterEditModeSettings in ui.lua.
-                    -- soundFile has no Edit Mode equivalent (LSM sound
-                    -- picker, not a plain checkbox/slider/dropdown value).
-                    headline_notification = {
-                        type = "header",
-                        name = L["Notification"],
-                        order = 2
-                    },
-                    soundFile = {
-                        type = "select",
-                        name = 'Soundfile',
-                        dialogControl = 'LSM30_Sound',
-                        values = LSM:HashTable("sound"),
-                        order = 5
-                    },
-                    headline_interrupt = {
-                        type = "header",
-                        name = L["Interrupts"],
-                        order = 4
-                    },
-                    outputchannel = {
-                        type = "select",
-                        name = L["Ouput channel"],
-                        order = 5,
-                        values = function () return SI.outputchannels end,
-                        style = "radio", -- "dropdown" uses AceGUI's Dropdown widget, which creates a frame with the native "UIDropDownMenuTemplate" that addons have been blocked from using since WoW 11.0 (Forever inherits this restriction)
-                        disabled = function() return not self.db.profile.notification.interruptmessage end
-                    }
-                }
-            },
-            ui = {
-                name = L["Look"],
-                type = "group",
-	            childGroups = "tab",
-                get = function(info) return self.db.profile.ui[info[#info]] end,
-                set = function(info, value) 
-                    self.db.profile.ui[info[#info]] = value;      
-
-                    SexyInterrupter:UpdateFrames();
-                 end,
-                args = {
-                    -- Font art/size/color, class-color toggle, and the whole
-                    -- "Bars" tab (class icon, bar color-by-class, statusbar
-                    -- texture, bar color, bar height) moved to the Edit Mode
-                    -- dialog - see SexyInterrupter:RegisterEditModeSettings
-                    -- in ui.lua.
-                    -- Point/relativePoint/x/y (manual positioning), the
-                    -- "Open Edit Mode" button (duplicate of the top-level
-                    -- "lock" entry above), background/border texture and
-                    -- color all moved to the Edit Mode dialog - see
-                    -- SexyInterrupter:RegisterEditModeSettings in ui.lua.
-                    -- Width has no Edit Mode equivalent, so this group stays
-                    -- just for that.
-                    window = {
-                        name = L["Window"],
-                        type = "group",
-                        get = function(info) return self.db.profile.ui.window[info[#info]] end,
-                        set = function(info, value) self.db.profile.ui.window[info[#info]] = value; SexyInterrupter:UpdateFrames(); end,
-                        args = {
-                            width = {
-                                type = "range",
-                                name = 'Width',
-                                min = -9999,
-                                max = 9999,
-                                step = 1,
-                                bigStep = 1,
-                                order = 1
-                            },
-                        }
-                    }
-                }
-            }
         }
     }
 

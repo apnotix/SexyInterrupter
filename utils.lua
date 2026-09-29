@@ -1,6 +1,5 @@
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
-local LibDD = LibStub("LibUIDropDownMenuQuestie-4.0");
 
 SexyInterrupter.role_icon_tcoords = {
 	DAMAGER = {0.3125, 0.63, 0.3125, 0.63},
@@ -92,6 +91,36 @@ function SexyInterrupter:PlayerKnowsAnyInterruptSpell()
 	return false;
 end
 
+-- Static "could this class+role ever interrupt" guess. Tolerates unknown
+-- classes / missing roles (e.g. a malformed or older-version comm message)
+-- instead of indexing nil.
+function SexyInterrupter:CanClassRoleInterrupt(classEN, role)
+	if not classEN or not role or role == 'NONE' then
+		return true;
+	end
+
+	local roles = self.unitCanInterrupt[strlower(classEN)];
+
+	if not roles then
+		return true;
+	end
+
+	return roles[strlower(role)] and true or false;
+end
+
+-- notification.soundFile holds either a LibSharedMedia sound NAME (what the
+-- picker stores) or a raw file path (the default). PlaySoundFile only
+-- understands paths, so resolve names first.
+local DEFAULT_SOUND_PATH = "Sound\\Spells\\PVPFlagTaken.ogg";
+
+function SexyInterrupter:ResolveSoundPath(value)
+	if not value then
+		return DEFAULT_SOUND_PATH;
+	end
+
+	return LSM:Fetch("sound", value, true) or value;
+end
+
 function SexyInterrupter:GetInterrupter(name, realm)
 	local retVal = nil;
 
@@ -107,6 +136,29 @@ function SexyInterrupter:GetInterrupter(name, realm)
 	end
 
 	return retVal;
+end
+
+-- Resolves the roster entry for a unit token. Entries are keyed by whatever
+-- the sender's client called its realm (GetRealmName(), with spaces), while
+-- UnitName() on our side returns a normalized realm - so the exact
+-- "Name-Realm" lookup can miss for cross-realm players even though the bare
+-- name matches. Try the full name first, then fall back to the bare name.
+-- Returns (entry|nil, nameKnown, name, realm); nameKnown is false while the
+-- unit's name isn't loaded yet.
+function SexyInterrupter:GetInterrupterByUnit(unit)
+	local name, realm = UnitName(unit);
+
+	if not name or name == UNKNOWNOBJECT then
+		return nil, false;
+	end
+
+	local interrupter;
+
+	if realm and realm ~= "" then
+		interrupter = SexyInterrupter:GetInterrupter(name .. '-' .. realm);
+	end
+
+	return interrupter or SexyInterrupter:GetInterrupter(name), true, name, realm;
 end
 
 -- Creates/refreshes the local player's own SI_Globals.interrupters entry
@@ -162,7 +214,7 @@ function SexyInterrupter:UpdateOwnInterrupter()
 	end
 
 	if interrupter.classEN and interrupter.role ~= 'NONE' then
-		interrupter.canInterrupt = self.unitCanInterrupt[strlower(interrupter.classEN)][strlower(interrupter.role)];
+		interrupter.canInterrupt = SexyInterrupter:CanClassRoleInterrupt(interrupter.classEN, interrupter.role);
 	else
 		interrupter.canInterrupt = true;
 	end
@@ -223,6 +275,12 @@ function SexyInterrupter:GetCurrentInterrupters()
 			if interrupter.abilities then
 				for spellId, ability in pairs(interrupter.abilities) do
 					hasAbilities = true;
+
+					-- Normalize an expired cooldown to 0 so it sorts as "ready"
+					-- (the UI only zeroes its transient row copy).
+					if ability.readyTime and ability.readyTime > 0 and ability.readyTime <= GetTime() then
+						ability.readyTime = 0;
+					end
 
 					tinsert(rows, {
 						interrupter = interrupter,
@@ -375,7 +433,7 @@ function SexyInterrupter:UpdateInterrupters()
 		end
 
 		if interrupter.classEN and interrupter.role ~= 'NONE' then
-			interrupter.canInterrupt = self.unitCanInterrupt[strlower(interrupter.classEN)][strlower(interrupter.role)];
+			interrupter.canInterrupt = SexyInterrupter:CanClassRoleInterrupt(interrupter.classEN, interrupter.role);
 		else
 			interrupter.canInterrupt = true;
 		end
@@ -519,15 +577,6 @@ function SexyInterrupter:LockFrame()
 	end
 end
 
--- Right-click menu only; dragging is handled by EditModeExpanded-1.0's own
--- Selection overlay while Edit Mode is open, not by these frames' own mouse
--- scripts anymore.
-function SexyInterrupter:OnMouseUp(self, button)
-	if button == "RightButton" then
-		LibDD:EasyMenu(SexyInterrupter.menu or {}, SexyInterrupterMenu, "cursor", nil, nil);
-	end
-end
-
 function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime)
 	-- notInterruptible (from UnitCastingInfo/UnitChannelInfo) can come through
 	-- as a "secret" value under the same protected-info guard as spellID
@@ -584,7 +633,7 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 			end
 
 			if self.db.profile.notification.sound then
-				PlaySoundFile(self.db.profile.notification.soundFile);
+				PlaySoundFile(SexyInterrupter:ResolveSoundPath(self.db.profile.notification.soundFile), "Master");
 			end
 
 			if self.db.profile.notification.flash then

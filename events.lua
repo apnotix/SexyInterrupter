@@ -1,6 +1,24 @@
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
+local lastVersionBroadcast;
+local rosterRetryPending = false;
+local rosterRetryCount = 0;
+local isRosterRetry = false;
+local MAX_ROSTER_RETRIES = 5;
+
+-- GetSpellBaseCooldown can return nil (unknown spell / client without the
+-- data) or 0; returns the base cooldown in seconds or nil.
+local function GetBaseCooldownSeconds(spellId)
+	local cooldownMs = GetSpellBaseCooldown and GetSpellBaseCooldown(spellId);
+
+	if not cooldownMs or cooldownMs <= 0 then
+		return nil;
+	end
+
+	return cooldownMs / 1000;
+end
+
 function SexyInterrupter:GROUP_ROSTER_UPDATE()
 	-- Reset everyone first, then re-establish the local player unconditionally
 	-- (UpdateOwnInterrupter recomputes canInterrupt for real, including
@@ -9,11 +27,26 @@ function SexyInterrupter:GROUP_ROSTER_UPDATE()
 	-- branch, so a stale group-mate entry (or a stale canInterrupt=true for
 	-- yourself, from before you'd trained an interrupt) never got cleared
 	-- after leaving a group, and the bar/flash kept showing it forever.
-	for cx, value in pairs(SI_Globals.interrupters) do
-		value.active = false;
+	--
+	-- Entries are NOT blanket-deactivated up front anymore: that made every
+	-- group-mate's bar depend on the name lookup below succeeding again in
+	-- this very pass, and it fails whenever a unit's name isn't loaded yet
+	-- (loading screens, zone changes) or the realm spelling differs - the
+	-- bar then vanished until some later event. Instead, entries are only
+	-- deactivated at the end, and only if they are provably not in the group.
+	local present = {};
+	local unresolved = false;
+
+	-- A real game event (not our own retry timer) starts a fresh retry budget.
+	if not isRosterRetry then
+		rosterRetryCount = 0;
 	end
 
+	isRosterRetry = false;
+
 	SexyInterrupter:UpdateOwnInterrupter();
+
+	present[SexyInterrupter:GetInterrupter(select(1, UnitName("player")) .. '-' .. GetRealmName())] = true;
 
 	if IsInGroup() or IsInRaid() or IsPartyLFG() then
 		for i = 1, GetNumGroupMembers() do
@@ -23,20 +56,31 @@ function SexyInterrupter:GROUP_ROSTER_UPDATE()
 				unit = "raid" .. i;
 			end
 			
-			if not UnitExists(unit) then	
+			if not UnitExists(unit) then
+				-- In a party (not raid) the last slot is the local player, which has
+				-- no partyN token. Any OTHER missing token is a member whose unit
+				-- isn't loaded yet - can't conclude anything about them.
+				if IsInRaid() or i ~= GetNumGroupMembers() then
+					unresolved = true;
+				end
+
 				unit = 'player';
 			end
-			
-			local name, realm = UnitName(unit);
+
+			local interrupter, nameKnown, name, realm = SexyInterrupter:GetInterrupterByUnit(unit);
 			local fullname = name;
 
-			if realm ~= "" and realm ~= nil then 
+			if not nameKnown then
+				-- Name not loaded yet: we can't tell who this slot is, so we must
+				-- not conclude that anybody has left.
+				unresolved = true;
+			elseif realm ~= "" and realm ~= nil then
 				fullname = name .. '-' .. realm;
 			end
 
-			local interrupter = SexyInterrupter:GetInterrupter(fullname);
-
 			if interrupter ~= nil then
+				present[interrupter] = true;
+
 				-- Sofort wieder aktiv setzen: der Spieler ist laut aktueller
 				-- Gruppen-Iteration JETZT nachweislich noch in der Gruppe, es
 				-- muss nicht auf die asynchrone 'requestuser'-Comm-Antwort
@@ -72,10 +116,45 @@ function SexyInterrupter:GROUP_ROSTER_UPDATE()
 				end
 			end
 
-			SexyInterrupter:SendMessage("requestuser", fullname);
+			-- Only ask for the user info of members we don't know yet (and never
+			-- for ourselves): a request per member on EVERY roster update, each
+			-- answered by a full 'userinfos' broadcast, meant O(n^2) addon traffic
+			-- in raids (and on every zone change).
+			if nameKnown and unit ~= 'player' and (interrupter == nil or interrupter.talents == nil) then
+				SexyInterrupter:SendMessage("requestuser", fullname);
+			end
 		end
 
-		SexyInterrupter:SendMessage("versioninfo", SexyInterrupter.Version);
+		-- Version info is only worth broadcasting occasionally.
+		local now = GetTime();
+
+		if not lastVersionBroadcast or now - lastVersionBroadcast > 30 then
+			lastVersionBroadcast = now;
+			SexyInterrupter:SendMessage("versioninfo", SexyInterrupter.Version);
+		end
+	end
+
+	if unresolved and rosterRetryCount < MAX_ROSTER_RETRIES then
+		-- Some slot's name wasn't available: keep everybody as they are and
+		-- look again shortly instead of guessing (a bounded number of times -
+		-- a slot that never resolves must not keep us polling forever or block
+		-- removing members who really left).
+		if not rosterRetryPending then
+			rosterRetryPending = true;
+
+			C_Timer.After(1.5, function()
+				rosterRetryPending = false;
+				rosterRetryCount = rosterRetryCount + 1;
+				isRosterRetry = true;
+				SexyInterrupter:GROUP_ROSTER_UPDATE();
+			end);
+		end
+	else
+		for _, value in pairs(SI_Globals.interrupters) do
+			if not present[value] then
+				value.active = false;
+			end
+		end
 	end
 
 	SexyInterrupter:UpdateInterrupterSettings();
@@ -121,16 +200,23 @@ function SexyInterrupter:MarkOwnInterrupt()
 		return;
 	end
 
-	local foundSpellId, cooldownLeft;
+	local foundSpellId, cooldownLeft, foundDuration;
 
-	for _, spellId in pairs(self.interruptSpells) do
+	for _, spellId in ipairs(self.interruptSpells) do
 		local start, duration = GetSpellCooldownCompat(spellId);
 
 		-- Ignore the ~1.5s global cooldown; only a real interrupt cooldown counts.
 		if start and start > 0 and duration and duration > 2 then
-			foundSpellId = spellId;
-			cooldownLeft = duration;
-			break;
+			-- Remaining time, not the full duration - otherwise running this
+			-- some seconds after the kick overstates the cooldown everywhere.
+			local remaining = start + duration - GetTime();
+
+			if remaining > 0 then
+				foundSpellId = spellId;
+				cooldownLeft = remaining;
+				foundDuration = duration;
+				break;
+			end
 		end
 	end
 
@@ -141,7 +227,7 @@ function SexyInterrupter:MarkOwnInterrupt()
 
 	interrupter.abilities = interrupter.abilities or {};
 	interrupter.abilities[foundSpellId] = {
-		cooldown = cooldownLeft,
+		cooldown = foundDuration,
 		readyTime = GetTime() + cooldownLeft,
 	};
 
@@ -158,12 +244,12 @@ function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 
 	if SI_Globals.numInterrupters > 0 then
 		if event == "SPELL_CAST_SUCCESS" then
-			if (tContains(spells, spellId)) then
-				local cooldown = GetSpellBaseCooldown(spellId);
+			if self.interruptSpellSet[spellId] then
+				local cooldown = GetBaseCooldownSeconds(spellId);
 				local interrupter = SexyInterrupter:GetInterrupter(sourceName);
 
-				if interrupter then
-					local cooldownLeft = cooldown / 1000;
+				if interrupter and cooldown then
+					local cooldownLeft = cooldown;
 					
 					-- Shadowpriest talent
 					if spellId == 15487 and interrupter.talents ~= nil and strfind(interrupter.talents, '263716') then
@@ -212,7 +298,7 @@ function SexyInterrupter:PLAYER_SPECIALIZATION_CHANGED(...)
 		end
 
 		if interrupter.classEN and interrupter.role ~= 'NONE' then
-			interrupter.canInterrupt = self.unitCanInterrupt[strlower(interrupter.classEN)][strlower(interrupter.role)];
+			interrupter.canInterrupt = SexyInterrupter:CanClassRoleInterrupt(interrupter.classEN, interrupter.role);
 		else
 			interrupter.canInterrupt = true;
 		end
@@ -254,7 +340,9 @@ function SexyInterrupter:PARTY_MEMBER_DISABLE(...)
 	local interrupter = SexyInterrupter:GetInterrupter(name, realm);
 
 	if interrupter ~= nil then
-		interrupter.offline = true;
+		-- PARTY_MEMBER_DISABLE also fires for members that are merely far away
+		-- / in another phase - only treat them as offline if they really are.
+		interrupter.offline = not UnitIsConnected(unitTarget);
 	end	
 end
 
@@ -264,7 +352,7 @@ function SexyInterrupter:PARTY_MEMBER_ENABLE(...)
 	local interrupter = SexyInterrupter:GetInterrupter(name, realm);
 
 	if interrupter ~= nil then
-		interrupter.offline = false;
+		interrupter.offline = not UnitIsConnected(unitTarget);
 	end	
 end
 
@@ -326,8 +414,18 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 		return;
 	end
 
-	if not tContains(self.interruptSpells, spellID) then
+	if not self.interruptSpellSet[spellID] then
 		return;
+	end
+
+	-- We register for every unit; only group members' own unit tokens count.
+	-- Otherwise an enemy/NPC with the same name as a group member (via
+	-- nameplateN/target/focus) would start and broadcast that member's
+	-- cooldown, and a member who is also our target/focus fires twice.
+	if unitTarget ~= "player" then
+		if not (unitTarget:match("^party%d+$") or unitTarget:match("^raid%d+$")) or UnitIsUnit(unitTarget, "player") then
+			return;
+		end
 	end
 
 	local name, realm = UnitName(unitTarget);
@@ -357,7 +455,11 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 		return;
 	end
 
-	local cooldownLeft = GetSpellBaseCooldown(spellID) / 1000;
+	local cooldownLeft = GetBaseCooldownSeconds(spellID);
+
+	if not cooldownLeft then
+		return;
+	end
 
 	-- Shadowpriest talent
 	if spellID == 15487 and interrupter.talents ~= nil and strfind(interrupter.talents, '263716') then
