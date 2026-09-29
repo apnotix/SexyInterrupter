@@ -1,100 +1,110 @@
+<div align="center">
+
 # 🔥 SexyInterrupter
 
-🇬🇧 **English** · 🇩🇪 [Deutsch](README.de.md)
+**Zauber unterbrechen. Kicks teilen. Nie wieder „Wer ist dran?“**
+Ein schlanker Unterbrechungs-Koordinator: Das Addon erkennt, wer in deiner Gruppe oder deinem Schlachtzug unterbrechen kann, zeigt die Abklingzeiten aller Spieler live an und meldet dir genau dann „Jetzt unterbrechen!“, wenn du an der Reihe bist. Alles frei einstellbar im Edit Mode.
 
-### *Stop the cast. Share the kick. Never argue about "who's next?" again.*
+![WoW Forever](https://img.shields.io/badge/WoW-Forever-e8c26a?style=for-the-badge)
+![Retail](https://img.shields.io/badge/WoW-Retail-c8a24a?style=for-the-badge)
+![Interface](https://img.shields.io/badge/Interface-120100%20%7C%2016001-3b2b12?style=for-the-badge)
+![Edit Mode](https://img.shields.io/badge/Edit%20Mode-ja-4fc16a?style=for-the-badge)
 
-**SexyInterrupter** is a lightweight group-interrupt coordinator for World of Warcraft. It tracks who in your party or raid can interrupt, shows every player's interrupt cooldown live, and tells **you** the moment it's your turn to kick.
+[🇬🇧 English version](README.en.md)
 
-No spreadsheets, no chat spam, no "I thought you had it!" — just a clean rotation on your screen.
+</div>
+
+---
+
+Keine Tabellen, kein Chat-Spam, kein „Ich dachte, du machst das!“ – nur eine saubere Rotation auf deinem Bildschirm.
 
 ---
 
 ## ✨ Features
 
-### 🎯 Smart interrupt rotation
-- Automatically builds a **kick order** for your whole group or raid
-- Sorted by **who's ready first**, then by role priority (🛡️ Tank → ⚔️ Damage → 💚 Healer)
-- The next player in line is always at the top of the list
+### 🎯 Intelligente Unterbrechungs-Rotation
+- Baut automatisch eine **Kick-Reihenfolge** für die ganze Gruppe bzw. den Schlachtzug
+- Sortiert nach **wer zuerst bereit ist**, danach nach Rollenpriorität (🛡️ Tank → ⚔️ Schaden → 💚 Heiler)
+- Der nächste Spieler steht immer ganz oben
 
-### 📣 "Interrupt now!" prompt
-- Big on-screen message showing **your target's name** when it starts casting and it's *your* turn
-- Optional **sound alert** 🔔 (pick any sound from your SharedMedia library, with preview)
-- Optional **screen flash** ⚡ so you can't miss it
-- Message disappears automatically when the cast ends or you change target
+### 📣 „Jetzt unterbrechen!“-Hinweis
+- Große Bildschirmmeldung mit dem **Namen deines Ziels**, sobald es zaubert und du an der Reihe bist
+- Optionaler **Soundalarm** 🔔 (beliebiger Sound aus deiner SharedMedia-Bibliothek, mit Vorschau)
+- Optionaler **Bildschirm-Flash** ⚡, damit du es nicht übersiehst
+- Die Meldung verschwindet automatisch, wenn der Zauber endet oder du das Ziel wechselst
 
-### 🧠 Learns interrupts on its own
-- Detects every player's interrupt **as they use it** — no manual setup
-- Supports players with **multiple interrupts** (each gets its own row, icon and cooldown)
-- Hover the spell icon to see the exact ability
-- Works for all classes, including 🐉 **Evoker (Quell)**
+### 🧠 Lernt Unterbrechungen selbstständig
+- Erkennt die Unterbrechung jedes Spielers, **sobald sie benutzt wird** – keine manuelle Einrichtung
+- Unterstützt Spieler mit **mehreren Unterbrechungen** (jede bekommt eigene Zeile, eigenes Symbol und eigene Abklingzeit)
+- Mit der Maus über das Zaubersymbol siehst du die genaue Fähigkeit
+- Funktioniert für alle Klassen, auch 🐉 **Rufer (Quell)**
 
-### 🔄 Real-time group sync
-- Cooldowns are shared between everyone running the addon (party, raid, instance groups)
-- Role changes and spec swaps are synced instantly
-- Players are only removed when they've **really left**, not on every loading screen
-- Out-of-range players are **dimmed** 👻 so you know who can actually reach the target
+### 🔄 Gruppen-Synchronisation in Echtzeit
+- Abklingzeiten werden unter allen Spielern mit dem Addon geteilt (Gruppe, Schlachtzug, Instanzgruppe)
+- Rollen- und Spezialisierungswechsel werden sofort übertragen
+- Spieler verschwinden nur, wenn sie **wirklich weg sind** – nicht bei jedem Ladebildschirm
+- Spieler außerhalb der Reichweite werden **abgedunkelt** 👻, damit du siehst, wer das Ziel überhaupt erreicht
 
-### 🎨 Fully configurable — right in Edit Mode
-Everything lives in **Blizzard's Edit Mode** dialog — drag the window where you want it and tweak it on the spot, with a live preview:
+### 🎨 Vollständig konfigurierbar – direkt im Bearbeitungsmodus
+Alles findest du im **Bearbeitungsmodus (Edit Mode)** von Blizzard: Fenster ziehen, direkt anpassen, mit Live-Vorschau.
 
 | | |
 |---|---|
-| 📐 **Layout** | Window width, bar height, max rows, grow direction (up / down) |
-| 🔤 **Fonts** | Font, size and colour (with live font previews) |
-| 🖼️ **Textures** | Status bar, background and border textures (via SharedMedia) |
-| 🌈 **Colours** | Bar, background, border and font colours, optional **class colours** |
-| 🔔 **Notifications** | Message, sound (with preview), screen flash |
-| 💬 **Chat announce** | Optionally announce your interrupts in Say / Yell / Party / Raid |
-| 👁️ **Visibility** | Show in combat only, minimap button on/off |
+| 📐 **Layout** | Fensterbreite, Balkenhöhe, maximale Zeilen, Wachstumsrichtung (oben / unten) |
+| 🔤 **Schrift** | Schriftart, Größe und Farbe (mit Live-Vorschau der Schriften) |
+| 🖼️ **Texturen** | Statusbalken-, Hintergrund- und Rahmentextur (über SharedMedia) |
+| 🌈 **Farben** | Balken-, Hintergrund-, Rahmen- und Schriftfarbe, optional **Klassenfarben** |
+| 🔔 **Benachrichtigung** | Meldung, Sound (mit Vorschau), Bildschirm-Flash |
+| 💬 **Chat-Ansage** | Optional eigene Unterbrechungen in Sagen / Schreien / Gruppe / Schlachtzug ansagen |
+| 👁️ **Sichtbarkeit** | Nur im Kampf anzeigen, Minimap-Symbol an/aus |
 
-Settings are saved per profile and survive `/reload` and Edit Mode layout changes.
+Einstellungen werden pro Profil gespeichert und überstehen `/reload` sowie Wechsel des Edit-Mode-Layouts.
 
-### 🥇 Priority assignments
-- Group leaders can **override the priority** of individual players
-- Fine-tune who kicks first for tricky encounters
+### 🥇 Prioritätszuweisung
+- Gruppenleiter können die **Priorität einzelner Spieler überschreiben**
+- So legst du für knifflige Bosskämpfe genau fest, wer zuerst kickt
 
 ### 🧭 Extras
-- 🗺️ **Minimap button** — left-click opens Edit Mode, right-click opens the settings
-- 🌍 **Localized** in English and German
-- 🪶 Lightweight, no dependencies you have to install (all libraries are bundled)
-- ✅ One download for **Retail** and **World of Warcraft: Forever**
+- 🗺️ **Minimap-Symbol** – Linksklick öffnet den Bearbeitungsmodus, Rechtsklick die Einstellungen
+- 🌍 **Lokalisiert** auf Deutsch und Englisch
+- 🪶 Schlank, keine zusätzlichen Abhängigkeiten (alle Bibliotheken sind enthalten)
+- ✅ Ein Download für **Retail** und **World of Warcraft: Forever**
 
 ---
 
-## 🚀 Getting started
+## 🚀 Los geht's
 
-1. Install SexyInterrupter and make sure your group members have it too (it works best when everyone does!)
-2. Log in — the window appears as soon as you're in a group
-3. Open **Edit Mode** (`/si lock` or click the minimap button) to move and style it
-4. Kick things. 💥
+1. SexyInterrupter installieren – am besten haben auch deine Gruppenmitglieder das Addon
+2. Einloggen – das Fenster erscheint, sobald du in einer Gruppe bist
+3. **Bearbeitungsmodus** öffnen (`/si lock` oder Minimap-Symbol), um das Fenster zu verschieben und zu gestalten
+4. Unterbrechen. 💥
 
-## ⌨️ Slash commands
+## ⌨️ Chat-Befehle
 
-| Command | What it does |
+| Befehl | Wirkung |
 |---|---|
-| `/si` | Open the settings |
-| `/si lock` | Open Edit Mode to move & style the window |
-| `/si kick` | Manually mark your interrupt as used (backup if auto-detection misses one) |
-| `/si version` | Show the installed version |
+| `/si` | Einstellungen öffnen |
+| `/si lock` | Bearbeitungsmodus öffnen, um das Fenster zu verschieben und zu gestalten |
+| `/si kick` | Eigene Unterbrechung manuell als benutzt markieren (Reserve, falls die automatische Erkennung eine verpasst) |
+| `/si version` | Installierte Version anzeigen |
 
 ---
 
 ## ❓ FAQ
 
-**Do all my group members need the addon?**
-Everyone who has it shares their cooldowns. Players without it can't be tracked, so the more people run it, the better the rotation.
+**Müssen alle Gruppenmitglieder das Addon haben?**
+Alle, die es haben, teilen ihre Abklingzeiten. Spieler ohne Addon können nicht erfasst werden – je mehr es nutzen, desto besser die Rotation.
 
-**Where did the options go?**
-Almost all options moved into Edit Mode so you can see every change instantly. The regular settings page keeps the priority assignments and profiles.
+**Wo sind die Optionen hin?**
+Fast alle Optionen sind in den Bearbeitungsmodus umgezogen, damit du jede Änderung sofort siehst. Die normale Einstellungsseite enthält noch die Prioritätszuweisung und die Profile.
 
-**Something isn't right / I have an idea!**
-Please open an issue on [GitHub](https://github.com/apnotix/SexyInterrupter/issues) — bug reports and feature requests are very welcome.
+**Etwas funktioniert nicht / ich habe eine Idee!**
+Bitte eröffne ein Issue auf [GitHub](https://github.com/apnotix/SexyInterrupter/issues) – Fehlerberichte und Wünsche sind willkommen.
 
 ---
 
 ## 🙏 Credits
 
-Built with [Ace3](https://www.wowace.com/projects/ace3), LibSharedMedia-3.0, LibDBIcon, LibDataBroker and [EditModeExpanded](https://github.com/teelolws/EditModeExpanded) by teelolws.
+Entwickelt mit [Ace3](https://www.wowace.com/projects/ace3), LibSharedMedia-3.0, LibDBIcon, LibDataBroker und [EditModeExpanded](https://github.com/teelolws/EditModeExpanded) von teelolws.
 
-**Made with ❤️ by apnotix — happy kicking!**
+**Mit ❤️ von apnotix – viel Spaß beim Kicken!**
