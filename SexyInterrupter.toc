@@ -6,6 +6,7 @@
 ## X-Curse-Project-ID: 255069
 ## X-WoWI-ID: 24320
 ## Category: Party & Raid
+## IconTexture: Interface\AddOns\SexyInterrupter\icon.tga
 ## DefaultState: Enabled
 ## LoadOnDemand: 0
 ## SavedVariables: SexyInterrupterDB, SI_Globals
