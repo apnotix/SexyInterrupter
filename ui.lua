@@ -912,21 +912,27 @@ function SexyInterrupter:UpdateFrames()
 		end
 	end
 
-	if editing then
-		-- Refresh the still-visible test message so a font/size change is
-		-- reflected immediately instead of only on the next AddMessage.
-		local fontPath = SexyInterrupterInterruptNowText:GetFont();
-		SexyInterrupterInterruptNowText:SetFont(fontPath, 25, "OUTLINE");
-		SexyInterrupterInterruptNowText:AddMessage(GetPreviewMessageText(), 1, 1, 1);
-		SexyInterrupterInterruptNowText:SetTimeVisible(86400);
-		SexyInterrupterInterruptNowText.isPreviewMessage = true;
-	elseif SexyInterrupterInterruptNowText.isPreviewMessage then
-		-- Edit Mode just closed and the test message (with its artificially
-		-- huge TimeVisible) is still showing - force it to clear instead of
-		-- waiting it out, same pattern PLAYER_TARGET_CHANGED uses in
-		-- events.lua to hide a live notification early.
-		SexyInterrupterInterruptNowText:SetTimeVisible(0);
-		SexyInterrupterInterruptNowText.isPreviewMessage = false;
+	do
+		-- Die Vorschau-Nachricht liegt in einem eigenen FontString statt im
+		-- MessageFrame: Text im MessageFrame beim Beenden des Edit Mode fuehrte zu
+		-- einer ACCESS_VIOLATION (Client-Absturz). Ein FontString wird beim
+		-- Schliessen einfach versteckt.
+		local msgFrame = SexyInterrupterInterruptNowText;
+		if not msgFrame.previewText then
+			msgFrame.previewText = msgFrame:CreateFontString(nil, "OVERLAY");
+			msgFrame.previewText:SetPoint("CENTER", msgFrame, "CENTER", 0, 0);
+			msgFrame.previewText:SetWidth(500);
+			msgFrame.previewText:Hide();
+		end
+
+		if editing then
+			local fontPath = msgFrame:GetFont();
+			msgFrame.previewText:SetFont(fontPath, 25, "OUTLINE");
+			msgFrame.previewText:SetText(GetPreviewMessageText());
+			msgFrame.previewText:Show();
+		else
+			msgFrame.previewText:Hide();
+		end
 	end
 
 	local rows = editing and GetPreviewRows() or self:GetCurrentInterrupters();

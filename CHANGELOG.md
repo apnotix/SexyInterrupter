@@ -1,3 +1,7 @@
+3.0.8
+
+- Fixed a client crash (access violation) when closing Edit Mode: the preview message is no longer shown inside the message frame
+
 3.0.1
 
 - Fixed a client crash ("Access denied") when dragging the Edit Mode window
