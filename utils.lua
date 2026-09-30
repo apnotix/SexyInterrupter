@@ -265,11 +265,25 @@ end
 function SexyInterrupter:GetCurrentInterrupters()
 	local rows = {};
 
+	-- Solo gibt es nur den eigenen Eintrag. Alte Gruppenmitglieder aus den
+	-- gespeicherten Daten (oder verspätet eingetroffene 'userinfos') dürfen
+	-- sonst weiter Zeilen belegen und den Frame aufblähen.
+	local solo = not IsInGroup() and not IsInRaid() and not IsPartyLFG();
+	local ownFullname = UnitName("player") .. '-' .. GetRealmName();
+
+	local soloDisabled = solo and not self.db.profile.general.activeSolo;
+
 	for cx, interrupter in pairs(SI_Globals.interrupters) do
 		interrupter.pos = cx;
 		interrupter.sortpos = nil;
 
-		if interrupter.active and interrupter.canInterrupt then
+		if solo and interrupter.fullname ~= ownFullname then
+			interrupter.active = false;
+		end
+
+		-- Solo deaktiviert: keine Zeilen -> numInterrupters = 0, wodurch
+		-- Anzeige, Warnung, Flash und Sound (alle hängen daran) ruhen.
+		if interrupter.active and interrupter.canInterrupt and not soloDisabled then
 			local hasAbilities = false;
 
 			if interrupter.abilities then

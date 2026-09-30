@@ -116,6 +116,7 @@ local defaults = {
         icon = {},
 		general = {
 			modeincombat = false,
+			activeSolo = true,
             maxrows = 5,
             minimapIcon = true
 		},

@@ -720,6 +720,10 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 		function() return self.db.profile.general.modeincombat end,
 		function(value) self.db.profile.general.modeincombat = value; end);
 
+	RegisterEditModeCheckbox(EME, anchorFrame, "activeSolo", L["Active when solo"],
+		function() return self.db.profile.general.activeSolo end,
+		function(value) self.db.profile.general.activeSolo = value; end);
+
 	RegisterEditModeCheckbox(EME, anchorFrame, "minimapIcon", L["Show minimap icon"] or "Show minimap icon",
 		function() return self.db.profile.general.minimapIcon end,
 		function(value)
