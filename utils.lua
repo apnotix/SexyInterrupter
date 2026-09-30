@@ -13,7 +13,7 @@ function SexyInterrupter:AddIcon()
 	local dataobj = LibStub("LibDataBroker-1.1"):NewDataObject("SexyInterrupter", {
 		label = "SexyInterrupter",
 		type = "launcher",
-		icon = "Interface\\Icons\\achievement_bg_defendxtowers_av",
+		icon = "Interface\\AddOns\\SexyInterrupter\\icon.tga",
 		text = "SexyInterrupter",
 		OnClick = function(self,btn)
 		   if btn == "RightButton" then
