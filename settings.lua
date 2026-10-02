@@ -505,6 +505,31 @@ function SexyInterrupter:InitOptions()
         elseif msg == 'debug' then
             SexyInterrupter.debug = not SexyInterrupter.debug;
             DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Debug " .. (SexyInterrupter.debug and "an" or "aus"), 1, 0.5, 0);
+        elseif msg == 'range' then
+            -- Rohwerte der Reichweiten-APIs je Gruppenmitglied ausgeben.
+            local function S(v)
+                if issecretvalue and issecretvalue(v) then return "SECRET"; end
+                return tostring(v);
+            end
+
+            DEFAULT_CHAT_FRAME:AddMessage("SI range (Kampf: " .. tostring(InCombatLockdown()) .. ")", 1, 0.5, 0);
+
+            for i = 1, math.max(GetNumGroupMembers(), 1) do
+                local unit = IsInRaid() and ("raid" .. i) or ("party" .. i);
+
+                if UnitExists(unit) and not UnitIsUnit(unit, "player") then
+                    local ir, cr = UnitInRange(unit);
+                    local ds, dok;
+
+                    if UnitDistanceSquared then ds, dok = UnitDistanceSquared(unit); end
+
+                    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                        "%s: visible=%s UnitInRange=%s/%s interact4=%s distSq=%s/%s",
+                        UnitName(unit) or unit, S(UnitIsVisible(unit)), S(ir), S(cr),
+                        CheckInteractDistance and S(CheckInteractDistance(unit, 4)) or "n/a",
+                        S(ds), S(dok)), 0.6, 0.8, 1);
+                end
+            end
         elseif msg == 'kick' then
             SexyInterrupter:MarkOwnInterrupt();
         else

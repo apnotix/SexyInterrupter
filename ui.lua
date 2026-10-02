@@ -1357,6 +1357,29 @@ function SexyInterrupter:OnUpdate(elapsed)
 					interrupter.inrange = inRange;
 					rangeChanged = true;
 				end
+
+				-- Tot/Offline/AFK ebenfalls laufend nachführen: GROUP_ROSTER_UPDATE
+				-- feuert beim Wiederbeleben nicht, der Name blieb sonst rot.
+				local dead = UnitIsDeadOrGhost(unit) and true or false;
+				local offline = not UnitIsConnected(unit);
+				local afk = UnitIsAFK(unit) and true or false;
+
+				if interrupter.dead ~= dead or interrupter.offline ~= offline or interrupter.afk ~= afk then
+					interrupter.dead = dead;
+					interrupter.offline = offline;
+					interrupter.afk = afk;
+					rangeChanged = true;
+				end
+			end
+		end
+
+		if GetNumGroupMembers() == 0 then
+			local own = SexyInterrupter:GetInterrupterByUnit("player");
+			local dead = UnitIsDeadOrGhost("player") and true or false;
+
+			if own and own.dead ~= dead then
+				own.dead = dead;
+				rangeChanged = true;
 			end
 		end
 

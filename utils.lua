@@ -65,10 +65,46 @@ end
 -- that case without tainting/erroring. Returns nil (meaning "unknown, leave
 -- the previous inrange state alone") instead of a real boolean when secret.
 function SexyInterrupter:UnitInRangeCompat(unit)
-	local inRange = UnitInRange(unit);
+	if unit == "player" then
+		return true;
+	end
 
-	if issecretvalue and issecretvalue(inRange) then
-		return nil;
+	-- Weit entfernte Einheiten sind für den Client gar nicht sichtbar.
+	local visible = UnitIsVisible(unit);
+
+	if not (issecretvalue and issecretvalue(visible)) and not visible then
+		return false;
+	end
+
+	-- Genaueste Quelle, falls vorhanden und nicht gesperrt: echte Entfernung
+	-- (quadriert, in Metern^2). 30 m ~ typische Interrupt-Reichweite.
+	if UnitDistanceSquared then
+		local distSq, distOk = UnitDistanceSquared(unit);
+
+		if distSq ~= nil and distOk ~= false and not (issecretvalue and (issecretvalue(distSq) or issecretvalue(distOk))) then
+			return distSq <= 30 * 30;
+		end
+	end
+
+	local inRange, checkedRange = UnitInRange(unit);
+	local secret = issecretvalue and (issecretvalue(inRange) or issecretvalue(checkedRange));
+
+	-- Ist checkedRange false (oder der Wert gesperrt), ist inRange wertlos
+	-- (immer true): dann stattdessen die Follow-Distanz (~28 m) prüfen.
+	if secret or checkedRange == false then
+		-- Im Kampf ist CheckInteractDistance eingeschränkt und liefert dort
+		-- unzuverlässig false: dann keine Aussage (alter Wert bleibt stehen).
+		if CheckInteractDistance and not (InCombatLockdown and InCombatLockdown()) then
+			local near = CheckInteractDistance(unit, 4);
+
+			if not (issecretvalue and issecretvalue(near)) and near ~= nil then
+				return near and true or false;
+			end
+		end
+
+		if secret then
+			return nil;
+		end
 	end
 
 	return inRange and true or false;
@@ -199,6 +235,28 @@ function SexyInterrupter:UpdateOwnInterrupter()
 		};
 
 		tinsert(SI_Globals.interrupters, interrupter);
+	end
+
+	-- Doppelte Einträge für den eigenen Spieler (z. B. "Name" und
+	-- "Name-Realm" aus älteren Versionen/gespeicherten Daten) entfernen und
+	-- deren gelernte Fähigkeiten übernehmen. Lookups finden immer nur den
+	-- ersten Treffer, ein zweiter aktiver Eintrag blieb sonst als eigene
+	-- Zeile stehen.
+	for i = #SI_Globals.interrupters, 1, -1 do
+		local other = SI_Globals.interrupters[i];
+
+		if other ~= interrupter then
+			local otherBase = (other.name or other.fullname or ""):match("^([^%-]+)");
+
+			if otherBase == name then
+				for spellId, ability in pairs(other.abilities or {}) do
+					interrupter.abilities = interrupter.abilities or {};
+					interrupter.abilities[spellId] = interrupter.abilities[spellId] or ability;
+				end
+
+				tremove(SI_Globals.interrupters, i);
+			end
+		end
 	end
 
 	local class, englishClass = UnitClass("player");
