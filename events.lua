@@ -19,6 +19,28 @@ local function GetBaseCooldownSeconds(spellId)
 	return cooldownMs / 1000;
 end
 
+-- Besitzer-Token zu einem Pet-Token ("pet" -> "player", "partypetN" -> "partyN",
+-- "raidpetN" -> "raidN"); nil für alles andere.
+local function PetOwnerUnit(unit)
+	if unit == "pet" then
+		return "player";
+	end
+
+	local n = unit:match("^partypet(%d+)$");
+
+	if n then
+		return "party" .. n;
+	end
+
+	n = unit:match("^raidpet(%d+)$");
+
+	if n then
+		return "raid" .. n;
+	end
+
+	return nil;
+end
+
 function SexyInterrupter:GROUP_ROSTER_UPDATE()
 	-- Reset everyone first, then re-establish the local player unconditionally
 	-- (UpdateOwnInterrupter recomputes canInterrupt for real, including
@@ -402,7 +424,7 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 
 	-- /si debug: Casts von Gruppen-Units im Chat ausgeben, um fehlende/andere
 	-- Spell-IDs zu finden.
-	if self.debug and unitTarget and (unitTarget == "player" or unitTarget:match("^party%d+$") or unitTarget:match("^raid%d+$")) then
+	if self.debug and unitTarget and (unitTarget == "player" or PetOwnerUnit(unitTarget) or unitTarget:match("^party%d+$") or unitTarget:match("^raid%d+$")) then
 		local secret = issecretvalue and issecretvalue(spellID);
 
 		DEFAULT_CHAT_FRAME:AddMessage(string.format("SI debug: %s (%s) spellID=%s interrupt=%s rows=%s",
@@ -429,6 +451,11 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 	if not self.interruptSpellSet[spellID] then
 		return;
 	end
+
+	-- Pet-Zauber (z. B. Spell Lock des Wichtels/Teufelsjägers) zählen für den
+	-- Besitzer: Pet-Unit auf den Besitzer-Token abbilden und ganz normal
+	-- weiterverarbeiten.
+	unitTarget = PetOwnerUnit(unitTarget) or unitTarget;
 
 	-- We register for every unit; only group members' own unit tokens count.
 	-- Otherwise an enemy/NPC with the same name as a group member (via

@@ -83,7 +83,8 @@ function SexyInterrupter:PlayerKnowsAnyInterruptSpell()
 	end
 
 	for _, spellId in pairs(self.interruptSpells) do
-		if IsSpellKnown(spellId) then
+		-- zweiter Parameter: auch im Pet-Zauberbuch suchen (Spell Lock).
+		if IsSpellKnown(spellId) or IsSpellKnown(spellId, true) then
 			return true;
 		end
 	end
