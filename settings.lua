@@ -57,7 +57,16 @@ SI.interruptSpells = {
     183752,     -- DH Consume Magic
     115750,     -- Paladin Blinding Light
     351338,     -- Evoker Quell
-    72          -- Warrior Shield Bash
+    72,         -- Warrior Shield Bash (Classic/Forever, Rang 1-3)
+    1671,
+    1672,
+    1767,       -- Rogue Kick Rang 2-4 (+ TBC Rang 5)
+    1768,
+    1769,
+    38768,
+    6554,       -- Warrior Pummel Rang 2
+    19244,      -- Warlock Spell Lock (Felhunter, Rang 1-2)
+    19647
 };
 
 -- Fallback-Abklingzeit (Sekunden), falls GetSpellBaseCooldown für den Zauber
@@ -66,6 +75,18 @@ SI.fallbackCooldowns = {};
 
 for _, spellId in ipairs({ 8042, 8044, 8045, 8046, 10412, 10413, 10414, 25454, 49230, 49231 }) do
     SI.fallbackCooldowns[spellId] = 6;
+end
+
+for _, spellId in ipairs({ 72, 1671, 1672 }) do
+    SI.fallbackCooldowns[spellId] = 12;
+end
+
+for _, spellId in ipairs({ 1766, 1767, 1768, 1769, 38768, 6552, 6554 }) do
+    SI.fallbackCooldowns[spellId] = 10;
+end
+
+for _, spellId in ipairs({ 19244, 19647 }) do
+    SI.fallbackCooldowns[spellId] = 24;
 end
 
 -- Set keyed by spell ID for O(1) lookups in the (very frequent) cast events.
