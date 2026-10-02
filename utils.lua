@@ -283,7 +283,9 @@ function SexyInterrupter:GetCurrentInterrupters()
 
 		-- Solo deaktiviert: keine Zeilen -> numInterrupters = 0, wodurch
 		-- Anzeige, Warnung, Flash und Sound (alle hängen daran) ruhen.
-		if interrupter.active and interrupter.canInterrupt and not soloDisabled then
+		local ignored = self.db.profile.general.ignoreHealer and interrupter.role == 'HEALER';
+
+		if interrupter.active and interrupter.canInterrupt and not soloDisabled and not ignored then
 			local hasAbilities = false;
 
 			if interrupter.abilities then

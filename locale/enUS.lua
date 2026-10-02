@@ -24,6 +24,7 @@ L["General"] = "General";
 L["Invalid Spell Name/ID/Link"] = "Invalid Spell Name/ID/Link";
 L["Show in combat only"] = "Show in combat only";
 L["Active when solo"] = "Active when solo";
+L["Ignore healers"] = "Ignore healers";
 L["Lock window"] = "Lock window";
 L["Look"] = "Look";
 L["Interrupted"] = "Interrupted";

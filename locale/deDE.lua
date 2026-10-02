@@ -24,6 +24,7 @@ L["General"] = "Allgemein";
 L["Invalid Spell Name/ID/Link"] = "Ungültiger Zaubername/ID/Link";
 L["Show in combat only"] = "Nur im Kampf anzeigen";
 L["Active when solo"] = "Auch solo aktiv";
+L["Ignore healers"] = "Heiler ignorieren";
 L["Lock window"] = "Fenster sperren";
 L["Look"] = "Aussehen";
 L["Interrupted"] = "Unterbrochen";

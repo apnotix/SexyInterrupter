@@ -117,6 +117,7 @@ local defaults = {
 		general = {
 			modeincombat = false,
 			activeSolo = true,
+			ignoreHealer = false,
             maxrows = 5,
             minimapIcon = true
 		},
