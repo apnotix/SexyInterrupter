@@ -35,6 +35,16 @@ SI.interruptSpells = {
     47528, 		-- DK Mind Freeze
     47476, 		-- DK Strangulate
     57994, 		-- Shaman Wind Shear
+    8042,       -- Shaman Earth Shock (Classic/Forever, Rang 1-10)
+    8044,
+    8045,
+    8046,
+    10412,
+    10413,
+    10414,
+    25454,
+    49230,
+    49231,
     78675, 		-- Druid Solar beam
     96231, 		-- Paladin Rebuke
     116705,  	-- Monk Spear Hand Strike
@@ -49,6 +59,14 @@ SI.interruptSpells = {
     351338,     -- Evoker Quell
     72          -- Warrior Shield Bash
 };
+
+-- Fallback-Abklingzeit (Sekunden), falls GetSpellBaseCooldown für den Zauber
+-- nichts liefert (Classic-Client ohne diese Daten).
+SI.fallbackCooldowns = {};
+
+for _, spellId in ipairs({ 8042, 8044, 8045, 8046, 10412, 10413, 10414, 25454, 49230, 49231 }) do
+    SI.fallbackCooldowns[spellId] = 6;
+end
 
 -- Set keyed by spell ID for O(1) lookups in the (very frequent) cast events.
 SI.interruptSpellSet = {};
@@ -118,6 +136,8 @@ local defaults = {
 			modeincombat = false,
 			activeSolo = true,
 			ignoreHealer = false,
+			fixedRotation = false,
+			highlightOwn = true,
             maxrows = 5,
             minimapIcon = true
 		},
@@ -461,6 +481,9 @@ function SexyInterrupter:InitOptions()
             SexyInterrupter:LockFrame();
         elseif msg == 'version' then
             DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Version " .. SI.Version, 1, 0.5, 0);
+        elseif msg == 'debug' then
+            SexyInterrupter.debug = not SexyInterrupter.debug;
+            DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Debug " .. (SexyInterrupter.debug and "an" or "aus"), 1, 0.5, 0);
         elseif msg == 'kick' then
             SexyInterrupter:MarkOwnInterrupt();
         else

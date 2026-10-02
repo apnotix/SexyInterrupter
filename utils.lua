@@ -318,7 +318,87 @@ function SexyInterrupter:GetCurrentInterrupters()
 		end
 	end
 
-	table.sort(rows, function(a, b)
+	-- Fester Rotationsmodus: statt "wer ist am längsten bereit" gilt eine feste
+	-- Spielerreihenfolge (Prio, dann Name - auf allen Clients identisch). Wer
+	-- zuletzt gekickt hat, rutscht ans Ende; der Nächste in der Reihe ist
+	-- oben. Bereite Spieler gehen vor Spielern mit Cooldown (sonst würde die
+	-- Rotation stehen, wenn der "Nächste" gerade keinen Kick hat), innerhalb
+	-- der beiden Gruppen entscheidet die Reihenfolge.
+	local fixedCompare;
+
+	if self.db.profile.general.fixedRotation then
+		local order, count = {}, 0;
+
+		for _, row in ipairs(rows) do
+			if not order[row.interrupter] then
+				count = count + 1;
+				order[row.interrupter] = count;
+			end
+		end
+
+		local players = {};
+
+		for interrupter in pairs(order) do
+			tinsert(players, interrupter);
+		end
+
+		table.sort(players, function(a, b)
+			local pa, pb = a.overridedprio or a.prio or 9, b.overridedprio or b.prio or 9;
+
+			if pa ~= pb then
+				return pa < pb;
+			end
+
+			return (a.fullname or a.name or "") < (b.fullname or b.name or "");
+		end);
+
+		local index = {};
+
+		for i, interrupter in ipairs(players) do
+			index[interrupter] = i;
+		end
+
+		local kickerIndex = SexyInterrupter.lastKicker and index[SexyInterrupter.lastKicker] or 0;
+
+		local function Rank(interrupter)
+			return (index[interrupter] - kickerIndex - 1) % #players;
+		end
+
+		local function Class(interrupter)
+			if interrupter.offline then return 3; end
+			if not interrupter.inrange then return 2; end
+			if interrupter.dead then return 1; end
+
+			return 0;
+		end
+
+		fixedCompare = function(a, b)
+			local ia, ib = a.interrupter, b.interrupter;
+			local ca, cb = Class(ia), Class(ib);
+
+			if ca ~= cb then
+				return ca < cb;
+			end
+
+			local ra, rb = a.readyTime > 0, b.readyTime > 0;
+
+			if ra ~= rb then
+				return rb;
+			end
+
+			if ia ~= ib then
+				return Rank(ia) < Rank(ib);
+			end
+
+			if a.readyTime ~= b.readyTime then
+				return a.readyTime < b.readyTime;
+			end
+
+			return (a.spellId or 0) < (b.spellId or 0);
+		end
+	end
+
+	table.sort(rows, fixedCompare or function(a, b)
 		local ia, ib = a.interrupter, b.interrupter;
 		local retVal = false;
 

@@ -400,6 +400,18 @@ end
 function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 	local event, unitTarget, castGUID, spellID = ...;
 
+	-- /si debug: Casts von Gruppen-Units im Chat ausgeben, um fehlende/andere
+	-- Spell-IDs zu finden.
+	if self.debug and unitTarget and (unitTarget == "player" or unitTarget:match("^party%d+$") or unitTarget:match("^raid%d+$")) then
+		local secret = issecretvalue and issecretvalue(spellID);
+
+		DEFAULT_CHAT_FRAME:AddMessage(string.format("SI debug: %s (%s) spellID=%s interrupt=%s rows=%s",
+			unitTarget, UnitName(unitTarget) or "?",
+			secret and "SECRET" or tostring(spellID),
+			secret and "?" or tostring(self.interruptSpellSet[spellID] == true),
+			tostring(SI_Globals.numInterrupters)), 0.6, 0.8, 1);
+	end
+
 	-- spellID (and castGUID) can come through as a "secret" value - Blizzard's
 	-- newer protected-info guard - for casts from units outside normal group
 	-- content (e.g. nameplate/world units), not just rated PvP as originally
@@ -455,7 +467,7 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 		return;
 	end
 
-	local cooldownLeft = GetBaseCooldownSeconds(spellID);
+	local cooldownLeft = GetBaseCooldownSeconds(spellID) or self.fallbackCooldowns[spellID];
 
 	if not cooldownLeft then
 		return;
@@ -471,6 +483,9 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 		cooldown = cooldownLeft,
 		readyTime = GetTime() + cooldownLeft,
 	};
+
+	-- Für den festen Rotationsmodus: dieser Spieler hat zuletzt gekickt.
+	SexyInterrupter.lastKicker = interrupter;
 
 	SexyInterrupter:UpdateInterrupterStatus();
 

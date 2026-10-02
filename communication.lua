@@ -226,6 +226,11 @@ function SexyInterrupter:ReceiveInterrupt(player, realm, spellId, cooldown)
         spellId = tonumber(spellId);
         cooldown = tonumber(cooldown);
 
+        -- Für den festen Rotationsmodus: dieser Spieler hat zuletzt gekickt
+        -- (auch wenn die Meldung nur per Comm kam, z. B. wenn der Spieler
+        -- für uns außer Reichweite war und UNIT_SPELLCAST_SUCCEEDED fehlte).
+        SexyInterrupter.lastKicker = interrupter;
+
         -- Plausibilitätsprüfung: kein bekannter Interrupt hat annähernd eine
         -- so lange Abklingzeit - eine (aus welchem Grund auch immer) korrupt
         -- übertragene riesige Zahl (z. B. 13719s statt 12s beobachtet) wurde

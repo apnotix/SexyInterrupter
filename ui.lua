@@ -728,6 +728,14 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 		function() return self.db.profile.general.ignoreHealer end,
 		function(value) self.db.profile.general.ignoreHealer = value; end);
 
+	RegisterEditModeCheckbox(EME, anchorFrame, "fixedRotation", L["Fixed rotation order"],
+		function() return self.db.profile.general.fixedRotation end,
+		function(value) self.db.profile.general.fixedRotation = value; end);
+
+	RegisterEditModeCheckbox(EME, anchorFrame, "highlightOwn", L["Highlight own row"],
+		function() return self.db.profile.general.highlightOwn end,
+		function(value) self.db.profile.general.highlightOwn = value; end);
+
 	RegisterEditModeCheckbox(EME, anchorFrame, "minimapIcon", L["Show minimap icon"] or "Show minimap icon",
 		function() return self.db.profile.general.minimapIcon end,
 		function(value)
@@ -982,6 +990,20 @@ function SexyInterrupter:UpdateUI(rows)
 			-- interrupt ability's own icon (once known) on the right, as its
 			-- own separate texture - these are two different pieces of
 			-- information, not one icon that swaps meaning.
+			-- Hervorhebung der eigenen Zeile (Tönung + Akzentstreifen links),
+			-- siehe UpdateInterrupterStatus().
+			f.highlightBG = f:CreateTexture(nil, "ARTWORK");
+			f.highlightBG:SetAllPoints(f);
+			f.highlightBG:SetColorTexture(1, 0.82, 0, 0.25);
+			f.highlightBG:Hide();
+
+			f.highlightEdge = f:CreateTexture(nil, "OVERLAY");
+			f.highlightEdge:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
+			f.highlightEdge:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0);
+			f.highlightEdge:SetWidth(3);
+			f.highlightEdge:SetColorTexture(1, 0.82, 0, 1);
+			f.highlightEdge:Hide();
+
 			f.classicon = f:CreateTexture(nil, "OVERLAY");
 			f.classicon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES");
 			f.classicon:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", 2, 0);
@@ -992,6 +1014,13 @@ function SexyInterrupter:UpdateUI(rows)
 			f.abilityicon:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", -2, 0);
 			f.abilityicon:SetSize(16, 16);
 			f.abilityicon:Hide();
+
+			-- Offline-Symbol an der Stelle des Fähigkeiten-Icons.
+			f.offlineicon = f:CreateTexture(nil, "OVERLAY");
+			f.offlineicon:SetTexture("Interface\\CharacterFrame\\Disconnect-Icon");
+			f.offlineicon:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", -2, 0);
+			f.offlineicon:SetSize(16, 16);
+			f.offlineicon:Hide();
 
 			-- Texturen können in WoW keine Mausereignisse empfangen (nur
 			-- Frames) - für den Tooltip deshalb ein unsichtbarer Frame exakt
@@ -1137,12 +1166,18 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 			row:SetValue(100);
 			row.cooldownText:SetText();
 
+			local barcolor = self.db.profile.ui.bars.barcolor;
+			row:SetStatusBarColor(barcolor.r, barcolor.g, barcolor.b, barcolor.a);
+
 			if self.db.profile.ui.bars.useclasscolor and interrupter.classColor then
 				row:SetStatusBarColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
 			end
 
 			if interrupter.offline then
-				rowParent:Hide();
+				-- Platz bleibt belegt: ausgegraute Leiste mit Namen und
+				-- Offline-Symbol (siehe unten), statt die Zeile zu verstecken.
+				row:SetStatusBarColor(0.4, 0.4, 0.4, 1);
+				row.text:SetTextColor(0.6, 0.6, 0.6, 1);
 			elseif interrupter.dead then
 				row.text:SetTextColor(1, 0, 0, 1);
 			elseif interrupter.afk then
@@ -1214,6 +1249,29 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 			end
 
 			row.text:SetText(interrupter.name);
+
+			local isOwn = self.db.profile.general.highlightOwn
+				and ((editing and cx == 1) or (not editing and interrupter.name == UnitName("player")));
+
+			if isOwn then
+				row.highlightBG:Show();
+				row.highlightEdge:Show();
+			else
+				row.highlightBG:Hide();
+				row.highlightEdge:Hide();
+			end
+
+			if interrupter.offline then
+				row:SetMinMaxValues(0, 100);
+				row:SetValue(100);
+				row.abilityicon:Hide();
+				row.abilityiconHitbox:Hide();
+				row.cooldownText:Hide();
+				row.offlineicon:Show();
+				rowParent:SetAlpha(0.6);
+			else
+				row.offlineicon:Hide();
+			end
 		end
 	end
 end
@@ -1242,7 +1300,7 @@ function SexyInterrupter:OnUpdate(elapsed)
 			value = currentplayer;
 		end
 
-		if value.readyTime > 0 then
+		if value.readyTime > 0 and not (value.interrupter and value.interrupter.offline) then
 			local bar = _G["SexyInterrupterStatusBar" .. cx];
 
 			if bar then
