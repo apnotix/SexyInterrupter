@@ -1300,7 +1300,19 @@ function SexyInterrupter:OnUpdate(elapsed)
 			value = currentplayer;
 		end
 
-		if value.readyTime > 0 and not (value.interrupter and value.interrupter.offline) then
+		if value.readyTime == 0 then
+			-- GetCurrentInterrupters() normalisiert einen abgelaufenen Cooldown
+			-- schon vorher auf 0, der Zweig unten sieht ihn dann nie mehr ablaufen:
+			-- der letzte Wert (z. B. "0.0") blieb stehen und die Leiste leer.
+			local bar = _G["SexyInterrupterStatusBar" .. cx];
+			local text = bar and bar.cooldownText:GetText();
+
+			if text and text ~= '' then
+				bar.cooldownText:SetText('');
+				bar:SetMinMaxValues(0, 100);
+				bar:SetValue(100);
+			end
+		elseif value.readyTime > 0 and not (value.interrupter and value.interrupter.offline) then
 			local bar = _G["SexyInterrupterStatusBar" .. cx];
 
 			if bar then
