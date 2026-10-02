@@ -17,7 +17,7 @@ local function GetSIAddOnMetadata(name, field)
 	return nil
 end
 
-SI.Version = GetSIAddOnMetadata("SexyInterrupter", "Version") or "3.0.13";
+SI.Version = GetSIAddOnMetadata("SexyInterrupter", "Version") or "3.0.14";
 
 SI.outputchannels = {
     ['SAY'] = 'SAY',    
