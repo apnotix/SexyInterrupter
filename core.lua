@@ -13,11 +13,12 @@ function SexyInterrupter:OnInitialize()
 	-- Einmalig: die Standardwerte für Meldung/Flash/Chat-Meldung wurden auf
 	-- "an" geändert, bereits gespeicherte "aus"-Werte (alte Defaults bzw.
 	-- Edit-Mode-Altlasten) würden sonst bestehen bleiben.
-	if not self.db.profile.notificationDefaultsV2 then
+	if not self.db.profile.notificationDefaultsV3 then
+		self.db.profile.notification.sound = true;
 		self.db.profile.notification.message = true;
 		self.db.profile.notification.flash = true;
 		self.db.profile.notification.interruptmessage = true;
-		self.db.profile.notificationDefaultsV2 = true;
+		self.db.profile.notificationDefaultsV3 = true;
 	end
 
 	self:CreateUi();
