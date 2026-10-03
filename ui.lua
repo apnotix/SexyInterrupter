@@ -1360,9 +1360,19 @@ function SexyInterrupter:OnUpdate(elapsed)
 
 				-- Tot/Offline/AFK ebenfalls laufend nachführen: GROUP_ROSTER_UPDATE
 				-- feuert beim Wiederbeleben nicht, der Name blieb sonst rot.
-				local dead = UnitIsDeadOrGhost(unit) and true or false;
-				local offline = not UnitIsConnected(unit);
-				local afk = UnitIsAFK(unit) and true or false;
+				-- Die Unit-Abfragen können "secret"-Booleans liefern (z.B. im Kampf);
+				-- ein Boolean-Test darauf wirft einen Fehler -> dann den alten Wert behalten.
+				local function Safe(value, old)
+					if issecretvalue and issecretvalue(value) then
+						return old;
+					end
+					return value and true or false;
+				end
+
+				local dead = Safe(UnitIsDeadOrGhost(unit), interrupter.dead);
+				local connected = Safe(UnitIsConnected(unit), not interrupter.offline);
+				local offline = not connected;
+				local afk = Safe(UnitIsAFK(unit), interrupter.afk);
 
 				if interrupter.dead ~= dead or interrupter.offline ~= offline or interrupter.afk ~= afk then
 					interrupter.dead = dead;
@@ -1375,7 +1385,13 @@ function SexyInterrupter:OnUpdate(elapsed)
 
 		if GetNumGroupMembers() == 0 then
 			local own = SexyInterrupter:GetInterrupterByUnit("player");
-			local dead = UnitIsDeadOrGhost("player") and true or false;
+			local deadRaw = UnitIsDeadOrGhost("player");
+			local dead;
+			if issecretvalue and issecretvalue(deadRaw) then
+				dead = own and own.dead;
+			else
+				dead = deadRaw and true or false;
+			end
 
 			if own and own.dead ~= dead then
 				own.dead = dead;
