@@ -237,7 +237,7 @@ local defaults = {
             soundFile = "Sound\\Spells\\PVPFlagTaken.ogg",
 			flash = true,
 			message = true,
-			interruptmessage = false,
+			interruptmessage = true,
 			outputchannel = 'SAY'
 		}
 	}
