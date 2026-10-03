@@ -69,6 +69,22 @@ SI.interruptSpells = {
     19647
 };
 
+-- Ränge desselben Zaubers -> eine gemeinsame Familie (eine Zeile pro Spieler).
+SI.spellFamily = {};
+
+for _, family in ipairs({
+    { 8042, 8044, 8045, 8046, 10412, 10413, 10414, 25454, 49230, 49231 },
+    { 72, 1671, 1672 },
+    { 1766, 1767, 1768, 1769, 38768 },
+    { 6552, 6554 },
+    { 19244, 19647 },
+    { 119910, 132409 },
+}) do
+    for _, spellId in ipairs(family) do
+        SI.spellFamily[spellId] = family[1];
+    end
+end
+
 -- Fallback-Abklingzeit (Sekunden), falls GetSpellBaseCooldown für den Zauber
 -- nichts liefert (Classic-Client ohne diese Daten).
 SI.fallbackCooldowns = {};

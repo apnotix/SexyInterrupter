@@ -348,6 +348,10 @@ function SexyInterrupter:GetCurrentInterrupters()
 			local hasAbilities = false;
 
 			if interrupter.abilities then
+				-- Ränge desselben Zaubers (z. B. Pummel Rang 1/2) sind eine
+				-- Fähigkeit: pro Familie nur die zuletzt benutzte.
+				local byFamily = {};
+
 				for spellId, ability in pairs(interrupter.abilities) do
 					hasAbilities = true;
 
@@ -357,12 +361,21 @@ function SexyInterrupter:GetCurrentInterrupters()
 						ability.readyTime = 0;
 					end
 
-					tinsert(rows, {
-						interrupter = interrupter,
-						spellId = spellId,
-						cooldown = ability.cooldown,
-						readyTime = ability.readyTime,
-					});
+					local family = self.spellFamily[spellId] or spellId;
+					local existing = byFamily[family];
+
+					if not existing or (ability.readyTime or 0) > (existing.readyTime or 0) then
+						byFamily[family] = {
+							interrupter = interrupter,
+							spellId = spellId,
+							cooldown = ability.cooldown,
+							readyTime = ability.readyTime,
+						};
+					end
+				end
+
+				for _, row in pairs(byFamily) do
+					tinsert(rows, row);
 				end
 			end
 
