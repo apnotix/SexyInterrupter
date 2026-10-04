@@ -1168,6 +1168,16 @@ function SexyInterrupter:UpdateRowClick(rowParent, interrupter)
 		click:RegisterForClicks("AnyDown", "AnyUp");
 		click:SetAttribute("type", "target");
 		click:SetAttribute("type1", "target");
+		click:SetScript("OnEnter", function(self)
+			local unit = rowParent.clickUnit;
+
+			if unit and UnitExists(unit) then
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+				GameTooltip:SetUnit(unit);
+				GameTooltip:Show();
+			end
+		end);
+		click:SetScript("OnLeave", function() GameTooltip:Hide(); end);
 		rowParent.click = click;
 	end
 

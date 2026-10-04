@@ -166,6 +166,17 @@ function SexyInterrupter:CreateMarkRow(index)
 	row.click:SetAttribute("type", "target");
 	row.click:SetAttribute("type1", "target");
 
+	row.click:SetScript("OnEnter", function(self)
+		local unit = row.clickUnit;
+
+		if unit and UnitExists(unit) then
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+			GameTooltip:SetUnit(unit);
+			GameTooltip:Show();
+		end
+	end);
+	row.click:SetScript("OnLeave", function() GameTooltip:Hide(); end);
+
 	row.bg = row:CreateTexture(nil, "BACKGROUND");
 	row.bg:SetAllPoints(row);
 	row.bg:SetColorTexture(0.09, 0.07, 0.05, 0.85);
