@@ -158,7 +158,7 @@ function SexyInterrupter:CreateMarkRow(index)
 	row.click = CreateFrame("Button", nil, row, "SecureActionButtonTemplate");
 	row.click:SetAllPoints(row);
 	row.click:SetFrameLevel(row:GetFrameLevel() + 10);
-	row.click:SetHighlightTexture("Interface\Buttons\WHITE8X8");
+	row.click:SetHighlightTexture("Interface/Buttons/WHITE8X8");
 	row.click:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.12);
 	-- Je nach CVar ActionButtonUseKeyDown feuert ein Secure-Button beim Drücken
 	-- oder Loslassen: beides anmelden.

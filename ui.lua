@@ -1161,7 +1161,7 @@ function SexyInterrupter:UpdateRowClick(rowParent, interrupter)
 
 		-- rowParent selbst ist nur 20px breit - die sichtbare Zeile ist die Leiste.
 		click:SetAllPoints(_G["SexyInterrupterStatusBar" .. rowParent.rowIndex] or rowParent);
-		click:SetHighlightTexture("Interface\Buttons\WHITE8X8");
+		click:SetHighlightTexture("Interface/Buttons/WHITE8X8");
 		click:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.12);
 		-- Unter dem Fähigkeiten-Icon-Hitbox (Tooltip), aber über der Leiste.
 		click:SetFrameLevel(3);
