@@ -10,9 +10,6 @@ local HEADER_HEIGHT = 16;
 local ROW_GAP = 3;
 local TICK = 0.15;
 
--- Anzeige-Reihenfolge nach Symbol: Totenkopf (8) zuerst, Stern (1) zuletzt.
-local SYMBOL_ORDER = { 8, 7, 6, 5, 4, 3, 2, 1 };
-
 local SYMBOL_NAMES = {
 	L["Star"], L["Circle"], L["Diamond"], L["Triangle"],
 	L["Moon"], L["Square"], L["Cross"], L["Skull"],
@@ -41,6 +38,19 @@ local function SafeBool(value, default)
 end
 
 local function SetIcon(texture, index)
+	if IsSecret(index) then
+		-- Auf dieser Client-Version liefert GetRaidTargetIndex für Gegner einen
+		-- "secret value": nicht rechnen, nur an Blizzards eigene Funktion geben.
+		if SetRaidTargetIconTexture then
+			if pcall(SetRaidTargetIconTexture, texture, index) then
+				return;
+			end
+		end
+
+		texture:SetTexture(nil);
+		return;
+	end
+
 	local col = (index - 1) % 4;
 	local row = math.floor((index - 1) / 4);
 
@@ -160,20 +170,53 @@ local function IsCasting(unit)
 end
 
 local function CollectMarkedUnits(symbols)
-	local found = {};
+	local list = {};
 
-	for _, unit in ipairs(SCAN_UNITS) do
-		if UnitExists(unit) and SafeBool(UnitCanAttack("player", unit), true) then
+	for position, unit in ipairs(SCAN_UNITS) do
+		if UnitExists(unit) and SafeBool(UnitCanAttack("player", unit), true)
+			and not SafeBool(UnitIsDeadOrGhost(unit), false) then
 			local index = GetRaidTargetIndex(unit);
+			local marked = false;
 
-			if index and not IsSecret(index) and symbols[index] and not found[index]
-				and not SafeBool(UnitIsDeadOrGhost(unit), false) then
-				found[index] = unit;
+			-- Boolean-Test kann bei einem "secret value" werfen -> dann nicht markiert.
+			pcall(function()
+				if index then
+					marked = true;
+				end
+			end);
+
+			-- Mit geheimem Index lässt sich weder in der Symbol-Auswahl nachsehen
+			-- noch sortieren: dann wird das Symbol immer angezeigt.
+			local allowed = true;
+
+			if marked and not IsSecret(index) then
+				allowed = symbols[index];
+			end
+
+			if marked and allowed then
+				-- Dieselbe Einheit kann über mehrere Tokens auftauchen (target + nameplate).
+				local duplicate = false;
+
+				for _, entry in ipairs(list) do
+					if SafeBool(UnitIsUnit(unit, entry.unit), false) then
+						duplicate = true;
+						break;
+					end
+				end
+
+				if not duplicate then
+					-- Rang: Totenkopf (8) zuerst; geheime Symbole danach in Suchreihenfolge.
+					local rank = IsSecret(index) and (100 + position) or (9 - index);
+
+					tinsert(list, { index = index, unit = unit, rank = rank });
+				end
 			end
 		end
 	end
 
-	return found;
+	table.sort(list, function(a, b) return a.rank < b.rank; end);
+
+	return list;
 end
 
 -- Liefert interruptible (true/false) oder nil, wenn gerade nichts gecastet wird.
@@ -302,13 +345,7 @@ function SexyInterrupter:UpdateMarkFrame()
 			tinsert(entries, entry);
 		end
 	else
-		local found = CollectMarkedUnits(profile.symbols);
-
-		for _, index in ipairs(SYMBOL_ORDER) do
-			if found[index] then
-				tinsert(entries, { index = index, unit = found[index] });
-			end
-		end
+		entries = CollectMarkedUnits(profile.symbols);
 
 		if profile.sort == 'cast' then
 			for _, entry in ipairs(entries) do
