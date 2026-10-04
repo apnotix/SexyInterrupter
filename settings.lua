@@ -203,6 +203,7 @@ local defaults = {
 			-- lost/reset for players upgrading from the pre-Edit-Mode version.
 			editModeAnchorDB = {},
 			editModeMessageDB = {},
+			editModeMarksDB = {},
 			font = '2002',
 			fontsize = 13,
 			fontcolor = {
@@ -247,6 +248,17 @@ local defaults = {
 				},
 				texture = 'Blizzard'
 			}
+		},
+		marks = {
+			enabled = true,
+			combatOnly = false,
+			showCast = true,
+			highlightInterruptible = true,
+			maxrows = 8,
+			width = 260,
+			sort = 'symbol',
+			-- Raid-Symbol-Index (1 Stern .. 8 Totenkopf) -> anzeigen
+			symbols = { true, true, true, true, true, true, true, true },
 		},
 		notification = {
             sound = true,

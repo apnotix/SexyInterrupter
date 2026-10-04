@@ -268,11 +268,14 @@ function SexyInterrupter:CreateUi()
 
 		SexyInterrupter:RegisterEditModeSettings(EME, f, c);
 
+		-- Gegner-Marker-Fenster (marks.lua) registriert sein eigenes Edit-Mode-Frame.
+		local markFrame = SexyInterrupter:CreateMarkFrame(EME, SexyInterrupter.EditModeHelpers);
+
 		-- The library's dialog builds its sliders from ITS per-layout db (100
 		-- when a value is missing, e.g. after switching to a layout it hasn't
 		-- seen). Re-seed from AceDB right before a frame's dialog is built, so
 		-- it never shows - or lets the user drag from - a bogus default.
-		for _, frame in ipairs({ f, c }) do
+		for _, frame in ipairs({ f, c, markFrame }) do
 			local originalSelectSystem = frame.SelectSystem;
 
 			if originalSelectSystem then
@@ -715,6 +718,15 @@ end
 -- per-player priority-assignment tab (a whole dynamic sub-list, not a
 -- single value) have no sane equivalent here and stay in the normal
 -- options panel.
+-- Für marks.lua (ruft die Registrierungs-Helfer von dort aus auf).
+SexyInterrupter.EditModeHelpers = {
+	Checkbox = RegisterEditModeCheckbox,
+	Slider = RegisterEditModeSlider,
+	Select = RegisterEditModeSelectDropdown,
+	GetLiveDB = GetLiveDB,
+	ComputeBottomLeft = ComputeBottomLeft,
+};
+
 function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame)
 	RegisterEditModeCheckbox(EME, anchorFrame, "modeincombat", L["Show in combat only"],
 		function() return self.db.profile.general.modeincombat end,
@@ -955,6 +967,10 @@ function SexyInterrupter:UpdateFrames()
 
 	SexyInterrupter:UpdateUI(rows);
 	SexyInterrupter:UpdateInterrupterStatus(rows, editing);
+
+	if SexyInterrupter.UpdateMarkFrame then
+		SexyInterrupter:UpdateMarkFrame();
+	end
 end
 
 function SexyInterrupter:UpdateUI(rows)

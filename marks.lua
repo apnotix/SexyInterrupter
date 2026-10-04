@@ -1,0 +1,490 @@
+-- Gegner-Marker: eigenes Fenster mit den Unitframes aller Gegner, die ein
+-- Raid-Symbol tragen (Totenkopf, Kreuz, ...). Zeigt Gesundheit, den laufenden
+-- Cast und hebt unterbrechbare Casts hervor. Position/Optionen liegen wie bei
+-- den anderen Fenstern im Edit Mode (EditModeExpanded-1.0).
+local LSM = LibStub("LibSharedMedia-3.0");
+local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
+
+local ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons";
+local HEADER_HEIGHT = 16;
+local ROW_GAP = 3;
+local TICK = 0.15;
+
+-- Anzeige-Reihenfolge nach Symbol: Totenkopf (8) zuerst, Stern (1) zuletzt.
+local SYMBOL_ORDER = { 8, 7, 6, 5, 4, 3, 2, 1 };
+
+local SYMBOL_NAMES = {
+	L["Star"], L["Circle"], L["Diamond"], L["Triangle"],
+	L["Moon"], L["Square"], L["Cross"], L["Skull"],
+};
+
+-- Beispieldaten für die Vorschau im Edit Mode.
+local PREVIEW = {
+	{ index = 8, name = "High Marshal Valdric", pct = 100 },
+	{ index = 7, name = "Shadow Priest", pct = 78, cast = { name = "Shadow Bolt", progress = 0.62, interruptible = true } },
+	{ index = 6, name = "Blade Dancer", pct = 54 },
+	{ index = 4, name = "Thorn Weaver", pct = 100, cast = { name = "Healing Wave", progress = 0.35, interruptible = false } },
+	{ index = 5, name = "Cult Summoner", pct = 31 },
+};
+
+-- "Secret values" (Blizzards Schutz im Kampf) werfen bei Boolean-Tests Fehler.
+local function IsSecret(value)
+	return issecretvalue and issecretvalue(value);
+end
+
+local function SafeBool(value, default)
+	if IsSecret(value) then
+		return default;
+	end
+
+	return value and true or false;
+end
+
+local function SetIcon(texture, index)
+	local col = (index - 1) % 4;
+	local row = math.floor((index - 1) / 4);
+
+	texture:SetTexture(ICON_TEXTURE);
+	texture:SetTexCoord(col * 0.25, (col + 1) * 0.25, row * 0.25, (row + 1) * 0.25);
+end
+
+local function P()
+	return SexyInterrupter.db.profile.marks;
+end
+
+local function RowHeight(profile)
+	return profile.showCast and 38 or 26;
+end
+
+function SexyInterrupter:CreateMarkRow(index)
+	local f = self.markFrame;
+	local row = CreateFrame("Frame", nil, f);
+
+	row.bg = row:CreateTexture(nil, "BACKGROUND");
+	row.bg:SetAllPoints(row);
+	row.bg:SetColorTexture(0.09, 0.07, 0.05, 0.85);
+
+	row.glow = row:CreateTexture(nil, "BACKGROUND", nil, 1);
+	row.glow:SetAllPoints(row);
+	row.glow:SetColorTexture(1, 0.83, 0.3, 0.3);
+	row.glow:Hide();
+
+	row.icon = row:CreateTexture(nil, "ARTWORK");
+	row.icon:SetPoint("LEFT", row, "LEFT", 4, 0);
+
+	row.name = row:CreateFontString(nil, "OVERLAY");
+	row.name:SetJustifyH("LEFT");
+	row.name:SetWordWrap(false);
+
+	row.pct = row:CreateFontString(nil, "OVERLAY");
+	row.pct:SetJustifyH("RIGHT");
+
+	row.hp = CreateFrame("StatusBar", nil, row);
+	row.hp.bg = row.hp:CreateTexture(nil, "BACKGROUND");
+	row.hp.bg:SetAllPoints(row.hp);
+	row.hp.bg:SetColorTexture(0.05, 0.04, 0.03, 1);
+	row.hp:SetStatusBarColor(0.70, 0.21, 0.18, 1);
+
+	row.cast = CreateFrame("StatusBar", nil, row);
+	row.cast.bg = row.cast:CreateTexture(nil, "BACKGROUND");
+	row.cast.bg:SetAllPoints(row.cast);
+	row.cast.bg:SetColorTexture(0.05, 0.04, 0.03, 1);
+
+	row.castName = row.cast:CreateFontString(nil, "OVERLAY");
+	row.castName:SetJustifyH("LEFT");
+	row.castName:SetPoint("LEFT", row.cast, "LEFT", 3, 0);
+
+	row.castTime = row.cast:CreateFontString(nil, "OVERLAY");
+	row.castTime:SetJustifyH("RIGHT");
+	row.castTime:SetPoint("RIGHT", row.cast, "RIGHT", -3, 0);
+
+	f.rows[index] = row;
+
+	return row;
+end
+
+-- Layout/Schrift/Textur eines Rows an die aktuellen Einstellungen anpassen.
+function SexyInterrupter:LayoutMarkRow(row, position)
+	local profile = self.db.profile.marks;
+	local rowHeight = RowHeight(profile);
+	local font = LSM:Fetch("font", self.db.profile.ui.font);
+	local fontSize = math.max(8, math.min(self.db.profile.ui.fontsize, 12));
+	local texture = LSM:Fetch("statusbar", self.db.profile.ui.bars.texture);
+	local textLeft = rowHeight - 6 + 10;
+
+	row:ClearAllPoints();
+	row:SetPoint("TOPLEFT", self.markFrame, "TOPLEFT", 0, -(HEADER_HEIGHT + (position - 1) * (rowHeight + ROW_GAP)));
+	row:SetSize(profile.width, rowHeight);
+
+	row.icon:SetSize(rowHeight - 6, rowHeight - 6);
+
+	row.name:SetFont(font, fontSize, "OUTLINE");
+	row.name:ClearAllPoints();
+	row.name:SetPoint("TOPLEFT", row, "TOPLEFT", textLeft, -2);
+	row.name:SetPoint("TOPRIGHT", row, "TOPRIGHT", -40, -2);
+	row.name:SetHeight(fontSize + 2);
+
+	row.pct:SetFont(font, fontSize, "OUTLINE");
+	row.pct:ClearAllPoints();
+	row.pct:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -2);
+
+	row.hp:SetStatusBarTexture(texture);
+	row.hp:ClearAllPoints();
+	row.hp:SetPoint("TOPLEFT", row, "TOPLEFT", textLeft, -(fontSize + 5));
+	row.hp:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -(fontSize + 5));
+	row.hp:SetHeight(7);
+
+	row.cast:SetStatusBarTexture(texture);
+	row.cast:ClearAllPoints();
+	row.cast:SetPoint("TOPLEFT", row.hp, "BOTTOMLEFT", 0, -3);
+	row.cast:SetPoint("TOPRIGHT", row.hp, "BOTTOMRIGHT", 0, -3);
+	row.cast:SetHeight(11);
+	row.castName:SetFont(font, 9, "OUTLINE");
+	row.castTime:SetFont(font, 9, "OUTLINE");
+end
+
+-- Alle angreifbaren Gegner mit Symbol einsammeln: ein Symbol existiert nur
+-- einmal, daher dient der Symbol-Index als Schlüssel.
+local SCAN_UNITS = { "target", "focus", "mouseover", "boss1", "boss2", "boss3", "boss4", "boss5" };
+
+for i = 1, 40 do
+	tinsert(SCAN_UNITS, "nameplate" .. i);
+end
+
+local function IsCasting(unit)
+	local ok, casting = pcall(function()
+		return UnitCastingInfo(unit) ~= nil or UnitChannelInfo(unit) ~= nil;
+	end);
+
+	return ok and casting;
+end
+
+local function CollectMarkedUnits(symbols)
+	local found = {};
+
+	for _, unit in ipairs(SCAN_UNITS) do
+		if UnitExists(unit) and SafeBool(UnitCanAttack("player", unit), true) then
+			local index = GetRaidTargetIndex(unit);
+
+			if index and not IsSecret(index) and symbols[index] and not found[index]
+				and not SafeBool(UnitIsDeadOrGhost(unit), false) then
+				found[index] = unit;
+			end
+		end
+	end
+
+	return found;
+end
+
+-- Liefert interruptible (true/false) oder nil, wenn gerade nichts gecastet wird.
+local function UpdateCast(row, unit, profile)
+	local name, _, _, startMs, endMs, _, castId, notInterruptible = UnitCastingInfo(unit);
+	local channel = false;
+
+	if name == nil then
+		name, _, _, startMs, endMs, _, notInterruptible = UnitChannelInfo(unit);
+		channel = true;
+	end
+
+	if name == nil then
+		return nil;
+	end
+
+	local interruptible = not SafeBool(notInterruptible, false);
+
+	row.castName:SetText(name);
+
+	local ok = pcall(function()
+		local startTime, endTime = startMs / 1000, endMs / 1000;
+
+		row.cast:SetMinMaxValues(startTime, endTime);
+		row.cast:SetValue(channel and (startTime + endTime - GetTime()) or GetTime());
+		row.castTime:SetText(string.format("%.1f", math.max(0, endTime - GetTime())));
+	end);
+
+	if not ok then
+		-- Zeiten im Kampf geschützt: nur Name + volle Leiste.
+		row.cast:SetMinMaxValues(0, 1);
+		row.cast:SetValue(1);
+		row.castTime:SetText("");
+	end
+
+	if interruptible then
+		row.cast:SetStatusBarColor(0.91, 0.72, 0.23, 1);
+	else
+		row.cast:SetStatusBarColor(0.54, 0.54, 0.54, 1);
+	end
+
+	return interruptible;
+end
+
+local function UpdateHealth(row, unit)
+	local ok = pcall(function()
+		row.hp:SetMinMaxValues(0, UnitHealthMax(unit));
+		row.hp:SetValue(UnitHealth(unit));
+	end);
+
+	if not ok then
+		row.hp:SetMinMaxValues(0, 1);
+		row.hp:SetValue(1);
+	end
+
+	local shown = pcall(function()
+		local max = UnitHealthMax(unit);
+
+		if IsSecret(max) or max <= 0 then
+			error("secret");
+		end
+
+		row.pct:SetText(string.format("%d%%", math.floor(UnitHealth(unit) / max * 100 + 0.5)));
+	end);
+
+	if not shown then
+		shown = UnitHealthPercent and pcall(function()
+			row.pct:SetFormattedText("%d%%", UnitHealthPercent(unit, false, CurveConstants and CurveConstants.ScaleTo100));
+		end);
+	end
+
+	if not shown then
+		row.pct:SetText("");
+	end
+end
+
+local function FillPreviewRow(row, entry, profile)
+	SetIcon(row.icon, entry.index);
+	row.name:SetText(entry.name);
+	row.pct:SetText(entry.pct .. "%");
+	row.hp:SetMinMaxValues(0, 100);
+	row.hp:SetValue(entry.pct);
+
+	local highlight = false;
+
+	if profile.showCast and entry.cast then
+		row.cast:SetMinMaxValues(0, 1);
+		row.cast:SetValue(entry.cast.progress);
+		row.castName:SetText(entry.cast.name);
+		row.castTime:SetText(string.format("%.1f", (1 - entry.cast.progress) * 2));
+
+		if entry.cast.interruptible then
+			row.cast:SetStatusBarColor(0.91, 0.72, 0.23, 1);
+			highlight = true;
+		else
+			row.cast:SetStatusBarColor(0.54, 0.54, 0.54, 1);
+		end
+
+		row.cast:Show();
+	else
+		row.cast:Hide();
+	end
+
+	return highlight;
+end
+
+function SexyInterrupter:UpdateMarkFrame()
+	local f = self.markFrame;
+
+	if not f then
+		return;
+	end
+
+	local profile = self.db.profile.marks;
+	local editing = self:IsEditingUi();
+
+	if not editing and (not profile.enabled or (profile.combatOnly and not UnitAffectingCombat("player"))) then
+		f:Hide();
+		return;
+	end
+
+	local entries = {};
+
+	if editing then
+		for _, entry in ipairs(PREVIEW) do
+			tinsert(entries, entry);
+		end
+	else
+		local found = CollectMarkedUnits(profile.symbols);
+
+		for _, index in ipairs(SYMBOL_ORDER) do
+			if found[index] then
+				tinsert(entries, { index = index, unit = found[index] });
+			end
+		end
+
+		if profile.sort == 'cast' then
+			for _, entry in ipairs(entries) do
+				entry.casting = IsCasting(entry.unit);
+			end
+
+			-- Stabil: Castende nach vorn, sonst Symbol-Reihenfolge behalten.
+			local ordered = {};
+
+			for _, entry in ipairs(entries) do
+				if entry.casting then tinsert(ordered, entry); end
+			end
+
+			for _, entry in ipairs(entries) do
+				if not entry.casting then tinsert(ordered, entry); end
+			end
+
+			entries = ordered;
+		end
+
+		if #entries == 0 then
+			f:Hide();
+			return;
+		end
+	end
+
+	local rowHeight = RowHeight(profile);
+	local width = profile.width;
+	local height = HEADER_HEIGHT + profile.maxrows * (rowHeight + ROW_GAP);
+
+	-- Größe nur bei Änderung setzen (nicht während eines Edit-Mode-Drags anfassen).
+	if f.lastWidth ~= width or f.lastHeight ~= height then
+		f:SetSize(width, height);
+		f.lastWidth, f.lastHeight = width, height;
+	end
+
+	f.header:SetText(L["Enemy marks"]);
+	f.count:SetText(#entries .. " " .. L["marked"]);
+
+	local shown = 0;
+
+	for position = 1, math.min(#entries, profile.maxrows) do
+		local entry = entries[position];
+		local row = f.rows[position] or self:CreateMarkRow(position);
+
+		self:LayoutMarkRow(row, position);
+		row:Show();
+		shown = position;
+
+		local highlight = false;
+
+		if editing then
+			highlight = FillPreviewRow(row, entry, profile);
+		else
+			SetIcon(row.icon, entry.index);
+			row.name:SetText(UnitName(entry.unit));
+			UpdateHealth(row, entry.unit);
+
+			local ok, interruptible = false, nil;
+
+			if profile.showCast then
+				ok, interruptible = pcall(UpdateCast, row, entry.unit, profile);
+			end
+
+			if ok and interruptible ~= nil then
+				row.cast:Show();
+				highlight = interruptible;
+			else
+				row.cast:Hide();
+			end
+		end
+
+		if highlight and profile.highlightInterruptible then
+			row.glow:Show();
+		else
+			row.glow:Hide();
+		end
+	end
+
+	for position = shown + 1, #f.rows do
+		f.rows[position]:Hide();
+	end
+
+	f:Show();
+end
+
+function SexyInterrupter:CreateMarkFrame(EME, helpers)
+	local profile = self.db.profile.marks;
+	local ui = self.db.profile.ui;
+	local f = CreateFrame("Frame", "SexyInterrupterMarks", UIParent);
+
+	f.rows = {};
+	self.markFrame = f;
+
+	local height = HEADER_HEIGHT + profile.maxrows * (RowHeight(profile) + ROW_GAP);
+
+	f:SetSize(profile.width, height);
+	f.lastWidth, f.lastHeight = profile.width, height;
+
+	-- Standardposition: rechts oben, unterhalb der Bildschirmmitte-Oberkante.
+	-- x/y vorab selbst eintragen (siehe Kommentar in CreateUi zum
+	-- ClearAllPoints-Bruchpfad der Library).
+	local db = ui.editModeMarksDB;
+
+	if not (db.x and db.y) then
+		local screenWidth, screenHeight = UIParent:GetSize();
+
+		db.x = screenWidth - profile.width - 60;
+		db.y = screenHeight - height - 200;
+	end
+
+	f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", db.x, db.y);
+
+	f.bg = f:CreateTexture(nil, "BACKGROUND");
+	f.bg:SetAllPoints(f);
+	f.bg:SetColorTexture(0, 0, 0, 0.2);
+
+	f.header = f:CreateFontString(nil, "OVERLAY");
+	f.header:SetFont(LSM:Fetch("font", ui.font), 11, "OUTLINE");
+	f.header:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -2);
+	f.header:SetTextColor(0.91, 0.79, 0.42, 1);
+
+	f.count = f:CreateFontString(nil, "OVERLAY");
+	f.count:SetFont(LSM:Fetch("font", ui.font), 10, "OUTLINE");
+	f.count:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -3);
+	f.count:SetTextColor(0.75, 0.68, 0.55, 1);
+
+	f:Hide();
+
+	if EME then
+		EME:RegisterFrame(f, L["Addon name"] .. " " .. L["Enemy marks"], db, UIParent, "BOTTOMLEFT", true);
+
+		helpers.Checkbox(EME, f, "marksenabled", L["Show enemy marks"],
+			function() return P().enabled end,
+			function(value) P().enabled = value; end);
+
+		helpers.Checkbox(EME, f, "markscombatonly", L["Marks: show in combat only"],
+			function() return P().combatOnly end,
+			function(value) P().combatOnly = value; end);
+
+		helpers.Checkbox(EME, f, "marksshowcast", L["Show cast bars"],
+			function() return P().showCast end,
+			function(value) P().showCast = value; end);
+
+		helpers.Checkbox(EME, f, "markshighlight", L["Highlight interruptible casts"],
+			function() return P().highlightInterruptible end,
+			function(value) P().highlightInterruptible = value; end);
+
+		helpers.Slider(EME, f, "marksmaxrows", L["Max rows of marks"], 1, 8, 1,
+			function() return P().maxrows end,
+			function(value) P().maxrows = value; end);
+
+		helpers.Slider(EME, f, "markswidth", L["Width"], 150, 400, 1,
+			function() return P().width end,
+			function(value) P().width = value; end);
+
+		helpers.Select(EME, f, "markssort", L["Marks sort"],
+			{
+				{ value = 'symbol', label = L["By symbol"] },
+				{ value = 'cast', label = L["Casting first"] },
+			},
+			function() return P().sort end,
+			function(value) P().sort = value; end);
+
+		for index = 8, 1, -1 do
+			helpers.Checkbox(EME, f, "markssymbol" .. index, SYMBOL_NAMES[index],
+				function() return P().symbols[index] end,
+				function(value) P().symbols[index] = value; end);
+		end
+	end
+
+	-- Laufende Aktualisierung (Gesundheit/Cast ändern sich dauernd). Eigener
+	-- Ticker, da ein versteckter Frame kein OnUpdate bekommt.
+	C_Timer.NewTicker(TICK, function()
+		SexyInterrupter:UpdateMarkFrame();
+	end);
+
+	return f;
+end
