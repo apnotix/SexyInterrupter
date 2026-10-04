@@ -231,6 +231,17 @@ function SexyInterrupter:LayoutMarkRow(row, position)
 	local texture = LSM:Fetch("statusbar", self.db.profile.ui.bars.texture);
 	local textLeft = rowHeight - 6 + 10;
 
+	-- Nur neu anordnen, wenn sich etwas geändert hat: ein Umlayout alle 0,15 s
+	-- (ClearAllPoints/SetPoint) lässt die Maus-Fokus-/Klick-Erkennung des
+	-- Secure-Buttons auf der Zeile immer wieder abreißen (Klick kommt nie an).
+	local key = table.concat({ position, profile.width, rowHeight, tostring(font), fontSize, tostring(texture) }, "|");
+
+	if row.layoutKey == key then
+		return;
+	end
+
+	row.layoutKey = key;
+
 	row:ClearAllPoints();
 	row:SetPoint("TOPLEFT", self.markFrame, "TOPLEFT", 0, -(HEADER_HEIGHT + (position - 1) * (rowHeight + ROW_GAP)));
 	row:SetSize(profile.width, rowHeight);
@@ -820,6 +831,16 @@ function SexyInterrupter:DebugMarks(reset)
 		if row:IsShown() then
 			Say(string.format("Zeile %d: clickUnit=%s Kampf=%s", index, tostring(row.clickUnit), tostring(InCombatLockdown())));
 		end
+	end
+
+	do
+		local tokens = {};
+
+		for _, entry in ipairs(CollectMarkedUnits(p.symbols)) do
+			tinsert(tokens, entry.unit);
+		end
+
+		Say("Angezeigt (Collect): " .. table.concat(tokens, ", "));
 	end
 
 	Say("Icon-Test: " .. tostring(self.lastIconError));
