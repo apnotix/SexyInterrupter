@@ -156,14 +156,15 @@ end
 -- Position/Größe der Buttons ändern sich nur außerhalb des Kampfes.
 function SexyInterrupter:CreateMarkClickButton(index)
 	local f = self.markFrame;
-	local button = CreateFrame("Button", nil, f, "SecureActionButtonTemplate");
+	local button = CreateFrame("Button", "SexyInterrupterMarkButton" .. index, f, "SecureActionButtonTemplate");
 
 	button:SetFrameLevel(f:GetFrameLevel() + 20);
 	button:SetHighlightTexture("Interface/Buttons/WHITE8X8");
 	button:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.12);
 	-- Je nach CVar ActionButtonUseKeyDown feuert ein Secure-Button beim Drücken
 	-- oder Loslassen: beides anmelden.
-	button:RegisterForClicks("AnyDown", "AnyUp");
+	button:RegisterForClicks("AnyUp");
+	button:SetAttribute("useOnKeyDown", false);
 	button:SetAttribute("type", "target");
 	button:SetAttribute("type1", "target");
 
@@ -177,6 +178,15 @@ function SexyInterrupter:CreateMarkClickButton(index)
 		end
 	end);
 	button:SetScript("OnLeave", function() GameTooltip:Hide(); end);
+
+	-- Diagnose (/si debug): kommt der Klick an, und was würde er auslösen?
+	button:HookScript("PreClick", function(self, mouseButton, down)
+		if SexyInterrupter.debug then
+			DEFAULT_CHAT_FRAME:AddMessage(string.format("SI click: %s button=%s down=%s type1=%s unit=%s macro=%s",
+				self:GetName(), tostring(mouseButton), tostring(down), tostring(self:GetAttribute("type1")),
+				tostring(self:GetAttribute("unit")), tostring(self:GetAttribute("macrotext1"))), 0.6, 0.8, 1);
+		end
+	end);
 
 	f.clickButtons[index] = button;
 
@@ -684,6 +694,7 @@ function SexyInterrupter:UpdateMarkFrame()
 				if button and button.clickKey ~= key then
 					if useMacro then
 						button:SetAttribute("type1", "macro");
+						button:SetAttribute("unit", nil);
 						button:SetAttribute("macrotext1", "/targetexact " .. name);
 					else
 						button:SetAttribute("type1", "target");
