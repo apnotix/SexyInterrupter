@@ -370,6 +370,24 @@ local function IsSameUnit(a, b)
 	return plateA ~= nil and plateA == plateB;
 end
 
+-- Tot? Mehrere unabhängige Prüfungen, weil einzelne Werte im Kampf geheim sein
+-- können (SafeBool würde dann "lebt" annehmen und die Leiche stehen lassen).
+local function IsDeadUnit(unit)
+	for _, check in ipairs({ UnitIsDead, UnitIsDeadOrGhost }) do
+		local dead = check(unit);
+
+		if not IsSecret(dead) and dead then
+			return true;
+		end
+	end
+
+	local ok, zero = pcall(function()
+		return UnitHealth(unit) <= 0;
+	end);
+
+	return ok and zero or false;
+end
+
 local function CollectMarkedUnits(symbols)
 	local list = {};
 	-- Ziele von Gruppenmitgliedern haben keine Namensplakette und lassen sich bei
@@ -393,7 +411,7 @@ local function CollectMarkedUnits(symbols)
 
 	for position, unit in ipairs(units) do
 		if UnitExists(unit) and SafeBool(UnitCanAttack("player", unit), true)
-			and not SafeBool(UnitIsDeadOrGhost(unit), false) then
+			and not IsDeadUnit(unit) then
 			local index = GetRaidTargetIndex(unit);
 			local marked = false;
 
