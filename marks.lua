@@ -37,17 +37,43 @@ local function SafeBool(value, default)
 	return value and true or false;
 end
 
-local function SetIcon(texture, index)
+-- Fallback für geheime Indizes: Textur und Koordinaten vom Symbol der
+-- Blizzard-Namensplakette derselben Einheit übernehmen.
+local function CopyNameplateIcon(texture, unit)
+	local plate = unit and C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit);
+	local unitFrame = plate and plate.UnitFrame;
+	local source = unitFrame and unitFrame.RaidTargetFrame and unitFrame.RaidTargetFrame.RaidTargetIcon;
+
+	if not source then
+		return false;
+	end
+
+	return pcall(function()
+		texture:SetTexture(source:GetTexture());
+		texture:SetTexCoord(source:GetTexCoord());
+	end);
+end
+
+local function SetIcon(texture, index, unit)
 	if IsSecret(index) then
 		-- Auf dieser Client-Version liefert GetRaidTargetIndex für Gegner einen
 		-- "secret value": nicht rechnen, nur an Blizzards eigene Funktion geben.
 		if SetRaidTargetIconTexture then
-			if pcall(SetRaidTargetIconTexture, texture, index) then
+			local ok, err = pcall(SetRaidTargetIconTexture, texture, index);
+
+			SexyInterrupter.lastIconError = ok and "ok (kein Fehler)" or tostring(err);
+
+			if ok and texture:GetTexture() ~= nil then
 				return;
 			end
+		else
+			SexyInterrupter.lastIconError = "SetRaidTargetIconTexture fehlt";
 		end
 
-		texture:SetTexture(nil);
+		if not CopyNameplateIcon(texture, unit) then
+			texture:SetTexture(nil);
+		end
+
 		return;
 	end
 
@@ -400,7 +426,7 @@ function SexyInterrupter:UpdateMarkFrame()
 		if editing then
 			highlight = FillPreviewRow(row, entry, profile);
 		else
-			SetIcon(row.icon, entry.index);
+			SetIcon(row.icon, entry.index, entry.unit);
 			row.name:SetText(UnitName(entry.unit));
 			UpdateHealth(row, entry.unit);
 
@@ -578,6 +604,8 @@ function SexyInterrupter:DebugMarks(reset)
 			end
 		end
 	end
+
+	Say("Icon-Test: " .. tostring(self.lastIconError));
 
 	if count == 0 then
 		Say("keine Einheit mit Symbol gefunden (target/focus/mouseover/boss/nameplates).");
