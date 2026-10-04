@@ -408,6 +408,13 @@ function SexyInterrupter:UpdateMarkFrame()
 		f.lastWidth, f.lastHeight = width, height;
 	end
 
+	-- Sichtbarer Hintergrund passt sich der Zeilenzahl an; der Frame selbst
+	-- behält seine feste Größe (stabile Position/Auswahl im Edit Mode).
+	f.bg:ClearAllPoints();
+	f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
+	f.bg:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0);
+	f.bg:SetHeight(HEADER_HEIGHT + math.min(#entries, profile.maxrows) * (rowHeight + ROW_GAP));
+
 	f.header:SetText(L["Enemy marks"]);
 	f.count:SetText(#entries .. " " .. L["marked"]);
 
@@ -486,7 +493,8 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 	f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", db.x, db.y);
 
 	f.bg = f:CreateTexture(nil, "BACKGROUND");
-	f.bg:SetAllPoints(f);
+	f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
+	f.bg:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0);
 	f.bg:SetColorTexture(0, 0, 0, 0.2);
 
 	f.header = f:CreateFontString(nil, "OVERLAY");
