@@ -605,9 +605,25 @@ function SexyInterrupter:UpdateMarkFrame()
 		else
 			SetIcon(row.icon, entry.index, entry.unit);
 			row.targetBorder:SetShown(UnitExists("target") and IsSameUnit(entry.unit, "target"));
-			if not InCombatLockdown() and row.clickUnit ~= entry.unit then
-				row.click:SetAttribute("unit", entry.unit);
-				row.clickUnit = entry.unit;
+			if not InCombatLockdown() then
+				-- Namensplaketten-Tokens lassen sich auf diesem Client nicht per
+				-- Secure-"target" anvisieren: dort stattdessen per Name (Makro).
+				local name = UnitName(entry.unit);
+				local useMacro = entry.unit:find("^nameplate") and name and not IsSecret(name);
+				local key = entry.unit .. "|" .. (useMacro and name or "");
+
+				if row.clickKey ~= key then
+					if useMacro then
+						row.click:SetAttribute("type1", "macro");
+						row.click:SetAttribute("macrotext1", "/targetexact " .. name);
+					else
+						row.click:SetAttribute("type1", "target");
+						row.click:SetAttribute("unit", entry.unit);
+					end
+
+					row.clickKey = key;
+					row.clickUnit = entry.unit;
+				end
 			end
 
 			row.name:SetText(UnitName(entry.unit));
