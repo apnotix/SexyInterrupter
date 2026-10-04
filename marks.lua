@@ -312,6 +312,10 @@ end
 
 local function CollectMarkedUnits(symbols)
 	local list = {};
+	-- Ziele von Gruppenmitgliedern haben keine Namensplakette und lassen sich bei
+	-- geheimen Werten nicht von Plaketten-Einträgen unterscheiden: nur Rückfall,
+	-- wenn sonst nichts gefunden wurde.
+	local fallbackList = {};
 
 	local units = SCAN_UNITS;
 
@@ -351,11 +355,23 @@ local function CollectMarkedUnits(symbols)
 			if marked and allowed then
 				-- Dieselbe Einheit kann über mehrere Tokens auftauchen (target + nameplate).
 				local duplicate = false;
+				local isFallback = unit:find("^party%d+target$") or unit:find("^raid%d+target$");
+				local targetList = isFallback and fallbackList or list;
 
-				for _, entry in ipairs(list) do
+				for _, entry in ipairs(targetList) do
 					if IsSameUnit(unit, entry.unit) then
 						duplicate = true;
 						break;
+					end
+
+					-- Rückfall-Tokens: ohne verwertbare UnitIsUnit/GUID hilft nur der Name.
+					if isFallback then
+						local nameA, nameB = UnitName(unit), UnitName(entry.unit);
+
+						if nameA and nameB and not IsSecret(nameA) and not IsSecret(nameB) and nameA == nameB then
+							duplicate = true;
+							break;
+						end
 					end
 				end
 
@@ -363,10 +379,14 @@ local function CollectMarkedUnits(symbols)
 					-- Rang: Totenkopf (8) zuerst; geheime Symbole danach in Suchreihenfolge.
 					local rank = IsSecret(index) and (100 + position) or (9 - index);
 
-					tinsert(list, { index = index, unit = unit, rank = rank });
+					tinsert(targetList, { index = index, unit = unit, rank = rank });
 				end
 			end
 		end
+	end
+
+	if #list == 0 then
+		list = fallbackList;
 	end
 
 	table.sort(list, function(a, b) return a.rank < b.rank; end);
@@ -759,6 +779,12 @@ function SexyInterrupter:DebugMarks(reset)
 					IsSecret(UnitIsDeadOrGhost(unit)) and "SECRET" or tostring(UnitIsDeadOrGhost(unit))));
 			end
 		end
+	end
+
+	do
+		local function Secrecy(v) return IsSecret(v) and "SECRET" or "offen"; end
+		Say(string.format("Secrecy: UnitIsUnit=%s GUID=%s Name=%s",
+			Secrecy(UnitIsUnit("target", "nameplate1")), Secrecy(UnitGUID("target")), Secrecy(UnitName("target"))));
 	end
 
 	Say("Icon-Test: " .. tostring(self.lastIconError));
