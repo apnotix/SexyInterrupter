@@ -1124,6 +1124,57 @@ function SexyInterrupter:UpdateUI(rows)
 	end
 end
 
+-- Unit-Token (player/partyN/raidN) zu einem Spieler-Eintrag ermitteln.
+local function FindUnitToken(interrupter)
+	if not interrupter or not interrupter.name then
+		return nil;
+	end
+
+	if UnitName("player") == interrupter.name then
+		return "player";
+	end
+
+	local prefix = IsInRaid() and "raid" or "party";
+
+	for i = 1, GetNumGroupMembers() do
+		local unit = prefix .. i;
+
+		if UnitExists(unit) and UnitName(unit) == interrupter.name then
+			return unit;
+		end
+	end
+
+	return nil;
+end
+
+-- Klick auf eine Zeile = diesen Spieler anvisieren. Secure-Button, daher nur
+-- außerhalb des Kampfes erzeugbar bzw. umkonfigurierbar; fehlende Buttons und
+-- Ziele werden beim nächsten Update nachgeholt.
+function SexyInterrupter:UpdateRowClick(rowParent, interrupter)
+	if InCombatLockdown() then
+		return;
+	end
+
+	if not rowParent.click then
+		local click = CreateFrame("Button", nil, rowParent, "SecureActionButtonTemplate");
+
+		click:SetAllPoints(rowParent);
+		-- Unter dem Fähigkeiten-Icon-Hitbox (Tooltip), aber über der Leiste.
+		click:SetFrameLevel(3);
+		click:RegisterForClicks("AnyDown", "AnyUp");
+		click:SetAttribute("type", "target");
+		click:SetAttribute("type1", "target");
+		rowParent.click = click;
+	end
+
+	local unit = interrupter and FindUnitToken(interrupter) or nil;
+
+	if rowParent.clickUnit ~= unit then
+		rowParent.click:SetAttribute("unit", unit);
+		rowParent.clickUnit = unit;
+	end
+end
+
 function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 	rows = rows or SexyInterrupter:GetCurrentInterrupters();
 
@@ -1171,6 +1222,10 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 		end
 
 		local interrupter = dataRow.interrupter;
+
+		if rowParent then
+			self:UpdateRowClick(rowParent, not editing and interrupter or nil);
+		end
 
 		-- Out of range: dim the whole row (bar included), not just the name.
 		if interrupter.inrange == false then
