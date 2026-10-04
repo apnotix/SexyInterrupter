@@ -104,6 +104,43 @@ local function SetIcon(texture, index, unit)
 	texture:SetTexCoord(col * 0.25, (col + 1) * 0.25, row * 0.25, (row + 1) * 0.25);
 end
 
+-- Rahmen (4 Kanten) um einen Frame, z. B. für das aktuelle Ziel. Wird auch vom
+-- Interrupter-Fenster (ui.lua) benutzt.
+function SexyInterrupter:CreateTargetBorder(frame)
+	local border = {};
+	local thickness = 2;
+
+	local function Edge(point1, point2, width, height)
+		local t = frame:CreateTexture(nil, "OVERLAY", nil, 7);
+
+		t:SetColorTexture(1, 1, 1, 0.95);
+		t:SetPoint(point1, frame, point1, 0, 0);
+		t:SetPoint(point2, frame, point2, 0, 0);
+
+		if width then t:SetWidth(width); end
+		if height then t:SetHeight(height); end
+
+		t:Hide();
+
+		return t;
+	end
+
+	border.edges = {
+		Edge("TOPLEFT", "TOPRIGHT", nil, thickness),
+		Edge("BOTTOMLEFT", "BOTTOMRIGHT", nil, thickness),
+		Edge("TOPLEFT", "BOTTOMLEFT", thickness, nil),
+		Edge("TOPRIGHT", "BOTTOMRIGHT", thickness, nil),
+	};
+
+	function border:SetShown(shown)
+		for _, edge in ipairs(self.edges) do
+			if shown then edge:Show(); else edge:Hide(); end
+		end
+	end
+
+	return border;
+end
+
 local function P()
 	return SexyInterrupter.db.profile.marks;
 end
@@ -130,6 +167,8 @@ function SexyInterrupter:CreateMarkRow(index)
 	row.bg = row:CreateTexture(nil, "BACKGROUND");
 	row.bg:SetAllPoints(row);
 	row.bg:SetColorTexture(0.09, 0.07, 0.05, 0.85);
+
+	row.targetBorder = self:CreateTargetBorder(row);
 
 	row.glow = row:CreateTexture(nil, "BACKGROUND", nil, 1);
 	row.glow:SetAllPoints(row);
@@ -529,8 +568,10 @@ function SexyInterrupter:UpdateMarkFrame()
 
 		if editing then
 			highlight = FillPreviewRow(row, entry, profile);
+			row.targetBorder:SetShown(position == 2);
 		else
 			SetIcon(row.icon, entry.index, entry.unit);
+			row.targetBorder:SetShown(UnitExists("target") and IsSameUnit(entry.unit, "target"));
 			if not InCombatLockdown() and row.clickUnit ~= entry.unit then
 				row.click:SetAttribute("unit", entry.unit);
 				row.clickUnit = entry.unit;

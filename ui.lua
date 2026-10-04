@@ -1361,6 +1361,31 @@ function SexyInterrupter:OnUpdate(elapsed)
 
 	self.siElapsed = 0;
 
+	-- Rahmen um die Zeile des aktuell anvisierten Spielers.
+	local rowIndex = 1;
+
+	while _G["SexyInterrupterRow" .. rowIndex] do
+		local rowParent = _G["SexyInterrupterRow" .. rowIndex];
+
+		if not rowParent.targetBorder and SexyInterrupter.CreateTargetBorder then
+			rowParent.targetBorder = SexyInterrupter:CreateTargetBorder(rowParent);
+		end
+
+		if rowParent.targetBorder then
+			local isTarget = false;
+
+			if rowParent:IsShown() and rowParent.clickUnit and UnitExists("target") then
+				local same = UnitIsUnit(rowParent.clickUnit, "target");
+
+				isTarget = not (issecretvalue and issecretvalue(same)) and same and true or false;
+			end
+
+			rowParent.targetBorder:SetShown(isTarget);
+		end
+
+		rowIndex = rowIndex + 1;
+	end
+
 	local editing = SexyInterrupter:IsEditingUi();
 	local rows = editing and GetPreviewRows() or SexyInterrupter:GetCurrentInterrupters();
 	local currentplayer = not editing and SexyInterrupter:GetInterrupter(select(1, UnitName("player"))) or nil;
