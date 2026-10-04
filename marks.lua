@@ -121,7 +121,10 @@ function SexyInterrupter:CreateMarkRow(index)
 	row.click = CreateFrame("Button", nil, row, "SecureActionButtonTemplate");
 	row.click:SetAllPoints(row);
 	row.click:SetFrameLevel(row:GetFrameLevel() + 10);
-	row.click:RegisterForClicks("AnyUp");
+	-- Je nach CVar ActionButtonUseKeyDown feuert ein Secure-Button beim Drücken
+	-- oder Loslassen: beides anmelden.
+	row.click:RegisterForClicks("AnyDown", "AnyUp");
+	row.click:SetAttribute("type", "target");
 	row.click:SetAttribute("type1", "target");
 
 	row.bg = row:CreateTexture(nil, "BACKGROUND");
@@ -238,6 +241,36 @@ local function IsCasting(unit)
 	return ok and casting;
 end
 
+local function PlateOf(unit)
+	if not C_NamePlate then
+		return nil;
+	end
+
+	local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit);
+
+	return ok and plate or nil;
+end
+
+-- Ist es dieselbe Einheit? Reihenfolge: UnitIsUnit, GUID, Namensplakette
+-- (jeweils nur, wenn der Wert nicht "secret" ist).
+local function IsSameUnit(a, b)
+	local same = UnitIsUnit(a, b);
+
+	if not IsSecret(same) then
+		return same and true or false;
+	end
+
+	local guidA, guidB = UnitGUID(a), UnitGUID(b);
+
+	if guidA and guidB and not IsSecret(guidA) and not IsSecret(guidB) then
+		return guidA == guidB;
+	end
+
+	local plateA, plateB = PlateOf(a), PlateOf(b);
+
+	return plateA ~= nil and plateA == plateB;
+end
+
 local function CollectMarkedUnits(symbols)
 	local list = {};
 
@@ -281,7 +314,7 @@ local function CollectMarkedUnits(symbols)
 				local duplicate = false;
 
 				for _, entry in ipairs(list) do
-					if SafeBool(UnitIsUnit(unit, entry.unit), false) then
+					if IsSameUnit(unit, entry.unit) then
 						duplicate = true;
 						break;
 					end
