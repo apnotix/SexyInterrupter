@@ -40,7 +40,27 @@ end
 -- Fallback für geheime Indizes: Textur und Koordinaten vom Symbol der
 -- Blizzard-Namensplakette derselben Einheit übernehmen.
 local function CopyNameplateIcon(texture, unit)
-	local plate = unit and C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit);
+	local plate;
+
+	if unit and C_NamePlate then
+		-- Für party/raid-Tokens verweigert die API den Aufruf: dann die passende
+		-- nameplateN über UnitIsUnit suchen.
+		local ok, result = pcall(C_NamePlate.GetNamePlateForUnit, unit);
+
+		if ok then
+			plate = result;
+		else
+			for i = 1, 40 do
+				local token = "nameplate" .. i;
+
+				if UnitExists(token) and SafeBool(UnitIsUnit(unit, token), false) then
+					plate = C_NamePlate.GetNamePlateForUnit(token);
+					break;
+				end
+			end
+		end
+	end
+
 	local unitFrame = plate and plate.UnitFrame;
 	local source = unitFrame and unitFrame.RaidTargetFrame and unitFrame.RaidTargetFrame.RaidTargetIcon;
 
