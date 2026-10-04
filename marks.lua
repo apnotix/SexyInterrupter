@@ -96,6 +96,14 @@ function SexyInterrupter:CreateMarkRow(index)
 	local f = self.markFrame;
 	local row = CreateFrame("Frame", nil, f);
 
+	-- Klick auf die Zeile = Gegner anvisieren. Secure-Button (TargetUnit ist im
+	-- Kampf geschützt); wird deshalb nur vorab erzeugt und nie umverankert.
+	row.click = CreateFrame("Button", nil, row, "SecureActionButtonTemplate");
+	row.click:SetAllPoints(row);
+	row.click:SetFrameLevel(row:GetFrameLevel() + 10);
+	row.click:RegisterForClicks("AnyUp");
+	row.click:SetAttribute("type1", "target");
+
 	row.bg = row:CreateTexture(nil, "BACKGROUND");
 	row.bg:SetAllPoints(row);
 	row.bg:SetColorTexture(0.09, 0.07, 0.05, 0.85);
@@ -183,8 +191,23 @@ end
 -- einmal, daher dient der Symbol-Index als Schlüssel.
 local SCAN_UNITS = { "target", "focus", "mouseover", "boss1", "boss2", "boss3", "boss4", "boss5" };
 
+for _, unit in ipairs({ "targettarget", "focustarget", "mouseovertarget", "pettarget" }) do
+	tinsert(SCAN_UNITS, unit);
+end
+
+for i = 1, 4 do
+	tinsert(SCAN_UNITS, "party" .. i .. "target");
+end
+
 for i = 1, 40 do
 	tinsert(SCAN_UNITS, "nameplate" .. i);
+end
+
+-- Ziele der Raid-Mitglieder: nur wenn es einen Raid gibt (siehe CollectMarkedUnits).
+local RAID_TARGET_UNITS = {};
+
+for i = 1, 40 do
+	tinsert(RAID_TARGET_UNITS, "raid" .. i .. "target");
 end
 
 local function IsCasting(unit)
@@ -198,7 +221,21 @@ end
 local function CollectMarkedUnits(symbols)
 	local list = {};
 
-	for position, unit in ipairs(SCAN_UNITS) do
+	local units = SCAN_UNITS;
+
+	if IsInRaid() then
+		units = {};
+
+		for _, unit in ipairs(SCAN_UNITS) do
+			tinsert(units, unit);
+		end
+
+		for _, unit in ipairs(RAID_TARGET_UNITS) do
+			tinsert(units, unit);
+		end
+	end
+
+	for position, unit in ipairs(units) do
 		if UnitExists(unit) and SafeBool(UnitCanAttack("player", unit), true)
 			and not SafeBool(UnitIsDeadOrGhost(unit), false) then
 			local index = GetRaidTargetIndex(unit);
@@ -393,9 +430,16 @@ function SexyInterrupter:UpdateMarkFrame()
 		end
 
 		if #entries == 0 then
-			f:Hide();
+			-- Kurz überbrücken (z. B. beim Zielwechsel ist das Ziel für einen
+			-- Moment keiner Einheit zuordenbar): Anzeige unverändert stehen lassen.
+			if not (f.lastSeen and GetTime() - f.lastSeen < 3) then
+				f:Hide();
+			end
+
 			return;
 		end
+
+		f.lastSeen = GetTime();
 	end
 
 	local rowHeight = RowHeight(profile);
@@ -434,6 +478,11 @@ function SexyInterrupter:UpdateMarkFrame()
 			highlight = FillPreviewRow(row, entry, profile);
 		else
 			SetIcon(row.icon, entry.index, entry.unit);
+			if not InCombatLockdown() and row.clickUnit ~= entry.unit then
+				row.click:SetAttribute("unit", entry.unit);
+				row.clickUnit = entry.unit;
+			end
+
 			row.name:SetText(UnitName(entry.unit));
 			UpdateHealth(row, entry.unit);
 
@@ -506,6 +555,11 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 	f.count:SetFont(LSM:Fetch("font", ui.font), 10, "OUTLINE");
 	f.count:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -3);
 	f.count:SetTextColor(0.75, 0.68, 0.55, 1);
+
+	-- Alle Zeilen vorab erzeugen (secure Buttons dürfen nicht im Kampf entstehen).
+	for index = 1, 8 do
+		self:CreateMarkRow(index);
+	end
 
 	f:Hide();
 
