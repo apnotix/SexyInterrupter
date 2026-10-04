@@ -205,7 +205,7 @@ function SexyInterrupter:LayoutMarkClickButtons(editing)
 		button:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -(HEADER_HEIGHT + (index - 1) * (rowHeight + ROW_GAP)));
 		button:SetSize(profile.width, rowHeight);
 		-- Im Edit Mode dürfen die Buttons das Verschieben des Fensters nicht blockieren.
-		button:EnableMouse(not editing);
+		button:EnableMouse(not editing and button.clickKey ~= nil);
 	end
 end
 
@@ -692,6 +692,7 @@ function SexyInterrupter:UpdateMarkFrame()
 
 					button.clickKey = key;
 					button.clickUnit = entry.unit;
+					button:EnableMouse(true);
 				end
 			end
 
@@ -733,6 +734,7 @@ function SexyInterrupter:UpdateMarkFrame()
 				button:SetAttribute("type1", "target");
 				button:SetAttribute("unit", nil);
 				button.clickKey, button.clickUnit = nil, nil;
+				button:EnableMouse(false);
 			end
 		end
 	end
