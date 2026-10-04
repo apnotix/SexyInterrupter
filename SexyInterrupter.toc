@@ -1,5 +1,5 @@
 ## Interface: 120100, 16001
-## Version: 3.0.36
+## Version: 3.0.37
 ## Title: SexyInterrupter
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
