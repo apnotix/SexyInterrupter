@@ -488,3 +488,61 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 
 	return f;
 end
+
+-- /si marks: Zustand des Fensters und der Einheiten-Suche im Chat ausgeben.
+-- /si marks reset: Fenster in die Bildschirmmitte setzen (falls außerhalb des Bildschirms).
+function SexyInterrupter:DebugMarks(reset)
+	local function Say(text)
+		DEFAULT_CHAT_FRAME:AddMessage("SI marks: " .. text, 1, 0.5, 0);
+	end
+
+	local f = self.markFrame;
+
+	if not f then
+		Say("Fenster wurde nicht erzeugt (CreateMarkFrame lief nicht).");
+		return;
+	end
+
+	if reset then
+		local db = self.db.profile.ui.editModeMarksDB;
+		local screenWidth, screenHeight = UIParent:GetSize();
+
+		db.x = (screenWidth - f:GetWidth()) / 2;
+		db.y = (screenHeight - f:GetHeight()) / 2;
+
+		local liveDB = self.EditModeHelpers.GetLiveDB(f, db);
+		liveDB.x, liveDB.y = db.x, db.y;
+
+		f:ClearAllPoints();
+		f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", db.x, db.y);
+		Say("Position zurückgesetzt.");
+	end
+
+	local p = self.db.profile.marks;
+	local left, bottom, width, height = f:GetRect();
+
+	Say(string.format("enabled=%s combatOnly=%s shown=%s editing=%s rect=%s/%s %sx%s UIParent=%sx%s",
+		tostring(p.enabled), tostring(p.combatOnly), tostring(f:IsShown()), tostring(self:IsEditingUi()),
+		tostring(left), tostring(bottom), tostring(width), tostring(height),
+		tostring(UIParent:GetWidth()), tostring(UIParent:GetHeight())));
+
+	local count = 0;
+
+	for _, unit in ipairs(SCAN_UNITS) do
+		if UnitExists(unit) then
+			local index = GetRaidTargetIndex(unit);
+
+			if index then
+				count = count + 1;
+				Say(string.format("%s: Symbol=%s canAttack=%s dead=%s", unit,
+					IsSecret(index) and "SECRET" or tostring(index),
+					IsSecret(UnitCanAttack("player", unit)) and "SECRET" or tostring(UnitCanAttack("player", unit)),
+					IsSecret(UnitIsDeadOrGhost(unit)) and "SECRET" or tostring(UnitIsDeadOrGhost(unit))));
+			end
+		end
+	end
+
+	if count == 0 then
+		Say("keine Einheit mit Symbol gefunden (target/focus/mouseover/boss/nameplates).");
+	end
+end

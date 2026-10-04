@@ -558,6 +558,8 @@ function SexyInterrupter:InitOptions()
                         S(ds), S(dok)), 0.6, 0.8, 1);
                 end
             end
+        elseif msg == 'marks' or msg == 'marks reset' then
+            SexyInterrupter:DebugMarks(msg == 'marks reset');
         elseif msg == 'kick' then
             SexyInterrupter:MarkOwnInterrupt();
         else
