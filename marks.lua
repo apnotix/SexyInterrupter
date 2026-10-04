@@ -149,25 +149,26 @@ local function RowHeight(profile)
 	return profile.showCast and 38 or 26;
 end
 
-function SexyInterrupter:CreateMarkRow(index)
+-- Klick auf die Zeile = Gegner anvisieren. Secure-Buttons (TargetUnit ist im
+-- Kampf geschützt) hängen NICHT an den Zeilen, sondern direkt am Hauptframe mit
+-- festen Offsets: Zeilen werden im Kampf ständig angezeigt/versteckt/verschoben,
+-- und mit einem Secure-Button als Kind bzw. Anker wäre das dort gesperrt.
+-- Position/Größe der Buttons ändern sich nur außerhalb des Kampfes.
+function SexyInterrupter:CreateMarkClickButton(index)
 	local f = self.markFrame;
-	local row = CreateFrame("Frame", nil, f);
+	local button = CreateFrame("Button", nil, f, "SecureActionButtonTemplate");
 
-	-- Klick auf die Zeile = Gegner anvisieren. Secure-Button (TargetUnit ist im
-	-- Kampf geschützt); wird deshalb nur vorab erzeugt und nie umverankert.
-	row.click = CreateFrame("Button", nil, row, "SecureActionButtonTemplate");
-	row.click:SetAllPoints(row);
-	row.click:SetFrameLevel(row:GetFrameLevel() + 10);
-	row.click:SetHighlightTexture("Interface/Buttons/WHITE8X8");
-	row.click:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.12);
+	button:SetFrameLevel(f:GetFrameLevel() + 20);
+	button:SetHighlightTexture("Interface/Buttons/WHITE8X8");
+	button:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.12);
 	-- Je nach CVar ActionButtonUseKeyDown feuert ein Secure-Button beim Drücken
 	-- oder Loslassen: beides anmelden.
-	row.click:RegisterForClicks("AnyDown", "AnyUp");
-	row.click:SetAttribute("type", "target");
-	row.click:SetAttribute("type1", "target");
+	button:RegisterForClicks("AnyDown", "AnyUp");
+	button:SetAttribute("type", "target");
+	button:SetAttribute("type1", "target");
 
-	row.click:SetScript("OnEnter", function(self)
-		local unit = row.clickUnit;
+	button:SetScript("OnEnter", function(self)
+		local unit = self.clickUnit;
 
 		if unit and UnitExists(unit) then
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
@@ -175,7 +176,42 @@ function SexyInterrupter:CreateMarkRow(index)
 			GameTooltip:Show();
 		end
 	end);
-	row.click:SetScript("OnLeave", function() GameTooltip:Hide(); end);
+	button:SetScript("OnLeave", function() GameTooltip:Hide(); end);
+
+	f.clickButtons[index] = button;
+
+	return button;
+end
+
+-- Buttons über die Zeilen legen (nur außerhalb des Kampfes, nur bei Änderung).
+function SexyInterrupter:LayoutMarkClickButtons(editing)
+	if InCombatLockdown() then
+		return;
+	end
+
+	local f = self.markFrame;
+	local profile = self.db.profile.marks;
+	local rowHeight = RowHeight(profile);
+	local key = table.concat({ profile.width, rowHeight, tostring(editing) }, "|");
+
+	if f.clickLayoutKey == key then
+		return;
+	end
+
+	f.clickLayoutKey = key;
+
+	for index, button in ipairs(f.clickButtons) do
+		button:ClearAllPoints();
+		button:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -(HEADER_HEIGHT + (index - 1) * (rowHeight + ROW_GAP)));
+		button:SetSize(profile.width, rowHeight);
+		-- Im Edit Mode dürfen die Buttons das Verschieben des Fensters nicht blockieren.
+		button:EnableMouse(not editing);
+	end
+end
+
+function SexyInterrupter:CreateMarkRow(index)
+	local f = self.markFrame;
+	local row = CreateFrame("Frame", nil, f);
 
 	row.bg = row:CreateTexture(nil, "BACKGROUND");
 	row.bg:SetAllPoints(row);
@@ -583,7 +619,7 @@ function SexyInterrupter:UpdateMarkFrame()
 	local height = HEADER_HEIGHT + profile.maxrows * (rowHeight + ROW_GAP);
 
 	-- Größe nur bei Änderung setzen (nicht während eines Edit-Mode-Drags anfassen).
-	if f.lastWidth ~= width or f.lastHeight ~= height then
+	if (f.lastWidth ~= width or f.lastHeight ~= height) and not InCombatLockdown() then
 		f:SetSize(width, height);
 		f.lastWidth, f.lastHeight = width, height;
 	end
@@ -594,6 +630,8 @@ function SexyInterrupter:UpdateMarkFrame()
 	f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
 	f.bg:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0);
 	f.bg:SetHeight(HEADER_HEIGHT + math.min(#entries, profile.maxrows) * (rowHeight + ROW_GAP));
+
+	self:LayoutMarkClickButtons(editing);
 
 	f.header:SetText(L["Enemy marks"]);
 	f.count:SetText(#entries .. " " .. L["marked"]);
@@ -616,26 +654,29 @@ function SexyInterrupter:UpdateMarkFrame()
 		else
 			SetIcon(row.icon, entry.index, entry.unit);
 			row.targetBorder:SetShown(UnitExists("target") and IsSameUnit(entry.unit, "target"));
+
 			if not InCombatLockdown() then
 				-- Namensplaketten-Tokens lassen sich auf diesem Client nicht per
 				-- Secure-"target" anvisieren: dort stattdessen per Name (Makro).
+				local button = f.clickButtons[position];
 				local name = UnitName(entry.unit);
 				local useMacro = entry.unit:find("^nameplate") and name and not IsSecret(name);
 				local key = entry.unit .. "|" .. (useMacro and name or "");
 
-				if row.clickKey ~= key then
+				if button and button.clickKey ~= key then
 					if useMacro then
-						row.click:SetAttribute("type1", "macro");
-						row.click:SetAttribute("macrotext1", "/targetexact " .. name);
+						button:SetAttribute("type1", "macro");
+						button:SetAttribute("macrotext1", "/targetexact " .. name);
 					else
-						row.click:SetAttribute("type1", "target");
-						row.click:SetAttribute("unit", entry.unit);
+						button:SetAttribute("type1", "target");
+						button:SetAttribute("unit", entry.unit);
 					end
 
-					row.clickKey = key;
-					row.clickUnit = entry.unit;
+					button.clickKey = key;
+					button.clickUnit = entry.unit;
 				end
 			end
+
 
 			row.name:SetText(UnitName(entry.unit));
 			UpdateHealth(row, entry.unit);
@@ -665,6 +706,19 @@ function SexyInterrupter:UpdateMarkFrame()
 		f.rows[position]:Hide();
 	end
 
+	-- Nicht belegte Buttons von ihrem alten Ziel lösen (nur außerhalb des Kampfes).
+	if not InCombatLockdown() then
+		for position = (editing and 0 or shown) + 1, #f.clickButtons do
+			local button = f.clickButtons[position];
+
+			if button.clickKey ~= nil then
+				button:SetAttribute("type1", "target");
+				button:SetAttribute("unit", nil);
+				button.clickKey, button.clickUnit = nil, nil;
+			end
+		end
+	end
+
 	f:Show();
 end
 
@@ -674,6 +728,7 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 	local f = CreateFrame("Frame", "SexyInterrupterMarks", UIParent);
 
 	f.rows = {};
+	f.clickButtons = {};
 	self.markFrame = f;
 
 	local height = HEADER_HEIGHT + profile.maxrows * (RowHeight(profile) + ROW_GAP);
@@ -713,6 +768,7 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 	-- Alle Zeilen vorab erzeugen (secure Buttons dürfen nicht im Kampf entstehen).
 	for index = 1, 8 do
 		self:CreateMarkRow(index);
+		self:CreateMarkClickButton(index);
 	end
 
 	f:Hide();
@@ -827,20 +883,10 @@ function SexyInterrupter:DebugMarks(reset)
 			Secrecy(UnitIsUnit("target", "nameplate1")), Secrecy(UnitGUID("target")), Secrecy(UnitName("target"))));
 	end
 
-	for index, row in ipairs(f.rows) do
-		if row:IsShown() then
-			Say(string.format("Zeile %d: clickUnit=%s Kampf=%s", index, tostring(row.clickUnit), tostring(InCombatLockdown())));
+	for index, button in ipairs(f.clickButtons) do
+		if button.clickUnit then
+			Say(string.format("Button %d: unit=%s Kampf=%s", index, tostring(button.clickUnit), tostring(InCombatLockdown())));
 		end
-	end
-
-	do
-		local tokens = {};
-
-		for _, entry in ipairs(CollectMarkedUnits(p.symbols)) do
-			tinsert(tokens, entry.unit);
-		end
-
-		Say("Angezeigt (Collect): " .. table.concat(tokens, ", "));
 	end
 
 	Say("Icon-Test: " .. tostring(self.lastIconError));
