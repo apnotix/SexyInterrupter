@@ -979,6 +979,7 @@ function SexyInterrupter:UpdateUI(rows)
 	for cx, value in pairs(rows) do
 		if not _G["SexyInterrupterRow" .. cx] then
 			local f = CreateFrame("Frame", "SexyInterrupterRow" .. cx, SexyInterrupterAnchor);
+			f.rowIndex = cx;
 
 			f:SetSize(20, self.db.profile.ui.bars.barheight);
 
@@ -1158,7 +1159,10 @@ function SexyInterrupter:UpdateRowClick(rowParent, interrupter)
 	if not rowParent.click then
 		local click = CreateFrame("Button", nil, rowParent, "SecureActionButtonTemplate");
 
-		click:SetAllPoints(rowParent);
+		-- rowParent selbst ist nur 20px breit - die sichtbare Zeile ist die Leiste.
+		click:SetAllPoints(_G["SexyInterrupterStatusBar" .. rowParent.rowIndex] or rowParent);
+		click:SetHighlightTexture("Interface\Buttons\WHITE8X8");
+		click:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.12);
 		-- Unter dem Fähigkeiten-Icon-Hitbox (Tooltip), aber über der Leiste.
 		click:SetFrameLevel(3);
 		click:RegisterForClicks("AnyDown", "AnyUp");
@@ -1368,7 +1372,7 @@ function SexyInterrupter:OnUpdate(elapsed)
 		local rowParent = _G["SexyInterrupterRow" .. rowIndex];
 
 		if not rowParent.targetBorder and SexyInterrupter.CreateTargetBorder then
-			rowParent.targetBorder = SexyInterrupter:CreateTargetBorder(rowParent);
+			rowParent.targetBorder = SexyInterrupter:CreateTargetBorder(_G["SexyInterrupterStatusBar" .. rowIndex] or rowParent);
 		end
 
 		if rowParent.targetBorder then

@@ -158,6 +158,8 @@ function SexyInterrupter:CreateMarkRow(index)
 	row.click = CreateFrame("Button", nil, row, "SecureActionButtonTemplate");
 	row.click:SetAllPoints(row);
 	row.click:SetFrameLevel(row:GetFrameLevel() + 10);
+	row.click:SetHighlightTexture("Interface\Buttons\WHITE8X8");
+	row.click:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.12);
 	-- Je nach CVar ActionButtonUseKeyDown feuert ein Secure-Button beim Drücken
 	-- oder Loslassen: beides anmelden.
 	row.click:RegisterForClicks("AnyDown", "AnyUp");
@@ -785,6 +787,12 @@ function SexyInterrupter:DebugMarks(reset)
 		local function Secrecy(v) return IsSecret(v) and "SECRET" or "offen"; end
 		Say(string.format("Secrecy: UnitIsUnit=%s GUID=%s Name=%s",
 			Secrecy(UnitIsUnit("target", "nameplate1")), Secrecy(UnitGUID("target")), Secrecy(UnitName("target"))));
+	end
+
+	for index, row in ipairs(f.rows) do
+		if row:IsShown() then
+			Say(string.format("Zeile %d: clickUnit=%s Kampf=%s", index, tostring(row.clickUnit), tostring(InCombatLockdown())));
+		end
 	end
 
 	Say("Icon-Test: " .. tostring(self.lastIconError));
