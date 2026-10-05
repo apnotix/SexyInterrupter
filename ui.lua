@@ -921,7 +921,7 @@ function SexyInterrupter:UpdateFrames()
 	for _, child in ipairs({ SexyInterrupterAnchor:GetChildren() }) do
 		if child:GetName() and string.find(child:GetName(), "SexyInterrupterRow") then
 			for _, subchild in ipairs({ child:GetChildren() }) do
-				if string.find(subchild:GetName(), "SexyInterrupterStatusBar") then
+				if subchild:GetName() and string.find(subchild:GetName(), "SexyInterrupterStatusBar") then
 					subchild:SetSize(self.db.profile.ui.window.width - 10, self.db.profile.ui.bars.barheight)
 					subchild:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.profile.ui.bars.texture));
 					subchild:SetStatusBarColor(self.db.profile.ui.bars.barcolor.r, self.db.profile.ui.bars.barcolor.g, self.db.profile.ui.bars.barcolor.b, self.db.profile.ui.bars.barcolor.a);
