@@ -900,10 +900,13 @@ function SexyInterrupter:DebugMarks(reset)
 
 			if index then
 				count = count + 1;
-				Say(string.format("%s: Symbol=%s canAttack=%s dead=%s", unit,
-					IsSecret(index) and "SECRET" or tostring(index),
-					IsSecret(UnitCanAttack("player", unit)) and "SECRET" or tostring(UnitCanAttack("player", unit)),
-					IsSecret(UnitIsDeadOrGhost(unit)) and "SECRET" or tostring(UnitIsDeadOrGhost(unit))));
+				local function V(value)
+					return IsSecret(value) and "SECRET" or tostring(value);
+				end
+
+				Say(string.format("%s: Symbol=%s canAttack=%s isDead=%s deadOrGhost=%s health=%s healthMax=%s Kampf=%s", unit,
+					V(index), V(UnitCanAttack("player", unit)), V(UnitIsDead(unit)), V(UnitIsDeadOrGhost(unit)),
+					V(UnitHealth(unit)), V(UnitHealthMax(unit)), tostring(InCombatLockdown())));
 			end
 		end
 	end

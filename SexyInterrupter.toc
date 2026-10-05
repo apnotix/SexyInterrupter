@@ -28,5 +28,7 @@ events.lua
 utils.lua
 communication.lua
 ui.lua
-marks.lua
+# Gegner-Marker-Fenster vorerst deaktiviert (Klick/Tot-Erkennung im Kampf unzuverlaessig).
+# Zum Reaktivieren die Raute entfernen; Code in marks.lua ist vollstaendig vorhanden.
+#marks.lua
 SexyInterrupter.xml

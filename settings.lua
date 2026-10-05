@@ -559,7 +559,11 @@ function SexyInterrupter:InitOptions()
                 end
             end
         elseif msg == 'marks' or msg == 'marks reset' then
-            SexyInterrupter:DebugMarks(msg == 'marks reset');
+            if SexyInterrupter.DebugMarks then
+                SexyInterrupter:DebugMarks(msg == 'marks reset');
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Gegner-Marker-Fenster ist deaktiviert.", 1, 0.5, 0);
+            end
         elseif msg == 'kick' then
             SexyInterrupter:MarkOwnInterrupt();
         else

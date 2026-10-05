@@ -269,7 +269,8 @@ function SexyInterrupter:CreateUi()
 		SexyInterrupter:RegisterEditModeSettings(EME, f, c);
 
 		-- Gegner-Marker-Fenster (marks.lua) registriert sein eigenes Edit-Mode-Frame.
-		local markFrame = SexyInterrupter:CreateMarkFrame(EME, SexyInterrupter.EditModeHelpers);
+		-- nil, solange marks.lua nicht in der .toc geladen wird.
+		local markFrame = SexyInterrupter.CreateMarkFrame and SexyInterrupter:CreateMarkFrame(EME, SexyInterrupter.EditModeHelpers) or nil;
 
 		-- The library's dialog builds its sliders from ITS per-layout db (100
 		-- when a value is missing, e.g. after switching to a layout it hasn't
