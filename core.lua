@@ -53,6 +53,7 @@ function SexyInterrupter:RegisterEvents()
     -- for why this replaces COMBAT_LOG_EVENT_UNFILTERED for cooldown detection.
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_SUCCEEDED");
 	self:RegisterEvent("PLAYER_TARGET_CHANGED", "PLAYER_TARGET_CHANGED");
+	self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN");
 	self:RegisterEvent("PLAYER_REGEN_DISABLED", "PLAYER_REGEN_DISABLED");
 	self:RegisterEvent("PLAYER_REGEN_ENABLED", "PLAYER_REGEN_ENABLED");
 		

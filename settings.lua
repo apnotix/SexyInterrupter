@@ -85,6 +85,19 @@ for _, family in ipairs({
     end
 end
 
+-- Schamanen-Schocks (Classic/Forever) teilen sich einen gemeinsamen Cooldown:
+-- ein Frost- oder Flammenschock legt auch Erdschock (den Interrupt) lahm. Ein
+-- Cast dieser Zauber zählt daher als Nutzung von Erdschock (Rang 1) - ohne
+-- selbst als Kick zu gelten.
+SI.sharedCooldownSpells = {};
+
+for _, spellId in ipairs({
+    8056, 8058, 10472, 10473, 25464, 49235, 49236,                 -- Frostschock
+    8050, 8052, 8053, 10447, 10448, 29228, 25457, 49232, 49233,    -- Flammenschock
+}) do
+    SI.sharedCooldownSpells[spellId] = 8042;
+end
+
 -- Fallback-Abklingzeit (Sekunden), falls GetSpellBaseCooldown für den Zauber
 -- nichts liefert (Classic-Client ohne diese Daten).
 SI.fallbackCooldowns = {};

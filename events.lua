@@ -257,6 +257,64 @@ function SexyInterrupter:MarkOwnInterrupt()
 	SexyInterrupter:SendInterrupt(interrupter.name, foundSpellId, cooldownLeft);
 end
 
+-- Aktive Cooldown-Prüfung für die EIGENEN Interrupts: feuert, sobald sich
+-- irgendein Cooldown ändert (z. B. auch durch geteilte Cooldowns wie die
+-- Schamanen-Schocks oder Cooldown-Verkürzungen) und meldet einen neu aktiven
+-- Interrupt-Cooldown an die Gruppe, ohne dass der Interrupt selbst gecastet
+-- werden muss. Fremde Cooldowns sind nicht lesbar - die melden deren eigene
+-- Clients über denselben Weg.
+function SexyInterrupter:SPELL_UPDATE_COOLDOWN()
+	if not SI_Globals or SI_Globals.numInterrupters == 0 then
+		return;
+	end
+
+	-- Das Event feuert sehr oft: höchstens alle 0,2 s prüfen.
+	local now = GetTime();
+
+	if self.lastCooldownScan and now - self.lastCooldownScan < 0.2 then
+		return;
+	end
+
+	self.lastCooldownScan = now;
+
+	local interrupter = SexyInterrupter:GetInterrupter(select(1, UnitName("player")));
+
+	if not interrupter then
+		return;
+	end
+
+	local seenFamily = {};
+
+	for _, spellId in ipairs(self.interruptSpells) do
+		local family = self.spellFamily[spellId] or spellId;
+
+		if not seenFamily[family] then
+			local start, duration = GetSpellCooldownCompat(spellId);
+
+			-- Geheime Werte (im Kampf möglich) und die ~1,5 s Global Cooldown überspringen.
+			if start and duration and not (issecretvalue and (issecretvalue(start) or issecretvalue(duration)))
+				and start > 0 and duration > 2 then
+				local readyTime = start + duration;
+
+				if readyTime > now then
+					seenFamily[family] = true;
+
+					local known = interrupter.abilities and interrupter.abilities[spellId];
+
+					-- Nur melden, wenn wir diesen Cooldown noch nicht kennen.
+					if not known or math.abs((known.readyTime or 0) - readyTime) > 0.5 then
+						interrupter.abilities = interrupter.abilities or {};
+						interrupter.abilities[spellId] = { cooldown = duration, readyTime = readyTime };
+
+						SexyInterrupter:UpdateInterrupterStatus();
+						SexyInterrupter:SendInterrupt(interrupter.name, spellId, readyTime - now);
+					end
+				end
+			end
+		end
+	end
+end
+
 function SexyInterrupter:COMBAT_LOG_EVENT_UNFILTERED()
 	local timestamp, event, _, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, extraArg1, extraArg2, extraArg3, extraArg4, extraArg5, extraArg6, extraArg7, extraArg8, extraArg9, extraArg10 = CombatLogGetCurrentEventInfo()
 
@@ -448,8 +506,18 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 		return;
 	end
 
-	if not self.interruptSpellSet[spellID] then
+	-- Zauber mit gemeinsamem Cooldown (Schamanen-Schocks) laufen als Nutzung des
+	-- Interrupts, ohne selbst ein Kick zu sein.
+	local sharedAs = self.sharedCooldownSpells[spellID];
+
+	if not self.interruptSpellSet[spellID] and not sharedAs then
 		return;
+	end
+
+	local isKick = not sharedAs;
+
+	if sharedAs then
+		spellID = sharedAs;
 	end
 
 	-- Pet-Zauber (z. B. Spell Lock des Wichtels/Teufelsjägers) zählen für den
@@ -512,7 +580,9 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 	};
 
 	-- Für den festen Rotationsmodus: dieser Spieler hat zuletzt gekickt.
-	SexyInterrupter.lastKicker = interrupter;
+	if isKick then
+		SexyInterrupter.lastKicker = interrupter;
+	end
 
 	SexyInterrupter:UpdateInterrupterStatus();
 
