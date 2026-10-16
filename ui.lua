@@ -726,6 +726,7 @@ SexyInterrupter.EditModeHelpers = {
 	Select = RegisterEditModeSelectDropdown,
 	GetLiveDB = GetLiveDB,
 	ComputeBottomLeft = ComputeBottomLeft,
+	ApplyBackdrop = ApplyBackdrop,
 };
 
 function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame)
@@ -893,7 +894,14 @@ function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame
 
 	RegisterEditModeCheckbox(EME, messageFrame, "flash", L["Flash display"],
 		function() return self.db.profile.notification.flash end,
-		function(value) self.db.profile.notification.flash = value; end);
+		function(value)
+			self.db.profile.notification.flash = value;
+
+			-- Läuft gerade ein Flash, beim Abschalten sofort beenden.
+			if not value and SexyInterrupterBlueWarningFrame then
+				SexyInterrupterBlueWarningFrame:Hide();
+			end
+		end);
 
 	RegisterEditModeCheckbox(EME, messageFrame, "interruptmessage", L["Show chat message"],
 		function() return self.db.profile.notification.interruptmessage end,

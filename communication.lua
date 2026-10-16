@@ -79,6 +79,7 @@ function SexyInterrupter:SendUserInformation(player, realm, target)
     end
 
     infos.talents = talents;
+    infos.knowsInterrupt = SexyInterrupter:PlayerKnowsAnyInterruptSpell();
 
     SexyInterrupter:SendMessage('userinfos', infos);
 end
@@ -103,6 +104,7 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
     interrupter.classEN = infos.classEN;
     interrupter.role = infos.role;
     interrupter.talents = infos.talents;
+    interrupter.knowsInterrupt = infos.knowsInterrupt;
 
     -- UpdateInterrupters() (utils.lua) ist der einzige Code, der inrange für
     -- ANDERE Spieler per UnitInRangeCompat() setzt, wird aber laut eigenem
@@ -136,7 +138,7 @@ function SexyInterrupter:ReceiveUserInformation(player, realm, infos)
     end
 
     if interrupter.classEN and interrupter.role ~= 'NONE' then
-        interrupter.canInterrupt = SexyInterrupter:CanClassRoleInterrupt(interrupter.classEN, interrupter.role);
+        interrupter.canInterrupt = SexyInterrupter:GuessCanInterrupt(interrupter);
     else
         interrupter.canInterrupt = true;
     end

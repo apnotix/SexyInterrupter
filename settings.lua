@@ -546,6 +546,8 @@ function SexyInterrupter:InitOptions()
         elseif msg == 'debug' then
             SexyInterrupter.debug = not SexyInterrupter.debug;
             DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Debug " .. (SexyInterrupter.debug and "an" or "aus"), 1, 0.5, 0);
+        elseif msg == 'probe' then
+            SexyInterrupter:ToggleProbe();
         elseif msg == 'range' then
             -- Rohwerte der Reichweiten-APIs je Gruppenmitglied ausgeben.
             local function S(v)

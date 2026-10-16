@@ -6,8 +6,9 @@ local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
 local ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons";
-local HEADER_HEIGHT = 16;
-local ROW_GAP = 3;
+local HEADER_HEIGHT = 5;   -- oberer Innenabstand wie im Interrupter-Fenster
+local ROW_GAP = 0;
+local PADDING = 5;
 local TICK = 0.15;
 
 local SYMBOL_NAMES = {
@@ -145,8 +146,14 @@ local function P()
 	return SexyInterrupter.db.profile.marks;
 end
 
+local CAST_HEIGHT = 4;   -- schmale Cast-Leiste am unteren Rand der Gesundheitsleiste
+
+-- Zeilenhöhe exakt wie im Interrupter-Fenster (Option "Bar height"); die
+-- Cast-Leiste liegt als schmaler Streifen INNERHALB der Leiste.
 local function RowHeight(profile)
-	return profile.showCast and 38 or 26;
+	local barHeight = SexyInterrupter.db.profile.ui.bars.barheight;
+
+	return barHeight;
 end
 
 -- Klick auf die Zeile = Gegner anvisieren. Secure-Buttons (TargetUnit ist im
@@ -212,8 +219,8 @@ function SexyInterrupter:LayoutMarkClickButtons(editing)
 
 	for index, button in ipairs(f.clickButtons) do
 		button:ClearAllPoints();
-		button:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -(HEADER_HEIGHT + (index - 1) * (rowHeight + ROW_GAP)));
-		button:SetSize(profile.width, rowHeight);
+		button:SetPoint("TOPLEFT", f, "TOPLEFT", PADDING, -(HEADER_HEIGHT + (index - 1) * (rowHeight + ROW_GAP)));
+		button:SetSize(profile.width - 2 * PADDING, rowHeight);
 		-- Im Edit Mode dürfen die Buttons das Verschieben des Fensters nicht blockieren.
 		button:EnableMouse(not editing and button.clickKey ~= nil);
 	end
@@ -223,45 +230,41 @@ function SexyInterrupter:CreateMarkRow(index)
 	local f = self.markFrame;
 	local row = CreateFrame("Frame", nil, f);
 
-	row.bg = row:CreateTexture(nil, "BACKGROUND");
-	row.bg:SetAllPoints(row);
-	row.bg:SetColorTexture(0.09, 0.07, 0.05, 0.85);
-
-	row.targetBorder = self:CreateTargetBorder(row);
-
-	row.glow = row:CreateTexture(nil, "BACKGROUND", nil, 1);
-	row.glow:SetAllPoints(row);
-	row.glow:SetColorTexture(1, 0.83, 0.3, 0.3);
-	row.glow:Hide();
-
-	row.icon = row:CreateTexture(nil, "ARTWORK");
-	row.icon:SetPoint("LEFT", row, "LEFT", 4, 0);
-
-	row.name = row:CreateFontString(nil, "OVERLAY");
-	row.name:SetJustifyH("LEFT");
-	row.name:SetWordWrap(false);
-
-	row.pct = row:CreateFontString(nil, "OVERLAY");
-	row.pct:SetJustifyH("RIGHT");
-
+	-- Wie im Interrupter-Fenster: eine Leiste (Gesundheit) mit Symbol, Name und
+	-- Prozent IN der Leiste. Alles liegt auf dem hp-Frame, damit es nicht hinter
+	-- der Leiste verschwindet (Kind-Frames liegen über den Regionen des Elternteils).
 	row.hp = CreateFrame("StatusBar", nil, row);
 	row.hp.bg = row.hp:CreateTexture(nil, "BACKGROUND");
 	row.hp.bg:SetAllPoints(row.hp);
-	row.hp.bg:SetColorTexture(0.05, 0.04, 0.03, 1);
-	row.hp:SetStatusBarColor(0.70, 0.21, 0.18, 1);
+	row.hp.bg:SetColorTexture(0, 0, 0, 0.4);
+
+	row.targetBorder = self:CreateTargetBorder(row.hp);
+
+	row.glow = row.hp:CreateTexture(nil, "ARTWORK");
+	row.glow:SetAllPoints(row.hp);
+	row.glow:SetColorTexture(1, 0.83, 0.3, 0.3);
+	row.glow:Hide();
+
+	row.icon = row.hp:CreateTexture(nil, "OVERLAY");
+
+	row.name = row.hp:CreateFontString(nil, "OVERLAY");
+	row.name:SetJustifyH("LEFT");
+	row.name:SetWordWrap(false);
+
+	row.pct = row.hp:CreateFontString(nil, "OVERLAY");
+	row.pct:SetJustifyH("RIGHT");
 
 	row.cast = CreateFrame("StatusBar", nil, row);
 	row.cast.bg = row.cast:CreateTexture(nil, "BACKGROUND");
 	row.cast.bg:SetAllPoints(row.cast);
-	row.cast.bg:SetColorTexture(0.05, 0.04, 0.03, 1);
+	row.cast.bg:SetColorTexture(0, 0, 0, 0.4);
 
 	row.castName = row.cast:CreateFontString(nil, "OVERLAY");
-	row.castName:SetJustifyH("LEFT");
-	row.castName:SetPoint("LEFT", row.cast, "LEFT", 3, 0);
+	row.castName:SetJustifyH("RIGHT");
 
 	row.castTime = row.cast:CreateFontString(nil, "OVERLAY");
 	row.castTime:SetJustifyH("RIGHT");
-	row.castTime:SetPoint("RIGHT", row.cast, "RIGHT", -3, 0);
+	row.castTime:Hide();   -- kein Platz in der schmalen Leiste
 
 	f.rows[index] = row;
 
@@ -271,16 +274,21 @@ end
 -- Layout/Schrift/Textur eines Rows an die aktuellen Einstellungen anpassen.
 function SexyInterrupter:LayoutMarkRow(row, position)
 	local profile = self.db.profile.marks;
+	local ui = self.db.profile.ui;
 	local rowHeight = RowHeight(profile);
-	local font = LSM:Fetch("font", self.db.profile.ui.font);
-	local fontSize = math.max(8, math.min(self.db.profile.ui.fontsize, 12));
-	local texture = LSM:Fetch("statusbar", self.db.profile.ui.bars.texture);
-	local textLeft = rowHeight - 6 + 10;
+	local barHeight = ui.bars.barheight;
+	local font = LSM:Fetch("font", ui.font);
+	local fontSize = ui.fontsize;
+	local texture = LSM:Fetch("statusbar", ui.bars.texture);
+	local barColor = ui.bars.barcolor;
+	local fontColor = ui.fontcolor;
+	local iconSize = math.min(barHeight - 2, 20);
 
 	-- Nur neu anordnen, wenn sich etwas geändert hat: ein Umlayout alle 0,15 s
 	-- (ClearAllPoints/SetPoint) lässt die Maus-Fokus-/Klick-Erkennung des
 	-- Secure-Buttons auf der Zeile immer wieder abreißen (Klick kommt nie an).
-	local key = table.concat({ position, profile.width, rowHeight, tostring(font), fontSize, tostring(texture) }, "|");
+	local key = table.concat({ position, profile.width, rowHeight, barHeight, tostring(font), fontSize, tostring(texture),
+		barColor.r, barColor.g, barColor.b, barColor.a, fontColor.r, fontColor.g, fontColor.b }, "|");
 
 	if row.layoutKey == key then
 		return;
@@ -289,50 +297,62 @@ function SexyInterrupter:LayoutMarkRow(row, position)
 	row.layoutKey = key;
 
 	row:ClearAllPoints();
-	row:SetPoint("TOPLEFT", self.markFrame, "TOPLEFT", 0, -(HEADER_HEIGHT + (position - 1) * (rowHeight + ROW_GAP)));
-	row:SetSize(profile.width, rowHeight);
+	row:SetPoint("TOPLEFT", self.markFrame, "TOPLEFT", PADDING, -(HEADER_HEIGHT + (position - 1) * (rowHeight + ROW_GAP)));
+	row:SetSize(profile.width - 2 * PADDING, rowHeight);
 
-	row.icon:SetSize(rowHeight - 6, rowHeight - 6);
+	row.hp:SetStatusBarTexture(texture);
+	row.hp:SetStatusBarColor(barColor.r, barColor.g, barColor.b, barColor.a);
+	row.hp:ClearAllPoints();
+	row.hp:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0);
+	row.hp:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0);
+	row.hp:SetHeight(barHeight);
+
+	row.icon:ClearAllPoints();
+	row.icon:SetPoint("LEFT", row.hp, "LEFT", 2, 0);
+	row.icon:SetSize(iconSize, iconSize);
 
 	row.name:SetFont(font, fontSize, "OUTLINE");
+	row.name:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
 	row.name:ClearAllPoints();
-	row.name:SetPoint("TOPLEFT", row, "TOPLEFT", textLeft, -2);
-	row.name:SetPoint("TOPRIGHT", row, "TOPRIGHT", -40, -2);
+	row.name:SetPoint("LEFT", row.hp, "LEFT", iconSize + 6, 0);
+	row.name:SetPoint("RIGHT", row.castName, "LEFT", -4, 0);
 	row.name:SetHeight(fontSize + 2);
 
 	row.pct:SetFont(font, fontSize, "OUTLINE");
+	row.pct:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
 	row.pct:ClearAllPoints();
-	row.pct:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -2);
-
-	row.hp:SetStatusBarTexture(texture);
-	row.hp:ClearAllPoints();
-	row.hp:SetPoint("TOPLEFT", row, "TOPLEFT", textLeft, -(fontSize + 5));
-	row.hp:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -(fontSize + 5));
-	row.hp:SetHeight(7);
+	row.pct:SetPoint("RIGHT", row.hp, "RIGHT", -4, 0);
 
 	row.cast:SetStatusBarTexture(texture);
 	row.cast:ClearAllPoints();
-	row.cast:SetPoint("TOPLEFT", row.hp, "BOTTOMLEFT", 0, -3);
-	row.cast:SetPoint("TOPRIGHT", row.hp, "BOTTOMRIGHT", 0, -3);
-	row.cast:SetHeight(11);
-	row.castName:SetFont(font, 9, "OUTLINE");
+	row.cast:SetFrameLevel(row.hp:GetFrameLevel() + 2);
+	row.cast:SetPoint("BOTTOMLEFT", row.hp, "BOTTOMLEFT", 0, 0);
+	row.cast:SetPoint("BOTTOMRIGHT", row.hp, "BOTTOMRIGHT", 0, 0);
+	row.cast:SetHeight(CAST_HEIGHT);
+	row.castName:SetFont(font, math.max(8, fontSize - 2), "OUTLINE");
+	row.castName:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
+	row.castName:ClearAllPoints();
+	row.castName:SetPoint("RIGHT", row.hp, "RIGHT", -40, 0);
 	row.castTime:SetFont(font, 9, "OUTLINE");
 end
 
 -- Alle angreifbaren Gegner mit Symbol einsammeln: ein Symbol existiert nur
 -- einmal, daher dient der Symbol-Index als Schlüssel.
-local SCAN_UNITS = { "target", "focus", "mouseover", "boss1", "boss2", "boss3", "boss4", "boss5" };
+-- Namensplaketten zuerst: deren Token bleiben pro Mob stabil (anders als "target"),
+-- und bei Dubletten gewinnt der erste Treffer.
+local SCAN_UNITS = {};
 
-for _, unit in ipairs({ "targettarget", "focustarget", "mouseovertarget", "pettarget" }) do
+for i = 1, 40 do
+	tinsert(SCAN_UNITS, "nameplate" .. i);
+end
+
+for _, unit in ipairs({ "target", "focus", "mouseover", "boss1", "boss2", "boss3", "boss4", "boss5",
+	"targettarget", "focustarget", "mouseovertarget", "pettarget" }) do
 	tinsert(SCAN_UNITS, unit);
 end
 
 for i = 1, 4 do
 	tinsert(SCAN_UNITS, "party" .. i .. "target");
-end
-
-for i = 1, 40 do
-	tinsert(SCAN_UNITS, "nameplate" .. i);
 end
 
 -- Ziele der Raid-Mitglieder: nur wenn es einen Raid gibt (siehe CollectMarkedUnits).
@@ -404,6 +424,7 @@ local function CollectMarkedUnits(symbols)
 	-- geheimen Werten nicht von Plaketten-Einträgen unterscheiden: nur Rückfall,
 	-- wenn sonst nichts gefunden wurde.
 	local fallbackList = {};
+	local sawDead = false;
 
 	local units = SCAN_UNITS;
 
@@ -420,8 +441,8 @@ local function CollectMarkedUnits(symbols)
 	end
 
 	for position, unit in ipairs(units) do
-		if UnitExists(unit) and SafeBool(UnitCanAttack("player", unit), true)
-			and not IsDeadUnit(unit) then
+		if UnitExists(unit) and SafeBool(UnitCanAttack("player", unit), true) then
+			local dead = IsDeadUnit(unit);
 			local index = GetRaidTargetIndex(unit);
 			local marked = false;
 
@@ -440,7 +461,13 @@ local function CollectMarkedUnits(symbols)
 				allowed = symbols[index];
 			end
 
-			if marked and allowed then
+			-- Toter markierter Mob: nicht anzeigen und der Überbrückung (siehe
+			-- UpdateMarkFrame) sagen, dass sie nicht greifen darf.
+			if marked and dead then
+				sawDead = true;
+			end
+
+			if marked and allowed and not dead then
 				-- Dieselbe Einheit kann über mehrere Tokens auftauchen (target + nameplate).
 				local duplicate = false;
 				local isFallback = unit:find("^party%d+target$") or unit:find("^raid%d+target$");
@@ -479,7 +506,7 @@ local function CollectMarkedUnits(symbols)
 
 	table.sort(list, function(a, b) return a.rank < b.rank; end);
 
-	return list;
+	return list, sawDead;
 end
 
 -- Liefert interruptible (true/false) oder nil, wenn gerade nichts gecastet wird.
@@ -581,6 +608,7 @@ local function FillPreviewRow(row, entry, profile)
 		row.cast:Show();
 	else
 		row.cast:Hide();
+		row.castName:SetText("");
 	end
 
 	return highlight;
@@ -597,7 +625,7 @@ function SexyInterrupter:UpdateMarkFrame()
 	local editing = self:IsEditingUi();
 
 	if not editing and (not profile.enabled or (profile.combatOnly and not UnitAffectingCombat("player"))) then
-		f:Hide();
+		f:SetAlpha(0);
 		return;
 	end
 
@@ -608,7 +636,9 @@ function SexyInterrupter:UpdateMarkFrame()
 			tinsert(entries, entry);
 		end
 	else
-		entries = CollectMarkedUnits(profile.symbols);
+		local sawDead;
+
+		entries, sawDead = CollectMarkedUnits(profile.symbols);
 
 		if profile.sort == 'cast' then
 			for _, entry in ipairs(entries) do
@@ -632,8 +662,10 @@ function SexyInterrupter:UpdateMarkFrame()
 		if #entries == 0 then
 			-- Kurz überbrücken (z. B. beim Zielwechsel ist das Ziel für einen
 			-- Moment keiner Einheit zuordenbar): Anzeige unverändert stehen lassen.
-			if not (f.lastSeen and GetTime() - f.lastSeen < 3) then
-				f:Hide();
+			-- Ausnahme: ein markierter Mob ist gerade gestorben -> sofort ausblenden.
+			if sawDead or not (f.lastSeen and GetTime() - f.lastSeen < 3) then
+				f.lastSeen = nil;
+				f:SetAlpha(0);
 			end
 
 			return;
@@ -642,9 +674,64 @@ function SexyInterrupter:UpdateMarkFrame()
 		f.lastSeen = GetTime();
 	end
 
+	-- Feste Zeilen-Slots: Secure-Buttons lassen sich im Kampf nicht umbelegen. Wer
+	-- einmal in einem Slot steht, bleibt dort (auch wenn andere wegfallen -> Lücke),
+	-- sonst würde der Klick auf eine nachgerückte Zeile den falschen/toten Mob
+	-- treffen. Außerhalb des Kampfes wird jedes Mal neu und lückenlos sortiert.
+	local slotEntries = {};
+	local last = 0;
+
+	if editing then
+		for i = 1, math.min(#entries, profile.maxrows) do
+			slotEntries[i] = entries[i];
+			last = i;
+		end
+	else
+		f.slots = f.slots or {};
+
+		if not InCombatLockdown() then
+			f.slots = {};
+		end
+
+		local byUnit, placed = {}, {};
+
+		for _, entry in ipairs(entries) do
+			byUnit[entry.unit] = entry;
+		end
+
+		for i = 1, profile.maxrows do
+			local unit = f.slots[i];
+
+			if unit and byUnit[unit] and not placed[unit] then
+				placed[unit] = true;
+			else
+				f.slots[i] = nil;
+			end
+		end
+
+		for _, entry in ipairs(entries) do
+			if not placed[entry.unit] then
+				for i = 1, profile.maxrows do
+					if not f.slots[i] then
+						f.slots[i] = entry.unit;
+						placed[entry.unit] = true;
+						break;
+					end
+				end
+			end
+		end
+
+		for i = 1, profile.maxrows do
+			if f.slots[i] then
+				slotEntries[i] = byUnit[f.slots[i]];
+				last = i;
+			end
+		end
+	end
+
 	local rowHeight = RowHeight(profile);
 	local width = profile.width;
-	local height = HEADER_HEIGHT + profile.maxrows * (rowHeight + ROW_GAP);
+	local height = HEADER_HEIGHT + profile.maxrows * (rowHeight + ROW_GAP) + PADDING;
 
 	-- Größe nur bei Änderung setzen (nicht während eines Edit-Mode-Drags anfassen).
 	if (f.lastWidth ~= width or f.lastHeight ~= height) and not InCombatLockdown() then
@@ -654,25 +741,36 @@ function SexyInterrupter:UpdateMarkFrame()
 
 	-- Sichtbarer Hintergrund passt sich der Zeilenzahl an; der Frame selbst
 	-- behält seine feste Größe (stabile Position/Auswahl im Edit Mode).
-	f.bg:ClearAllPoints();
-	f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
-	f.bg:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0);
-	f.bg:SetHeight(HEADER_HEIGHT + math.min(#entries, profile.maxrows) * (rowHeight + ROW_GAP));
+	-- Fenster-Optik wie im Interrupter-Fenster (Hintergrund, Rand, Farben aus
+	-- den gleichen Optionen); Höhe wächst mit der Zeilenzahl, der Frame selbst
+	-- behält seine feste Größe.
+	local ui = self.db.profile.ui;
+	local window = f.window;
+	local windowHeight = HEADER_HEIGHT + last * (rowHeight + ROW_GAP) + PADDING;
+	local windowKey = table.concat({ width, windowHeight, tostring(ui.window.backgroundtexture), tostring(ui.window.border),
+		ui.window.background.r, ui.window.background.g, ui.window.background.b, ui.window.background.a,
+		ui.window.bordercolor.r, ui.window.bordercolor.g, ui.window.bordercolor.b, ui.window.bordercolor.a }, "|");
 
-	self:LayoutMarkClickButtons(editing);
+	if window.styleKey ~= windowKey then
+		window.styleKey = windowKey;
+		window:SetSize(width, windowHeight);
 
-	f.header:SetText(L["Enemy marks"]);
-	f.count:SetText(#entries .. " " .. L["marked"]);
+		if window.SetBackdrop then
+			self.EditModeHelpers.ApplyBackdrop(window, self.db.profile);
+			window:SetBackdropBorderColor(ui.window.bordercolor.r, ui.window.bordercolor.g, ui.window.bordercolor.b, ui.window.bordercolor.a);
+		end
+	end
 
-	local shown = 0;
 
-	for position = 1, math.min(#entries, profile.maxrows) do
-		local entry = entries[position];
+	for position = 1, last do
+		local entry = slotEntries[position];
 		local row = f.rows[position] or self:CreateMarkRow(position);
 
+		if not entry then
+			row:Hide();
+		else
 		self:LayoutMarkRow(row, position);
 		row:Show();
-		shown = position;
 
 		local highlight = false;
 
@@ -722,6 +820,7 @@ function SexyInterrupter:UpdateMarkFrame()
 				highlight = interruptible;
 			else
 				row.cast:Hide();
+				row.castName:SetText("");
 			end
 		end
 
@@ -730,18 +829,19 @@ function SexyInterrupter:UpdateMarkFrame()
 		else
 			row.glow:Hide();
 		end
+		end
 	end
 
-	for position = shown + 1, #f.rows do
+	for position = last + 1, #f.rows do
 		f.rows[position]:Hide();
 	end
 
 	-- Nicht belegte Buttons von ihrem alten Ziel lösen (nur außerhalb des Kampfes).
 	if not InCombatLockdown() then
-		for position = (editing and 0 or shown) + 1, #f.clickButtons do
+		for position = 1, #f.clickButtons do
 			local button = f.clickButtons[position];
 
-			if button.clickKey ~= nil then
+			if not slotEntries[position] and button.clickKey ~= nil then
 				button:SetAttribute("type1", "target");
 				button:SetAttribute("unit", nil);
 				button.clickKey, button.clickUnit = nil, nil;
@@ -750,7 +850,7 @@ function SexyInterrupter:UpdateMarkFrame()
 		end
 	end
 
-	f:Show();
+	f:SetAlpha(1);
 end
 
 function SexyInterrupter:CreateMarkFrame(EME, helpers)
@@ -762,7 +862,7 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 	f.clickButtons = {};
 	self.markFrame = f;
 
-	local height = HEADER_HEIGHT + profile.maxrows * (RowHeight(profile) + ROW_GAP);
+	local height = HEADER_HEIGHT + profile.maxrows * (RowHeight(profile) + ROW_GAP) + PADDING;
 
 	f:SetSize(profile.width, height);
 	f.lastWidth, f.lastHeight = profile.width, height;
@@ -781,20 +881,14 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 
 	f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", db.x, db.y);
 
-	f.bg = f:CreateTexture(nil, "BACKGROUND");
-	f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
-	f.bg:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0);
-	f.bg:SetColorTexture(0, 0, 0, 0.2);
+	-- Eigener Frame für Hintergrund + Rand (wie SexyInterrupterAnchor), unter den Zeilen.
+	f.window = CreateFrame("Frame", nil, f, BackdropTemplateMixin and "BackdropTemplate" or nil);
+	f.window:SetFrameLevel(f:GetFrameLevel());
+	f.window:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
 
-	f.header = f:CreateFontString(nil, "OVERLAY");
-	f.header:SetFont(LSM:Fetch("font", ui.font), 11, "OUTLINE");
-	f.header:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -2);
-	f.header:SetTextColor(0.91, 0.79, 0.42, 1);
-
-	f.count = f:CreateFontString(nil, "OVERLAY");
-	f.count:SetFont(LSM:Fetch("font", ui.font), 10, "OUTLINE");
-	f.count:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -3);
-	f.count:SetTextColor(0.75, 0.68, 0.55, 1);
+	local tint = f.window:CreateTexture();
+	tint:SetColorTexture(0, 0, 0, 0.2);
+	tint:SetAllPoints(f.window);
 
 	-- Alle Zeilen vorab erzeugen (secure Buttons dürfen nicht im Kampf entstehen).
 	for index = 1, 8 do
@@ -802,7 +896,11 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 		self:CreateMarkClickButton(index);
 	end
 
-	f:Hide();
+	-- Immer angezeigt, Sichtbarkeit nur über Alpha: Show/Hide eines Frames mit
+	-- Secure-Buttons als Kindern ist im Kampf gesperrt - das Fenster erschien
+	-- sonst nicht, wenn man im Kampf markierte.
+	f:SetAlpha(0);
+	f:Show();
 
 	if EME then
 		EME:RegisterFrame(f, L["Addon name"] .. " " .. L["Enemy marks"], db, UIParent, "BOTTOMLEFT", true);

@@ -145,6 +145,17 @@ function SexyInterrupter:CanClassRoleInterrupt(classEN, role)
 	return roles[strlower(role)] and true or false;
 end
 
+-- Kann dieser (fremde) Spieler kicken? Meldet sein Client selbst, ob er einen
+-- Interrupt gelernt hat (knowsInterrupt, aus seinem Zauberbuch), gilt das; sonst
+-- (ältere Addon-Version) die grobe Klasse+Rolle-Schätzung.
+function SexyInterrupter:GuessCanInterrupt(interrupter)
+	if type(interrupter.knowsInterrupt) == "boolean" then
+		return interrupter.knowsInterrupt;
+	end
+
+	return SexyInterrupter:CanClassRoleInterrupt(interrupter.classEN, interrupter.role);
+end
+
 -- notification.soundFile holds either a LibSharedMedia sound NAME (what the
 -- picker stores) or a raw file path (the default). PlaySoundFile only
 -- understands paths, so resolve names first.
@@ -601,7 +612,7 @@ function SexyInterrupter:UpdateInterrupters()
 		end
 
 		if interrupter.classEN and interrupter.role ~= 'NONE' then
-			interrupter.canInterrupt = SexyInterrupter:CanClassRoleInterrupt(interrupter.classEN, interrupter.role);
+			interrupter.canInterrupt = SexyInterrupter:GuessCanInterrupt(interrupter);
 		else
 			interrupter.canInterrupt = true;
 		end
@@ -810,3 +821,106 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 		end
 	end
 end 
+
+-- /si probe: Diagnose-Logging, ob sich markierte Gegner (Symbol, Tot-Status,
+-- Gesundheit) im Kampf auslesen lassen. Gibt jede Sekunde den Zustand aller
+-- markierten Einheiten im Chat aus und meldet, wenn eine verschwindet.
+local PROBE_UNITS = { "target", "focus", "mouseover", "targettarget", "party1target", "party2target", "party3target", "party4target" };
+
+for i = 1, 40 do
+	tinsert(PROBE_UNITS, "nameplate" .. i);
+end
+
+local probeFrame;
+local probeSeen = {};
+
+local function ProbeSay(text)
+	DEFAULT_CHAT_FRAME:AddMessage("SI probe: " .. text, 0.6, 1, 0.6);
+end
+
+local function Probe(value)
+	if issecretvalue and issecretvalue(value) then
+		return "SECRET";
+	end
+
+	return tostring(value);
+end
+
+local function ProbeScan()
+	local combat = tostring(InCombatLockdown());
+	local nowMarked = {};
+
+	for _, unit in ipairs(PROBE_UNITS) do
+		if UnitExists(unit) then
+			local index = GetRaidTargetIndex(unit);
+			local marked = false;
+
+			pcall(function()
+				if index then
+					marked = true;
+				end
+			end);
+
+			if marked then
+				local percent = "n/a";
+
+				if UnitHealthPercent then
+					local ok, result = pcall(UnitHealthPercent, unit, false, CurveConstants and CurveConstants.ScaleTo100);
+
+					percent = ok and Probe(result) or "Fehler";
+				end
+
+				local line = string.format("%s '%s' sym=%s isDead=%s deadOrGhost=%s hp=%s/%s hp%%=%s canAttack=%s Kampf=%s",
+					unit, Probe(UnitName(unit)), Probe(index), Probe(UnitIsDead(unit)), Probe(UnitIsDeadOrGhost(unit)),
+					Probe(UnitHealth(unit)), Probe(UnitHealthMax(unit)), percent, Probe(UnitCanAttack("player", unit)), combat);
+
+				nowMarked[unit] = line;
+				ProbeSay(line);
+			end
+		end
+	end
+
+	for unit, line in pairs(probeSeen) do
+		if not nowMarked[unit] then
+			ProbeSay("VERSCHWUNDEN: " .. unit .. " (zuletzt: " .. line .. ")");
+		end
+	end
+
+	probeSeen = nowMarked;
+end
+
+function SexyInterrupter:ToggleProbe()
+	if probeFrame and probeFrame.active then
+		probeFrame.active = false;
+		probeFrame:UnregisterAllEvents();
+		probeFrame:SetScript("OnUpdate", nil);
+		ProbeSay("aus");
+		return;
+	end
+
+	if not probeFrame then
+		probeFrame = CreateFrame("Frame");
+		probeFrame:SetScript("OnEvent", function(_, event, arg1)
+			ProbeSay("Event " .. event .. " " .. Probe(arg1));
+		end);
+	end
+
+	probeFrame.active = true;
+	probeFrame.elapsed = 0;
+	probeSeen = {};
+
+	for _, event in ipairs({ "RAID_TARGET_UPDATE", "NAME_PLATE_UNIT_REMOVED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PARTY_KILL" }) do
+		pcall(probeFrame.RegisterEvent, probeFrame, event);
+	end
+
+	probeFrame:SetScript("OnUpdate", function(self, elapsed)
+		self.elapsed = self.elapsed + elapsed;
+
+		if self.elapsed >= 1 then
+			self.elapsed = 0;
+			ProbeScan();
+		end
+	end);
+
+	ProbeSay("an - markiere einen Gegner, kämpfe und töte ihn; danach /si probe zum Beenden und die Zeilen im Chat prüfen.");
+end

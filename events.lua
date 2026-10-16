@@ -378,7 +378,7 @@ function SexyInterrupter:PLAYER_SPECIALIZATION_CHANGED(...)
 		end
 
 		if interrupter.classEN and interrupter.role ~= 'NONE' then
-			interrupter.canInterrupt = SexyInterrupter:CanClassRoleInterrupt(interrupter.classEN, interrupter.role);
+			interrupter.canInterrupt = SexyInterrupter:GuessCanInterrupt(interrupter);
 		else
 			interrupter.canInterrupt = true;
 		end
@@ -464,10 +464,14 @@ end
 function SexyInterrupter:UNIT_SPELLCAST_STOP(...)
 	local event, unitTag, castGUID, spellID = ...;
 
-    if unitTag == "target" and SexyInterrupterInterruptNowText:IsVisible() then
-        SexyInterrupterInterruptNowText:SetTimeVisible(0);
-
+    if unitTag == "target" then
+        -- Flash unabhängig vom Text beenden: ist "Show message" aus, wird der Text
+        -- nie sichtbar und der Flash blieb sonst endlos stehen.
 		SexyInterrupterBlueWarningFrame:Hide();
+
+		if SexyInterrupterInterruptNowText:IsVisible() then
+			SexyInterrupterInterruptNowText:SetTimeVisible(0);
+		end
 	end
 end
 
@@ -591,11 +595,33 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 	end
 end
 
+-- Neuer Zauber gelernt (z. B. Level-Up): der Gruppe melden, sobald sich ändert,
+-- ob wir einen Interrupt kennen - sonst zeigen andere uns weiter als
+-- "kann nicht kicken" (oder umgekehrt).
+function SexyInterrupter:SPELLS_CHANGED()
+	local knows = SexyInterrupter:PlayerKnowsAnyInterruptSpell();
+
+	if self.lastKnowsInterrupt == knows then
+		return;
+	end
+
+	self.lastKnowsInterrupt = knows;
+
+	if IsInGroup() then
+		local name, realm = UnitName("player");
+
+		SexyInterrupter:SendUserInformation(name, realm, (realm and realm ~= "") and (name .. '-' .. realm) or name);
+	end
+
+	SexyInterrupter:UpdateOwnInterrupter();
+end
+
 function SexyInterrupter:PLAYER_TARGET_CHANGED()
+    -- Flash unabhängig vom Text beenden (siehe UNIT_SPELLCAST_STOP).
+	SexyInterrupterBlueWarningFrame:Hide();
+
     if SexyInterrupterInterruptNowText:IsVisible() then
         SexyInterrupterInterruptNowText:SetTimeVisible(0);
-		
-		SexyInterrupterBlueWarningFrame:Hide();
     end
 end
 
