@@ -1,0 +1,4 @@
+package-as: SexyInterrupter
+
+ignore:
+  - curseforge
