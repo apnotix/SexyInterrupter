@@ -1,14 +1,15 @@
 -- Gegner-Marker: eigenes Fenster mit den Unitframes aller Gegner, die ein
 -- Raid-Symbol tragen (Totenkopf, Kreuz, ...). Zeigt Gesundheit, den laufenden
 -- Cast und hebt unterbrechbare Casts hervor. Position/Optionen liegen wie bei
--- den anderen Fenstern im Edit Mode (EditModeExpanded-1.0).
+-- den anderen Fenstern im Edit Mode (SexyEditMode-1.0).
+local SEM = LibStub("SexyEditMode-1.0");
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
 local ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons";
-local HEADER_HEIGHT = 5;   -- oberer Innenabstand wie im Interrupter-Fenster
+local HEADER_HEIGHT = 30;  -- Rahmen oben plus Titelband (wie im Interrupter-Fenster)
 local ROW_GAP = 0;
-local PADDING = 5;
+local PADDING = 6;
 local TICK = 0.15;
 
 local SYMBOL_NAMES = {
@@ -301,7 +302,7 @@ function SexyInterrupter:LayoutMarkRow(row, position)
 	row:SetSize(profile.width - 2 * PADDING, rowHeight);
 
 	row.hp:SetStatusBarTexture(texture);
-	row.hp:SetStatusBarColor(barColor.r, barColor.g, barColor.b, barColor.a);
+	row.hp:SetStatusBarColor(0.353, 0.137, 0.125, 1);   -- Gesundheit: dunkles Rot (die Leistenfarbe gilt für die Interrupt-Zeilen)
 	row.hp:ClearAllPoints();
 	row.hp:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0);
 	row.hp:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0);
@@ -311,14 +312,14 @@ function SexyInterrupter:LayoutMarkRow(row, position)
 	row.icon:SetPoint("LEFT", row.hp, "LEFT", 2, 0);
 	row.icon:SetSize(iconSize, iconSize);
 
-	row.name:SetFont(font, fontSize, "OUTLINE");
+	self.Look.StyleText(row.name, font, fontSize);
 	row.name:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
 	row.name:ClearAllPoints();
 	row.name:SetPoint("LEFT", row.hp, "LEFT", iconSize + 6, 0);
 	row.name:SetPoint("RIGHT", row.castName, "LEFT", -4, 0);
 	row.name:SetHeight(fontSize + 2);
 
-	row.pct:SetFont(font, fontSize, "OUTLINE");
+	self.Look.StyleText(row.pct, font, fontSize);
 	row.pct:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
 	row.pct:ClearAllPoints();
 	row.pct:SetPoint("RIGHT", row.hp, "RIGHT", -4, 0);
@@ -329,11 +330,11 @@ function SexyInterrupter:LayoutMarkRow(row, position)
 	row.cast:SetPoint("BOTTOMLEFT", row.hp, "BOTTOMLEFT", 0, 0);
 	row.cast:SetPoint("BOTTOMRIGHT", row.hp, "BOTTOMRIGHT", 0, 0);
 	row.cast:SetHeight(CAST_HEIGHT);
-	row.castName:SetFont(font, math.max(8, fontSize - 2), "OUTLINE");
+	self.Look.StyleText(row.castName, font, math.max(8, fontSize - 2));
 	row.castName:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
 	row.castName:ClearAllPoints();
 	row.castName:SetPoint("RIGHT", row.hp, "RIGHT", -40, 0);
-	row.castTime:SetFont(font, 9, "OUTLINE");
+	self.Look.StyleText(row.castTime, font, 9);
 end
 
 -- Alle angreifbaren Gegner mit Symbol einsammeln: ein Symbol existiert nur
@@ -614,6 +615,37 @@ local function FillPreviewRow(row, entry, profile)
 	return highlight;
 end
 
+-- Löst Klick-Buttons von ihrem Ziel und schaltet ihre Maus ab (nur außerhalb des
+-- Kampfes möglich). keep(position) -> true = Button bleibt belegt.
+local function ReleaseClickButtons(f, keep)
+	if InCombatLockdown() then
+		return;
+	end
+
+	for position, button in ipairs(f.clickButtons) do
+		if button.clickKey ~= nil and not (keep and keep(position)) then
+			button:SetAttribute("type1", "target");
+			button:SetAttribute("unit", nil);
+			button.clickKey, button.clickUnit = nil, nil;
+			button:EnableMouse(false);
+		end
+	end
+end
+
+-- Eindeutiger Schlüssel dessen, worauf ein Button zielt: Token + (bei Namensplaketten)
+-- Name + (wenn lesbar) GUID. Gleicher Schlüssel = gleicher Klick-Effekt.
+local function EntryKey(unit)
+	local name = UnitName(unit);
+	local useMacro = unit:find("^nameplate") and name and not IsSecret(name);
+	local guid = UnitGUID(unit);
+
+	if guid == nil or IsSecret(guid) then
+		guid = "";
+	end
+
+	return unit .. "|" .. (useMacro and name or "") .. "|" .. guid, useMacro, name;
+end
+
 function SexyInterrupter:UpdateMarkFrame()
 	local f = self.markFrame;
 
@@ -626,6 +658,8 @@ function SexyInterrupter:UpdateMarkFrame()
 
 	if not editing and (not profile.enabled or (profile.combatOnly and not UnitAffectingCombat("player"))) then
 		f:SetAlpha(0);
+		ReleaseClickButtons(f);
+
 		return;
 	end
 
@@ -666,6 +700,7 @@ function SexyInterrupter:UpdateMarkFrame()
 			if sawDead or not (f.lastSeen and GetTime() - f.lastSeen < 3) then
 				f.lastSeen = nil;
 				f:SetAlpha(0);
+				ReleaseClickButtons(f);
 			end
 
 			return;
@@ -693,28 +728,38 @@ function SexyInterrupter:UpdateMarkFrame()
 			f.slots = {};
 		end
 
-		local byUnit, placed = {}, {};
+		-- Slots merken den Schlüssel (Token+Name+GUID), nicht nur das Token: wechselt
+		-- ein Token im Kampf auf einen anderen Mob, ändert sich der Schlüssel (sofern
+		-- die GUID lesbar ist) und der Mob zählt als neu statt eine alte Zeile zu erben.
+		local byKey, placed = {}, {};
 
 		for _, entry in ipairs(entries) do
-			byUnit[entry.unit] = entry;
+			entry.key, entry.useMacro, entry.name = EntryKey(entry.unit);
+			byKey[entry.key] = entry;
 		end
 
 		for i = 1, profile.maxrows do
-			local unit = f.slots[i];
+			local key = f.slots[i];
 
-			if unit and byUnit[unit] and not placed[unit] then
-				placed[unit] = true;
+			if key and byKey[key] and not placed[key] then
+				placed[key] = true;
 			else
 				f.slots[i] = nil;
 			end
 		end
 
+		-- Neue Einträge: im Kampf nur in einen Slot, dessen Button nichts oder genau
+		-- diesen Mob anvisiert (Buttons lassen sich im Kampf nicht umbelegen).
 		for _, entry in ipairs(entries) do
-			if not placed[entry.unit] then
+			if not placed[entry.key] then
 				for i = 1, profile.maxrows do
-					if not f.slots[i] then
-						f.slots[i] = entry.unit;
-						placed[entry.unit] = true;
+					local button = f.clickButtons[i];
+					local compatible = not InCombatLockdown() or not button
+						or button.clickKey == nil or button.clickKey == entry.key;
+
+					if not f.slots[i] and compatible then
+						f.slots[i] = entry.key;
+						placed[entry.key] = true;
 						break;
 					end
 				end
@@ -723,7 +768,7 @@ function SexyInterrupter:UpdateMarkFrame()
 
 		for i = 1, profile.maxrows do
 			if f.slots[i] then
-				slotEntries[i] = byUnit[f.slots[i]];
+				slotEntries[i] = byKey[f.slots[i]];
 				last = i;
 			end
 		end
@@ -747,20 +792,28 @@ function SexyInterrupter:UpdateMarkFrame()
 	local ui = self.db.profile.ui;
 	local window = f.window;
 	local windowHeight = HEADER_HEIGHT + last * (rowHeight + ROW_GAP) + PADDING;
-	local windowKey = table.concat({ width, windowHeight, tostring(ui.window.backgroundtexture), tostring(ui.window.border),
-		ui.window.background.r, ui.window.background.g, ui.window.background.b, ui.window.background.a,
-		ui.window.bordercolor.r, ui.window.bordercolor.g, ui.window.bordercolor.b, ui.window.bordercolor.a }, "|");
+	local windowKey = width .. "|" .. windowHeight;
 
 	if window.styleKey ~= windowKey then
 		window.styleKey = windowKey;
 		window:SetSize(width, windowHeight);
 
 		if window.SetBackdrop then
-			self.EditModeHelpers.ApplyBackdrop(window, self.db.profile);
-			window:SetBackdropBorderColor(ui.window.bordercolor.r, ui.window.bordercolor.g, ui.window.bordercolor.b, ui.window.bordercolor.a);
+			self.EditModeHelpers.ApplyBackdrop(window);
 		end
 	end
 
+
+	-- Badge im Titelband: Anzahl der angezeigten markierten Gegner
+	local shown = 0;
+
+	for position = 1, last do
+		if slotEntries[position] then
+			shown = shown + 1;
+		end
+	end
+
+	window:SetBadge(shown > 0 and string.format(L["%d active"], shown) or "");
 
 	for position = 1, last do
 		local entry = slotEntries[position];
@@ -785,9 +838,7 @@ function SexyInterrupter:UpdateMarkFrame()
 				-- Namensplaketten-Tokens lassen sich auf diesem Client nicht per
 				-- Secure-"target" anvisieren: dort stattdessen per Name (Makro).
 				local button = f.clickButtons[position];
-				local name = UnitName(entry.unit);
-				local useMacro = entry.unit:find("^nameplate") and name and not IsSecret(name);
-				local key = entry.unit .. "|" .. (useMacro and name or "");
+				local key, useMacro, name = entry.key, entry.useMacro, entry.name;
 
 				if button and button.clickKey ~= key then
 					if useMacro then
@@ -837,23 +888,12 @@ function SexyInterrupter:UpdateMarkFrame()
 	end
 
 	-- Nicht belegte Buttons von ihrem alten Ziel lösen (nur außerhalb des Kampfes).
-	if not InCombatLockdown() then
-		for position = 1, #f.clickButtons do
-			local button = f.clickButtons[position];
-
-			if not slotEntries[position] and button.clickKey ~= nil then
-				button:SetAttribute("type1", "target");
-				button:SetAttribute("unit", nil);
-				button.clickKey, button.clickUnit = nil, nil;
-				button:EnableMouse(false);
-			end
-		end
-	end
+	ReleaseClickButtons(f, function(position) return slotEntries[position] ~= nil; end);
 
 	f:SetAlpha(1);
 end
 
-function SexyInterrupter:CreateMarkFrame(EME, helpers)
+function SexyInterrupter:CreateMarkFrame(helpers)
 	local profile = self.db.profile.marks;
 	local ui = self.db.profile.ui;
 	local f = CreateFrame("Frame", "SexyInterrupterMarks", UIParent);
@@ -886,9 +926,8 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 	f.window:SetFrameLevel(f:GetFrameLevel());
 	f.window:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
 
-	local tint = f.window:CreateTexture();
-	tint:SetColorTexture(0, 0, 0, 0.2);
-	tint:SetAllPoints(f.window);
+	-- Titelband mit Badge ("N aktiv", siehe UpdateMarkFrame)
+	self.Look.CreateBand(f.window, L["Enemy marks"]);
 
 	-- Alle Zeilen vorab erzeugen (secure Buttons dürfen nicht im Kampf entstehen).
 	for index = 1, 8 do
@@ -902,46 +941,52 @@ function SexyInterrupter:CreateMarkFrame(EME, helpers)
 	f:SetAlpha(0);
 	f:Show();
 
-	if EME then
-		EME:RegisterFrame(f, L["Addon name"] .. " " .. L["Enemy marks"], db, UIParent, "BOTTOMLEFT", true);
+	do
+		local H = helpers;
+		local settings = {
+			H.Link(L["Interrupts"], function() return SexyInterrupterAnchor; end),
+			H.Header(L["Enemy marks"], "marks"),
+			H.Check(L["Show enemy marks"],
+				function() return P().enabled end,
+				function(value) P().enabled = value; end),
+			H.Check(L["Marks: show in combat only"],
+				function() return P().combatOnly end,
+				function(value) P().combatOnly = value; end),
+			H.Check(L["Show cast bars"],
+				function() return P().showCast end,
+				function(value) P().showCast = value; end),
+			H.Check(L["Highlight interruptible casts"],
+				function() return P().highlightInterruptible end,
+				function(value) P().highlightInterruptible = value; end),
+			H.Slider(L["Max rows of marks"], 1, 8, 1,
+				function() return P().maxrows end,
+				function(value) P().maxrows = value; end),
+			H.Slider(L["Width"], 150, 400, 1,
+				function() return P().width end,
+				function(value) P().width = value; end),
+			H.Select(L["Marks sort"],
+				{
+					{ value = 'symbol', label = L["By symbol"] },
+					{ value = 'cast', label = L["Casting first"] },
+				},
+				function() return P().sort end,
+				function(value) P().sort = value; end),
 
-		helpers.Checkbox(EME, f, "marksenabled", L["Show enemy marks"],
-			function() return P().enabled end,
-			function(value) P().enabled = value; end);
-
-		helpers.Checkbox(EME, f, "markscombatonly", L["Marks: show in combat only"],
-			function() return P().combatOnly end,
-			function(value) P().combatOnly = value; end);
-
-		helpers.Checkbox(EME, f, "marksshowcast", L["Show cast bars"],
-			function() return P().showCast end,
-			function(value) P().showCast = value; end);
-
-		helpers.Checkbox(EME, f, "markshighlight", L["Highlight interruptible casts"],
-			function() return P().highlightInterruptible end,
-			function(value) P().highlightInterruptible = value; end);
-
-		helpers.Slider(EME, f, "marksmaxrows", L["Max rows of marks"], 1, 8, 1,
-			function() return P().maxrows end,
-			function(value) P().maxrows = value; end);
-
-		helpers.Slider(EME, f, "markswidth", L["Width"], 150, 400, 1,
-			function() return P().width end,
-			function(value) P().width = value; end);
-
-		helpers.Select(EME, f, "markssort", L["Marks sort"],
-			{
-				{ value = 'symbol', label = L["By symbol"] },
-				{ value = 'cast', label = L["Casting first"] },
-			},
-			function() return P().sort end,
-			function(value) P().sort = value; end);
+			H.Header(L["Symbols"], "symbols", true),
+		};
 
 		for index = 8, 1, -1 do
-			helpers.Checkbox(EME, f, "markssymbol" .. index, SYMBOL_NAMES[index],
+			settings[#settings + 1] = H.Check(SYMBOL_NAMES[index],
 				function() return P().symbols[index] end,
 				function(value) P().symbols[index] = value; end);
 		end
+
+		SEM:Register(f, {
+			name = L["Addon name"] .. " " .. L["Enemy marks"],
+			db = db,
+			settings = settings,
+			visibility = false, -- das Fenster steuert seine Transparenz selbst
+		});
 	end
 
 	-- Laufende Aktualisierung (Gesundheit/Cast ändern sich dauernd). Eigener
@@ -974,11 +1019,7 @@ function SexyInterrupter:DebugMarks(reset)
 		db.x = (screenWidth - f:GetWidth()) / 2;
 		db.y = (screenHeight - f:GetHeight()) / 2;
 
-		local liveDB = self.EditModeHelpers.GetLiveDB(f, db);
-		liveDB.x, liveDB.y = db.x, db.y;
-
-		f:ClearAllPoints();
-		f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", db.x, db.y);
+		SEM:SetPosition(f, db.x, db.y);
 		Say("Position zurückgesetzt.");
 	end
 

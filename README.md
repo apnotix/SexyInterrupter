@@ -26,9 +26,10 @@ Keine Tabellen, kein Chat-Spam, kein „Ich dachte, du machst das!“ – nur ei
 - Baut automatisch eine **Kick-Reihenfolge** für die ganze Gruppe bzw. den Schlachtzug
 - Sortiert nach **wer zuerst bereit ist**, danach nach Rollenpriorität (🛡️ Tank → ⚔️ Schaden → 💚 Heiler)
 - Der nächste Spieler steht immer ganz oben
+- Im Look von SexyQuestHelper und SexyLoot: Goldrand, Titelband mit Anzahl der **bereiten Kicks**, Etiketten „tot“ und „offline“, Cooldown als Zahl bei bernsteinfarbener Leiste
 
 ### 📣 „Jetzt unterbrechen!“-Hinweis
-- Große Bildschirmmeldung mit dem **Namen deines Ziels**, sobald es zaubert und du an der Reihe bist
+- Meldungskarte mit rotem Rand: **Name deines Ziels** groß, dazu Zaubersymbol, Zaubername und Restzeit, sobald es zaubert und du an der Reihe bist
 - Optionaler **Soundalarm** 🔔 (beliebiger Sound aus deiner SharedMedia-Bibliothek, mit Vorschau)
 - Optionaler **Bildschirm-Flash** ⚡, damit du es nicht übersiehst
 - Die Meldung verschwindet automatisch, wenn der Zauber endet oder du das Ziel wechselst
@@ -46,14 +47,14 @@ Keine Tabellen, kein Chat-Spam, kein „Ich dachte, du machst das!“ – nur ei
 - Spieler außerhalb der Reichweite werden **abgedunkelt** 👻, damit du siehst, wer das Ziel überhaupt erreicht
 
 ### 🎨 Vollständig konfigurierbar – direkt im Bearbeitungsmodus
-Alles findest du im **Bearbeitungsmodus (Edit Mode)** von Blizzard: Fenster ziehen, direkt anpassen, mit Live-Vorschau.
+Alles findest du im **Bearbeitungsmodus (Edit Mode)** von Blizzard: Fenster ziehen und anklicken, der Dialog hat einklappbare Abschnitte (Verhalten, Aussehen, Text, Position und Größe, Sichtbarkeit) und eine Live-Vorschau.
 
 | | |
 |---|---|
 | 📐 **Layout** | Fensterbreite, Balkenhöhe, maximale Zeilen, Wachstumsrichtung (oben / unten) |
-| 🔤 **Schrift** | Schriftart, Größe und Farbe (mit Live-Vorschau der Schriften) |
-| 🖼️ **Texturen** | Statusbalken-, Hintergrund- und Rahmentextur (über SharedMedia) |
-| 🌈 **Farben** | Balken-, Hintergrund-, Rahmen- und Schriftfarbe, optional **Klassenfarben** |
+| 🔤 **Schrift** | Schriftart, Größe und Farbe (mit Live-Vorschau; neu: Marcellus und Inter, mitgeliefert) |
+| 🖼️ **Textur** | Statusbalkentextur (über SharedMedia) |
+| 🌈 **Farben** | Balken- und Schriftfarbe, optional **Klassenfarben** (Hintergrund und Rahmen sind fest) |
 | 🔔 **Benachrichtigung** | Meldung, Sound (mit Vorschau), Bildschirm-Flash |
 | 💬 **Chat-Ansage** | Optional eigene Unterbrechungen in Sagen / Schreien / Gruppe / Schlachtzug ansagen |
 | 👁️ **Sichtbarkeit** | Nur im Kampf anzeigen, Minimap-Symbol an/aus |
@@ -105,6 +106,6 @@ Bitte eröffne ein Issue auf [GitHub](https://github.com/apnotix/SexyInterrupter
 
 ## 🙏 Credits
 
-Entwickelt mit [Ace3](https://www.wowace.com/projects/ace3), LibSharedMedia-3.0, LibDBIcon, LibDataBroker und [EditModeExpanded](https://github.com/teelolws/EditModeExpanded) von teelolws.
+Entwickelt mit [Ace3](https://www.wowace.com/projects/ace3), LibSharedMedia-3.0, LibDBIcon, LibDataBroker und der eigenen Bibliothek SexyEditMode (Edit-Mode-Dialog).
 
 **Mit ❤️ von apnotix – viel Spaß beim Kicken!**

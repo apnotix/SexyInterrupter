@@ -443,7 +443,7 @@ function SexyInterrupter:UNIT_SPELLCAST_CHANNEL_START(...)
 	if unitTag == "target" and SI_Globals.numInterrupters > 0 then
 		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID = UnitChannelInfo("target");
 
-		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime);
+		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, name, texture);
 	end
 end
 
@@ -457,7 +457,7 @@ function SexyInterrupter:UNIT_SPELLCAST_START(...)
 		-- declared in this function) instead of the ones actually captured
 		-- above, so ShowInterruptWarning's timeVisible-from-cast-length logic
 		-- never triggered and silently always fell back to its 10s default.
-		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTimeMS, endTimeMS);
+		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTimeMS, endTimeMS, name, texture);
 	end
 end
 
@@ -469,9 +469,7 @@ function SexyInterrupter:UNIT_SPELLCAST_STOP(...)
         -- nie sichtbar und der Flash blieb sonst endlos stehen.
 		SexyInterrupterBlueWarningFrame:Hide();
 
-		if SexyInterrupterInterruptNowText:IsVisible() then
-			SexyInterrupterInterruptNowText:SetTimeVisible(0);
-		end
+		SexyInterrupterInterruptNowText:HideAlert();
 	end
 end
 
@@ -620,9 +618,7 @@ function SexyInterrupter:PLAYER_TARGET_CHANGED()
     -- Flash unabhängig vom Text beenden (siehe UNIT_SPELLCAST_STOP).
 	SexyInterrupterBlueWarningFrame:Hide();
 
-    if SexyInterrupterInterruptNowText:IsVisible() then
-        SexyInterrupterInterruptNowText:SetTimeVisible(0);
-    end
+	SexyInterrupterInterruptNowText:HideAlert();
 end
 
 function SexyInterrupter:PLAYER_REGEN_DISABLED() 

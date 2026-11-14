@@ -740,23 +740,31 @@ function SexyInterrupter:CreateFlasher(color)
 
 -- true while Blizzard's real Edit Mode is open (SexyInterrupterAnchor/
 -- SexyInterrupterInterruptNowText are registered with it via the vendored
--- EditModeExpanded-1.0 library, see ui.lua's CreateUi - it owns all
+-- SexyEditMode-1.0 library, see ui.lua's CreateUi - it owns all
 -- dragging/positioning now). Only used to decide whether to show test data
 -- instead of the live roster while the user is repositioning things.
 function SexyInterrupter:IsEditingUi()
+	-- Zustand der Bibliothek, nicht Blizzards Flag: Die Bibliothek ruft UpdateFrames() schon beim
+	-- Betreten/Verlassen auf, und dann muss die Abfrage bereits den neuen Zustand liefern.
+	local SEM = LibStub("SexyEditMode-1.0", true);
+
+	if SEM then
+		return SEM:IsEditing();
+	end
+
 	return EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive() or false;
 end
 
 -- Opens Blizzard's real Edit Mode (bound to the "Lock window"/"Open Edit
 -- Mode to reposition" option, the minimap icon left click, and `/si lock`).
--- Positioning itself is handled entirely by EditModeExpanded-1.0 from here.
+-- Positioning itself is handled entirely by SexyEditMode-1.0 from here.
 function SexyInterrupter:LockFrame()
 	if EditModeManagerFrame then
 		ShowUIPanel(EditModeManagerFrame);
 	end
 end
 
-function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime)
+function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, castName, castTexture)
 	-- notInterruptible (from UnitCastingInfo/UnitChannelInfo) can come through
 	-- as a "secret" value under the same protected-info guard as spellID
 	-- elsewhere - can't be used in a boolean test. When we can't tell, assume
@@ -779,6 +787,15 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 		endTime = nil;
 	end
 
+	-- Zaubername und -symbol fürs Etikett: bei "secret values" weglassen.
+	if issecretvalue and issecretvalue(castName) then
+		castName = nil;
+	end
+
+	if issecretvalue and issecretvalue(castTexture) then
+		castTexture = nil;
+	end
+
 	if not notInterruptible and UnitCanAttack('player', 'target') then
 		-- Gleicher Bug wie in events.lua's UNIT_SPELLCAST_SUCCEEDED: UnitName()s
 		-- Realm-Rückgabe ist für "player" auf diesem Client NICHT zuverlässig
@@ -798,17 +815,15 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 		if interrupter and interrupter.sortpos == 1 and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then
 			local timeVisible = 10;
 
+			-- Anzeigedauer = Zauberlänge in Sekunden (startTime/endTime sind Millisekunden)
 			if (startTime and endTime and endTime/1000 - startTime/1000 < 10) then
-				timeVisible = endTime - startTime
+				timeVisible = (endTime - startTime) / 1000;
 			end
 
 			local tName = UnitName('target');
 
 			if self.db.profile.notification.message then
-				local text = L["Interrupt now"] .. ' |cFFFF0000' .. tName .. '|r !!';
-				SexyInterrupterInterruptNowText:AddMessage(text, 1,1,1);
-				SexyInterrupterInterruptNowText:SetTimeVisible(timeVisible);
-				SexyInterrupterInterruptNowText.text = text;
+				SexyInterrupterInterruptNowText:ShowAlert(tName, castName, castTexture, endTime, timeVisible);
 			end
 
 			if self.db.profile.notification.sound then

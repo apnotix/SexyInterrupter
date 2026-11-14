@@ -209,7 +209,7 @@ local defaults = {
 				x = 0,
 				y = -150
 			},
-			-- Position/size storage owned entirely by the EditModeExpanded-1.0
+			-- Position/size storage owned entirely by the SexyEditMode-1.0
 			-- library (see ui.lua's CreateUi) once a frame is registered with
 			-- it - anchorPosition/messagePosition above stop being written to
 			-- after that point, kept only so an existing saved position isn't
@@ -217,30 +217,16 @@ local defaults = {
 			editModeAnchorDB = {},
 			editModeMessageDB = {},
 			editModeMarksDB = {},
-			font = '2002',
+			font = 'Inter',
 			fontsize = 13,
 			fontcolor = {
-				r = 1,
-				g = 1, 
-				b = 1,
+				r = 0.95,
+				g = 0.92,
+				b = 0.86,
 				a = 1
             },
-            useclasscolor = false,
+            useclasscolor = true,
 			window = {
-				background = {
-					r = 0,
-					g = 0,
-					b = 0,
-					a = 0.453
-				},
-                backgroundtexture = "Solid",
-				border = 'Blizzard Tooltip',
-				bordercolor = {
-					r = 0,
-					g = 0, 
-					b = 0,
-					a = 1
-                },
                 width = 200,
                 -- false = wächst nach unten (obere Kante bleibt fix), true =
                 -- wächst nach oben (untere Kante bleibt fix, so hat es sich
@@ -251,15 +237,15 @@ local defaults = {
 			},
 			bars = {
                 showclassicon = true,
-                useclasscolor = true,
-				barheight = 25,
+                useclasscolor = false,
+				barheight = 26,
 				barcolor = {
-					r = 0.451,
-					g = 0.471,
-					b = 0.435,
+					r = 0.40,
+					g = 0.32,
+					b = 0.13,
 					a = 1
 				},
-				texture = 'Blizzard'
+				texture = 'Flat'
 			}
 		},
 		marks = {

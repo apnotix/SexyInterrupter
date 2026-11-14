@@ -1,13 +1,6 @@
 local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
-local LibDD = LibStub("LibUIDropDownMenuQuestie-4.0");
-
--- Declared here (not next to RegisterEditModeCheckbox/Slider further down)
--- because CreateUi()'s EnterEditMode hook, which drains this list, is
--- defined earlier in the file - a local's closures can only capture it if
--- the local is already in lexical scope at the point the closure literal is
--- written, regardless of when either piece of code actually RUNS.
-local pendingEditModeResyncs = {};
+local SEM = LibStub("SexyEditMode-1.0");
 
 -- Berechnet die BOTTOMLEFT-Bildschirmkoordinaten, die EditModeExpanded-1.0 für
 -- seinen (BOTTOMLEFT-)Ankerpunkt in db.x/db.y erwartet, rein rechnerisch aus
@@ -44,15 +37,9 @@ local function ComputeBottomLeft(point, target, relativePoint, x, y, width, heig
 	return (relX + x) - ownX, (relY + y) - ownY;
 end
 
--- EditModeExpanded-1.0 moves x/y/settings out of the db table we hand it into
--- a nested per-Edit-Mode-layout table on its first profile init and keeps only
--- that one current - the table we passed in (editModeAnchorDB/MessageDB)
--- silently stops being the live position store. Always go through the
--- library's own live reference when reading or writing position.
+-- Die Position steht in der übergebenen DB-Tabelle (SexyEditMode speichert dort x/y).
 local function GetLiveDB(frame, fallback)
-	local EME = LibStub("EditModeExpanded-1.0", true);
-
-	return (EME and frame and frame.system and EME.framesDB and EME.framesDB[frame.system]) or fallback;
+	return fallback;
 end
 
 local function GetSpellTextureCompat(spellId)
@@ -109,26 +96,318 @@ local function GetPreviewRows(forceRegenerate)
 	return previewRows;
 end
 
-local function GetPreviewMessageText()
-	return L["Interrupt now"] .. ' |cFFFF0000' .. L["Preview Target"] .. '|r !!';
+-- Look wie SexyQuestHelper und SexyLoot: dunkelbraune Fläche, 2-px-Goldrand, Titelband
+-- mit Badge, farbige Etiketten. Schriften: Marcellus (Titel), Inter (Text), beide in
+-- media/fonts (SIL OFL) und bei LibSharedMedia angemeldet, damit sie in der Auswahl
+-- "Schriftart" erscheinen. Auf Clients ohne westliche Schrift (ru/ko/zh) werden sie
+-- nicht angemeldet, LSM:Fetch liefert dann die Standardschrift.
+local FONT_DIR = "Interface\\AddOns\\SexyInterrupter\\media\\fonts\\";
+local FLAT = "Interface\\Buttons\\WHITE8x8";
+local HEAD = 30;           -- Rahmen oben plus Titelband
+local CARD = { 0.145, 0.125, 0.10, 1 };      -- Zeilenfläche
+local DIVIDER = { 0.21, 0.19, 0.14, 1 };     -- Trennlinie
+local BAND = { 0.15, 0.12, 0.07, 0.96 };     -- Titelband
+local COOLING = { 0.22, 0.17, 0.08 };        -- Leiste, solange der Cooldown läuft (dunkles Braun)
+local TONES = {
+	ok = { bg = { 0.082, 0.188, 0.11 }, fg = { 0.48, 0.88, 0.56 } },
+	warn = { bg = { 0.227, 0.173, 0.063 }, fg = { 0.94, 0.75, 0.29 } },
+	grey = { bg = { 0.16, 0.145, 0.12 }, fg = { 0.66, 0.61, 0.54 } },
+	lack = { bg = { 0.231, 0.102, 0.09 }, fg = { 1, 0.6, 0.56 } },
+};
+
+if LSM.LOCALE_BIT_western then
+	LSM:Register("font", "Marcellus", FONT_DIR .. "Marcellus-Regular.ttf", LSM.LOCALE_BIT_western);
+	LSM:Register("font", "Inter", FONT_DIR .. "Inter.ttf", LSM.LOCALE_BIT_western);
 end
 
-local function ApplyBackdrop(frame, profile)
-	frame:SetBackdrop({
-        bgFile = LSM:Fetch("background", profile.ui.window.backgroundtexture),
-        edgeFile = LSM:Fetch("border", profile.ui.window.border),
-        tile = false,
-        tileSize = 16,
-        edgeSize = 16,
-        insets = {
-			left = 1,
-			right = 1,
-			top = 1,
-			bottom = 1
-		}
-    });
+-- Text ohne Kontur, mit leichtem Schatten (flacher Look)
+local function StyleText(fs, font, size)
+	fs:SetFont(font, size, "");
+	fs:SetShadowColor(0, 0, 0, 1);
+	fs:SetShadowOffset(1, -1);
+end
 
-	frame:SetBackdropColor(profile.ui.window.background.r, profile.ui.window.background.g, profile.ui.window.background.b, profile.ui.window.background.a);
+local function TitleFont()
+	return LSM:Fetch("font", "Marcellus");
+end
+
+-- Flache Leistentextur (ohne Glanzverlauf), neuer Standard für die Leisten
+LSM:Register("statusbar", "Flat", FLAT);
+
+local function TextFont()
+	return LSM:Fetch("font", "Inter");
+end
+
+-- Etikett (Pille): Fläche plus Text, p:Set(tone, text) färbt und passt die Breite an.
+local function MakePill(parent)
+	local p = {};
+
+	p.bg = parent:CreateTexture(nil, "ARTWORK", nil, 5);
+	p.text = parent:CreateFontString(nil, "OVERLAY");
+	p.text:SetFont(TextFont(), 11, "");
+	p.text:SetPoint("CENTER", p.bg, "CENTER", 0, 0);
+
+	function p:Set(tone, text, size)
+		local t = TONES[tone];
+
+		self.text:SetFont(TextFont(), size or 11, "");
+		self.text:SetText(text);
+		self.text:SetTextColor(t.fg[1], t.fg[2], t.fg[3]);
+		self.bg:SetColorTexture(t.bg[1], t.bg[2], t.bg[3], 1);
+		self.bg:SetSize(self.text:GetStringWidth() + 14, (size or 11) + 5);
+		self.bg:Show();
+		self.text:Show();
+	end
+
+	function p:Hide()
+		self.bg:Hide();
+		self.text:Hide();
+	end
+
+	return p;
+end
+
+-- Titelband mit Titel (links) und Badge (rechts, frame:SetBadge(text), "" blendet aus).
+local function CreateBand(frame, title, bandColor, titleColor)
+	local band = frame:CreateTexture(nil, "BACKGROUND", nil, 1);
+	local bc = bandColor or BAND;
+	local tc = titleColor or { 0.91, 0.76, 0.42 };
+
+	band:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, -3);
+	band:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -3, -3);
+	band:SetHeight(HEAD - 3);
+	band:SetColorTexture(bc[1], bc[2], bc[3], bc[4]);
+	frame.band = band;
+
+	frame.title = frame:CreateFontString(nil, "OVERLAY");
+	frame.title:SetFont(TitleFont(), 14, "");
+	frame.title:SetTextColor(tc[1], tc[2], tc[3]);
+	frame.title:SetPoint("LEFT", band, "LEFT", 8, 0);
+	frame.title:SetText(title);
+
+	local badgeBg = frame:CreateTexture(nil, "ARTWORK");
+	badgeBg:SetPoint("RIGHT", band, "RIGHT", -6, 0);
+	badgeBg:SetHeight(18);
+	badgeBg:SetColorTexture(0.165, 0.14, 0.10, 1);
+	local badgeText = frame:CreateFontString(nil, "OVERLAY");
+	badgeText:SetFont(TextFont(), 11, "");
+	badgeText:SetPoint("CENTER", badgeBg, "CENTER", 0, 0);
+	badgeText:SetTextColor(0.78, 0.73, 0.64);
+
+	function frame:SetBadge(text)
+		local show = text ~= nil and text ~= "";
+
+		badgeBg:SetShown(show);
+		badgeText:SetShown(show);
+
+		if show then
+			badgeText:SetText(text);
+			badgeBg:SetWidth(badgeText:GetStringWidth() + 18);
+		end
+	end
+
+	frame:SetBadge("");
+end
+
+-- Rahmen wie im SexyQuestHelper-Fenster: Tooltip-Fläche und Tooltip-Rand (12 px, gold gefärbt).
+-- Hintergrund- und Randfarbe sind fest (Quest-Look) und nicht einstellbar.
+local BACKDROP = {
+	bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+	edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+	edgeSize = 12,
+	insets = { left = 3, right = 3, top = 3, bottom = 3 },
+};
+
+local WINDOW_BG = { 0.08, 0.065, 0.05, 0.96 };
+local WINDOW_EDGE = { 0.42, 0.34, 0.15, 1 };
+
+local function ApplyBackdrop(frame)
+	frame:SetBackdrop(BACKDROP);
+	frame:SetBackdropColor(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], WINDOW_BG[4]);
+	frame:SetBackdropBorderColor(WINDOW_EDGE[1], WINDOW_EDGE[2], WINDOW_EDGE[3], WINDOW_EDGE[4]);
+end
+
+SexyInterrupter.Look = {
+	HEAD = HEAD, CARD = CARD, DIVIDER = DIVIDER, TONES = TONES,
+	MakePill = MakePill, CreateBand = CreateBand, TextFont = TextFont, TitleFont = TitleFont, StyleText = StyleText,
+};
+
+-- Karte "Unterbrich jetzt!" (oberes Mockup): Band mit rotem Rand, Zaubersymbol, Name des
+-- Ziels groß, Etiketten für Zaubername und Restzeit. Der Frame selbst bleibt immer
+-- sichtbar (Edit-Mode-Auswahl), die Karte (c.panel) wird ein- und ausgeblendet.
+local ALERT_W, ALERT_H = 440, HEAD + 72;
+local ALERT_EDGE = { 0.54, 0.20, 0.15, 1 };
+local ALERT_BAND = { 0.18, 0.08, 0.07, 0.96 };
+
+-- Weicher Schein um ein Ziel: neun Texturteile (vier Ecken fest, Kanten und Mitte gedehnt)
+-- aus media/glow128.tga, wie die Gewinner-Anzeige in SexyLoot. Liefert ein Objekt mit
+-- :SetColor(r, g, b, a). texSize/tc: Kantenlänge der Textur und Eckgröße darin (Pixel),
+-- disp: Eckgröße auf dem Bildschirm, out: wie weit der Schein über das Ziel hinausragt.
+local GLOW_TEX = "Interface\\AddOns\\SexyInterrupter\\media\\glow128.tga";
+
+local function NineSliceGlow(parent, target, texSize, tc, disp, out)
+	local f = tc / texSize;
+	local pieces = {};
+
+	local function tex(l, r, t, b)
+		local x = parent:CreateTexture(nil, "BACKGROUND");
+		x:SetTexture(GLOW_TEX);
+		x:SetTexCoord(l, r, t, b);
+		pieces[#pieces + 1] = x;
+		return x;
+	end
+
+	local tl = tex(0, f, 0, f);          tl:SetSize(disp, disp); tl:SetPoint("TOPLEFT", target, "TOPLEFT", -out, out);
+	local tr = tex(1 - f, 1, 0, f);      tr:SetSize(disp, disp); tr:SetPoint("TOPRIGHT", target, "TOPRIGHT", out, out);
+	local bl = tex(0, f, 1 - f, 1);      bl:SetSize(disp, disp); bl:SetPoint("BOTTOMLEFT", target, "BOTTOMLEFT", -out, -out);
+	local br = tex(1 - f, 1, 1 - f, 1);  br:SetSize(disp, disp); br:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", out, -out);
+	local top = tex(f, 1 - f, 0, f);     top:SetPoint("TOPLEFT", tl, "TOPRIGHT"); top:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT");
+	local bot = tex(f, 1 - f, 1 - f, 1); bot:SetPoint("TOPLEFT", bl, "TOPRIGHT"); bot:SetPoint("BOTTOMRIGHT", br, "BOTTOMLEFT");
+	local lef = tex(0, f, f, 1 - f);     lef:SetPoint("TOPLEFT", tl, "BOTTOMLEFT"); lef:SetPoint("BOTTOMRIGHT", bl, "TOPRIGHT");
+	local rig = tex(1 - f, 1, f, 1 - f); rig:SetPoint("TOPLEFT", tr, "BOTTOMLEFT"); rig:SetPoint("BOTTOMRIGHT", br, "TOPRIGHT");
+	local mid = tex(f, 1 - f, f, 1 - f); mid:SetPoint("TOPLEFT", tl, "BOTTOMRIGHT"); mid:SetPoint("BOTTOMRIGHT", br, "TOPLEFT");
+
+	local obj = {};
+
+	function obj:SetColor(r, g, b, a)
+		for _, x in ipairs(pieces) do
+			x:SetVertexColor(r, g, b, a or 1);
+		end
+	end
+
+	return obj;
+end
+
+local function CreateAlertCard(addon)
+	local c = CreateFrame("Frame", "SexyInterrupterInterruptNowText", UIParent);
+	c:SetSize(ALERT_W, ALERT_H);
+
+	local p = CreateFrame("Frame", nil, c, BackdropTemplateMixin and "BackdropTemplate" or nil);
+	p:SetAllPoints(c);
+	p:SetBackdrop(BACKDROP);
+	p:SetBackdropColor(0.08, 0.065, 0.05, 0.96);
+	p:SetBackdropBorderColor(ALERT_EDGE[1], ALERT_EDGE[2], ALERT_EDGE[3], ALERT_EDGE[4]);
+	CreateBand(p, L["Interrupt now"] .. "!", ALERT_BAND, { 1, 0.71, 0.66 });
+	p:SetBadge(L["You are up"]);
+	p:Hide();
+	c.panel = p;
+
+	-- Roter, pulsierender Schein um die Karte (wie bei "Gewinner" in SexyLoot). Der Schein
+	-- liegt in einem eigenen Frame über der Karte und ist innen durchsichtig.
+	local glow = CreateFrame("Frame", nil, p);
+	glow:SetAllPoints(p);
+	NineSliceGlow(glow, p, 128, 48, 48, 32):SetColor(1, 0.3, 0.2, 1);
+
+	local pulse = glow:CreateAnimationGroup();
+	local fade = pulse:CreateAnimation("Alpha");
+
+	if fade.SetFromAlpha then
+		fade:SetFromAlpha(1);
+		fade:SetToAlpha(0.45);
+	else
+		fade:SetChange(-0.55);
+	end
+
+	fade:SetDuration(0.9);
+	fade:SetSmoothing("IN_OUT");
+	pulse:SetLooping("BOUNCE");
+	p:SetScript("OnShow", function() pulse:Play(); end);
+	p:SetScript("OnHide", function() pulse:Stop(); end);
+
+	-- Zaubersymbol mit Rahmen
+	p.iconBorder = p:CreateTexture(nil, "ARTWORK");
+	p.iconBorder:SetColorTexture(1, 0.6, 0.53, 1);
+	p.icon = p:CreateTexture(nil, "OVERLAY");
+	p.icon:SetSize(44, 44);
+	p.icon:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -(HEAD + 12));
+	p.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+	p.iconBorder:SetPoint("TOPLEFT", p.icon, "TOPLEFT", -2, 2);
+	p.iconBorder:SetPoint("BOTTOMRIGHT", p.icon, "BOTTOMRIGHT", 2, -2);
+
+	p.name = p:CreateFontString(nil, "OVERLAY");
+	p.name:SetFont(TitleFont(), 26, "");
+	p.name:SetTextColor(0.95, 0.92, 0.86);
+	p.name:SetJustifyH("LEFT");
+	p.name:SetWordWrap(false);
+	p.name:SetPoint("TOPLEFT", p.icon, "TOPRIGHT", 14, 2);
+	p.name:SetPoint("RIGHT", p, "RIGHT", -16, 0);
+
+	p.spellPill = MakePill(p);
+	p.timePill = MakePill(p);
+	p.spellPill.bg:SetPoint("TOPLEFT", p.name, "BOTTOMLEFT", 0, -6);
+	p.timePill.bg:SetPoint("LEFT", p.spellPill.bg, "RIGHT", 6, 0);
+
+	function c:ShowAlert(targetName, spellName, texture, endTime, seconds)
+		local p = self.panel;
+
+		p.name:SetText(targetName or "");
+
+		if texture then
+			p.icon:SetTexture(texture);
+		else
+			p.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark");
+		end
+
+		if spellName then
+			p.spellPill:Set("lack", spellName, 12);
+			p.timePill.bg:ClearAllPoints();
+			p.timePill.bg:SetPoint("LEFT", p.spellPill.bg, "RIGHT", 6, 0);
+		else
+			p.spellPill:Hide();
+			p.timePill.bg:ClearAllPoints();
+			p.timePill.bg:SetPoint("TOPLEFT", p.name, "BOTTOMLEFT", 0, -6);
+		end
+
+		self.endAt = endTime and endTime / 1000 or nil;
+		self.hideAt = seconds and (GetTime() + seconds) or nil;
+		self.previewing = false;
+
+		if self.endAt then
+			p.timePill:Set("grey", string.format("%.1f s", math.max(0, self.endAt - GetTime())), 12);
+		else
+			p.timePill:Hide();
+		end
+
+		p:Show();
+	end
+
+	function c:ShowPreview()
+		local p = self.panel;
+
+		self.endAt, self.hideAt, self.previewing = nil, nil, true;
+		p.name:SetText(L["Preview Target"]);
+		p.icon:SetTexture("Interface\\Icons\\Spell_Shadow_ShadowBolt");
+		p.spellPill:Set("lack", L["Preview Spell"], 12);
+		p.timePill:Set("grey", "1.8 s", 12);
+		p.timePill.bg:ClearAllPoints();
+		p.timePill.bg:SetPoint("LEFT", p.spellPill.bg, "RIGHT", 6, 0);
+		p:Show();
+	end
+
+	function c:HideAlert()
+		self.endAt, self.hideAt, self.previewing = nil, nil, false;
+		self.panel:Hide();
+	end
+
+	-- Restzeit zählen lassen und die Karte nach der Anzeigedauer ausblenden
+	c:SetScript("OnUpdate", function(self, elapsed)
+		if not self.panel:IsShown() or self.previewing then
+			return;
+		end
+
+		local now = GetTime();
+
+		if self.hideAt and now >= self.hideAt then
+			self:HideAlert();
+			return;
+		end
+
+		if self.endAt then
+			self.panel.timePill:Set("grey", string.format("%.1f s", math.max(0, self.endAt - now)), 12);
+		end
+	end);
+
+	return c;
 end
 
 function SexyInterrupter:CreateUi()
@@ -138,6 +417,15 @@ function SexyInterrupter:CreateUi()
     -- The old options panel allowed any width (-9999..9999); the Edit Mode
     -- slider only covers 100-400, so bring stored values into that range once.
     self.db.profile.ui.window.width = math.max(100, math.min(400, self.db.profile.ui.window.width))
+
+    -- Einmalig pro Profil: Die Oberkante des Fensters bleibt beim Ändern der Zeilenzahl
+    -- stehen ("Nach unten wachsen"). Mit der alten Einstellung "Nach oben" saß das Fenster
+    -- nach dem Edit Mode (Vorschau mit allen Zeilen) unten im großen Rahmen. Die Option
+    -- bleibt im Edit Mode wählbar.
+    if not self.db.profile.ui.window.topFixedMigrated then
+        self.db.profile.ui.window.growUp = false
+        self.db.profile.ui.window.topFixedMigrated = true
+    end
 
     f:SetSize(self.db.profile.ui.window.width, 100)
     -- anchorPosition.region ist ein Frame-NAME (String, SavedVariables können
@@ -182,41 +470,15 @@ function SexyInterrupter:CreateUi()
         self.db.profile.ui.editModeAnchorDB.autoSeeded = true
     end
 
-	ApplyBackdrop(f, self.db.profile);
-	f:SetBackdropBorderColor(self.db.profile.ui.window.bordercolor.r, self.db.profile.ui.window.bordercolor.g, self.db.profile.ui.window.bordercolor.b, self.db.profile.ui.window.bordercolor.a);
+	ApplyBackdrop(f);
 	f:SetScript("OnUpdate", SexyInterrupter.OnUpdate);
 
-    local t = f:CreateTexture()
-    t:SetColorTexture(0, 0, 0, 0.2)
-    t:SetAllPoints(f);
+	-- Titelband mit Badge ("N bereit", siehe UpdateInterrupterStatus)
+	CreateBand(f, L["Interrupts"]);
 
-	-- Frame: InterruptMessage
-	local c = CreateFrame("MessageFrame", "SexyInterrupterInterruptNowText", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil);
-    c:SetFontObject(BossEmoteNormalHuge);
-    c:SetWidth(500);
+	-- Frame: InterruptMessage - Karte "Unterbrich jetzt!" (siehe CreateAlertCard)
+	local c = CreateAlertCard(self);
 
-    local fontPath = c:GetFont();
-    c:SetFont(fontPath, 25, "OUTLINE");
-    c:SetFadeDuration(0.4);
-
-    -- MessageFrame kennt kein echtes "vertikal zentriert" (kein SetJustifyV
-    -- wie bei einer normalen FontString - es ist als Scroll-/Fade-Log für
-    -- mehrere Zeilen gedacht, Text wird per SetInsertMode an eine Kante
-    -- "angeheftet"). Ein geschätzter fester Höhenwert (z. B. 32) trifft die
-    -- tatsächliche Zeilenhöhe dieser Schriftart/-größe nicht exakt, der Text
-    -- wirkte dadurch minimal nach oben/unten verschoben statt zentriert.
-    -- Robuster Fix: die ECHTE Zeilenhöhe über eine unsichtbare Referenz-
-    -- FontString mit exakt demselben Font ausmessen (GetStringHeight), statt
-    -- den Wert zu schätzen - dann exakt diese Höhe setzen, sodass gar kein
-    -- "totes" Polster mehr existiert, an das der Text angeheftet werden könnte.
-    local measureText = c:CreateFontString(nil, "OVERLAY");
-    measureText:SetFont(fontPath, 25, "OUTLINE");
-    measureText:SetText("Mg");
-    local measuredHeight = measureText:GetStringHeight();
-    measureText:Hide();
-
-    c:SetHeight(measuredHeight > 0 and measuredHeight or 32);
-    c:SetInsertMode("BOTTOM");
     c:SetPoint(self.db.profile.ui.messagePosition.point, UIParent, self.db.profile.ui.messagePosition.relativePoint, self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y);
 
     -- Siehe Kommentar bei editModeAnchorDB weiter oben - dasselbe für die
@@ -224,91 +486,41 @@ function SexyInterrupter:CreateUi()
     if not (self.db.profile.ui.editModeMessageDB.x and self.db.profile.ui.editModeMessageDB.y) then
         self.db.profile.ui.editModeMessageDB.x, self.db.profile.ui.editModeMessageDB.y = ComputeBottomLeft(
             self.db.profile.ui.messagePosition.point, UIParent, self.db.profile.ui.messagePosition.relativePoint,
-            self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, 500, c:GetHeight())
+            self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, ALERT_W, c:GetHeight())
         self.db.profile.ui.editModeMessageDB.autoSeeded = true
     end
 
-	-- Hand both frames to Blizzard's real Edit Mode instead of our own custom
-	-- drag/lock system - see https://github.com/teelolws/EditModeExpanded.
-	-- Register AFTER the SetPoint calls above: EditModeExpanded seeds a
-	-- frame's saved position from its CURRENT on-screen rect the first time
-	-- it's registered with an empty db, so any position saved under the old
-	-- system carries over automatically instead of resetting to a default.
-	local EME = LibStub("EditModeExpanded-1.0", true);
+	-- Beide Fenster im Edit Mode anmelden (eigene Bibliothek SexyEditMode-1.0). Position,
+	-- Größe und Sichtbarkeit speichert sie in editModeAnchorDB/editModeMessageDB (BOTTOMLEFT
+	-- von UIParent: die untere Kante bleibt fest, auch wenn sich die Zeilenzahl ändert).
+	-- Nach den SetPoint-Aufrufen oben registrieren, damit die berechnete Startposition gilt.
+	SEM:Register(f, {
+		name = L["Addon name"] .. " " .. L["Window"],
+		db = self.db.profile.ui.editModeAnchorDB,
+		settings = self:AnchorSettings(),
+		onEditMode = function() SexyInterrupter:UpdateFrames(); end,
+	});
+	SEM:Register(c, {
+		name = L["Addon name"] .. " " .. L["Interrupt now"],
+		db = self.db.profile.ui.editModeMessageDB,
+		settings = self:MessageSettings(),
+		visibility = false, -- die Karte blendet sich selbst ein und aus
+	});
 
-	if EME then
-		-- BOTTOMLEFT instead of CENTER: the anchor frame's height changes with
-		-- the number of interrupter rows shown, so anchoring by CENTER made
-		-- the frame visibly drift after a reload (whenever the row count at
-		-- that moment differed from when the position was saved). BOTTOMLEFT
-		-- keeps the bottom edge fixed regardless of how tall the frame gets.
-		EME:RegisterFrame(f, L["Addon name"] .. " " .. L["Window"], self.db.profile.ui.editModeAnchorDB, UIParent, "BOTTOMLEFT", true);
-		EME:RegisterFrame(c, L["Addon name"] .. " " .. L["Interrupt now"], self.db.profile.ui.editModeMessageDB, UIParent, "BOTTOMLEFT", true);
+	-- "autoSeeded" markiert nur einen von UNS berechneten Startwert und muss verschwinden,
+	-- sobald der Spieler die Position selbst setzt - sonst überschreibt der Korrektur-Timer
+	-- unten sie bei jedem /reload wieder.
+	f.Selection:HookScript("OnDragStop", function()
+		self.db.profile.ui.editModeAnchorDB.autoSeeded = nil;
+	end);
+	c.Selection:HookScript("OnDragStop", function()
+		self.db.profile.ui.editModeMessageDB.autoSeeded = nil;
+	end);
 
-		-- "autoSeeded" markiert nur einen von UNS berechneten Default-Wert (siehe
-		-- Kommentare weiter oben) und muss geloescht werden, sobald der Spieler
-		-- die Position tatsaechlich selbst per Drag setzt - sonst haelt der
-		-- Login-Korrekturtimer (2s-Timer unten) den vom Spieler gezogenen Wert
-		-- faelschlich weiter fuer "unsere Berechnung" und ueberschreibt ihn bei
-		-- jedem /reload wieder mit der Default-Position (Bug: Fenster springt
-		-- nach jedem Reload zurueck zum Charakterfenster). Die Library setzt
-		-- db.x/db.y in ihrem EIGENEN OnDragStop-Handler auf frame.Selection -
-		-- per HookScript haengen wir uns dort mit an, ohne den bestehenden
-		-- Handler zu ersetzen.
-		if f.Selection then
-			f.Selection:HookScript("OnDragStop", function()
-				self.db.profile.ui.editModeAnchorDB.autoSeeded = nil
-			end)
-		end
-		if c.Selection then
-			c.Selection:HookScript("OnDragStop", function()
-				self.db.profile.ui.editModeMessageDB.autoSeeded = nil
-			end)
-		end
-
-		SexyInterrupter:RegisterEditModeSettings(EME, f, c);
-
-		-- Gegner-Marker-Fenster (marks.lua) registriert sein eigenes Edit-Mode-Frame.
-		-- nil, solange marks.lua nicht in der .toc geladen wird.
-		local markFrame = SexyInterrupter.CreateMarkFrame and SexyInterrupter:CreateMarkFrame(EME, SexyInterrupter.EditModeHelpers) or nil;
-
-		-- The library's dialog builds its sliders from ITS per-layout db (100
-		-- when a value is missing, e.g. after switching to a layout it hasn't
-		-- seen). Re-seed from AceDB right before a frame's dialog is built, so
-		-- it never shows - or lets the user drag from - a bogus default.
-		for _, frame in ipairs({ f, c, markFrame }) do
-			local originalSelectSystem = frame.SelectSystem;
-
-			if originalSelectSystem then
-				frame.SelectSystem = function(...)
-					for _, resync in ipairs(pendingEditModeResyncs) do
-						resync();
-					end
-
-					return originalSelectSystem(...);
-				end
-			end
-		end
-	end
-
-	-- Keep the test-data preview (UpdateFrames() below, driven by
-	-- IsEditingUi()) in sync no matter how the user enters/exits Edit Mode -
-	-- our own "Open Edit Mode" button, the minimap icon, /si lock, or
-	-- Blizzard's own ESC menu / the in-Edit-Mode "Exit" button.
-	if EditModeManagerFrame then
-		hooksecurefunc(EditModeManagerFrame, "EnterEditMode", function()
-			-- Re-seed every custom checkbox/slider from our real AceDB values
-			-- right before the user can open a per-system dialog - see
-			-- pendingEditModeResyncs above for why a one-time seed at addon
-			-- load isn't enough (per-layout-profile migration inside the
-			-- library, and switching Edit Mode layouts entirely).
-			for _, resync in ipairs(pendingEditModeResyncs) do
-				resync();
-			end
-
-			SexyInterrupter:UpdateFrames();
-		end);
-		hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() SexyInterrupter:UpdateFrames(); end);
+	-- Gegner-Marker-Fenster (marks.lua) meldet sich selbst an.
+	-- nil, solange marks.lua nicht in der .toc geladen wird.
+	if SexyInterrupter.CreateMarkFrame then
+		SexyInterrupter:CreateMarkFrame(SexyInterrupter.EditModeHelpers);
 	end
 
 	-- Infight only
@@ -333,195 +545,70 @@ function SexyInterrupter:CreateUi()
 		-- desselben Frames aufrufen (Kollision mit Blizzards geschützter
 		-- Drag-Logik, beobachtet als Client-Absturz).
 		local anchorDB = self.db.profile.ui.editModeAnchorDB
-		if anchorDB.autoSeeded and not f.isDragging then
+		if anchorDB.autoSeeded and not SEM:IsMoving(f) then
 			local x, y = ComputeBottomLeft(
 				self.db.profile.ui.anchorPosition.point, anchorRegion, self.db.profile.ui.anchorPosition.relativePoint,
 				self.db.profile.ui.anchorPosition.x, self.db.profile.ui.anchorPosition.y,
 				self.db.profile.ui.window.width, 100)
 			if x and y then
 				anchorDB.x, anchorDB.y = x, y
-				local liveDB = GetLiveDB(f, anchorDB)
-				liveDB.x, liveDB.y = x, y
-				f:ClearAllPoints()
-				f:SetPoint(f.EMEanchorPoint or "BOTTOMLEFT", f.EMEanchorTo or UIParent, f.EMEanchorPoint or "BOTTOMLEFT", x, y)
+					SEM:SetPosition(f, x, y)
 			end
 		end
 
 		local messageDB = self.db.profile.ui.editModeMessageDB
-		if messageDB.autoSeeded and not c.isDragging then
+		if messageDB.autoSeeded and not SEM:IsMoving(c) then
 			local mx, my = ComputeBottomLeft(
 				self.db.profile.ui.messagePosition.point, UIParent, self.db.profile.ui.messagePosition.relativePoint,
-				self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, 500, c:GetHeight())
+				self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, ALERT_W, c:GetHeight())
 			if mx and my then
 				messageDB.x, messageDB.y = mx, my
-				local liveDB = GetLiveDB(c, messageDB)
-				liveDB.x, liveDB.y = mx, my
-				c:ClearAllPoints()
-				c:SetPoint(c.EMEanchorPoint or "BOTTOMLEFT", c.EMEanchorTo or UIParent, c.EMEanchorPoint or "BOTTOMLEFT", mx, my)
+					SEM:SetPosition(c, mx, my)
 			end
 		end
 	end)
 end
 
--- EditModeExpanded-1.0's custom checkbox/slider settings store their own
--- checked/value state in db.settings[<setting type number>][<internalName>]
--- on the library's OWN db table - not in our AceDB fields directly, and not
--- documented (no public getter, no initial-value parameter). The setting-
--- type numbers below (12 = Custom checkbox, 18 = Slider) are the vendored
--- library's own local constants (see lib/EditModeExpanded-1.0/
--- EditModeExpanded-1.0.lua, ENUM_EDITMODEACTIONBARSETTING_CUSTOM/SLIDER) -
--- re-check them if that file is ever re-vendored from a newer upstream
--- version.
---
--- EditModeExpanded also moves that db.settings into a NESTED per-layout-
--- profile table (db.profiles[<name>].settings) the first time the user ever
--- opens Edit Mode, and framesDB[systemID] then points at that nested copy
--- from then on (see the library's refreshCurrentProfile) - so seeding once
--- at CreateUi() time (ADDON_LOADED, before that migration has necessarily
--- happened) only works for a brand-new profile; on every later login the
--- migration already happened in a PRIOR session, so a one-time seed lands on
--- the now-abandoned outer table and is invisible. This is why "Show minimap
--- icon" kept showing unchecked despite the icon being on, and would also
--- desync if the user switches Edit Mode layouts. Fix: re-seed every time
--- Edit Mode is opened (CreateUi's EnterEditMode hook drains
--- pendingEditModeResyncs below), writing through EME.framesDB[frame.system]
--- (the library's own live/current reference for this system, migrated or
--- not) instead of our own db table. onChecked/onUnchecked/onChanged still
--- write back into our own AceDB - the actual, single source of truth the
--- rest of the addon reads, regardless of Edit Mode layout.
-local EME_SETTING_TYPE_CUSTOM = 12;
-local EME_SETTING_TYPE_SLIDER = 18;
-
-local function RegisterEditModeCheckbox(EME, frame, internalName, label, getFn, setFn)
-	local function Resync()
-		local liveDB = EME.framesDB and EME.framesDB[frame.system];
-
-		if liveDB then
-			liveDB.settings = liveDB.settings or {};
-			liveDB.settings[EME_SETTING_TYPE_CUSTOM] = liveDB.settings[EME_SETTING_TYPE_CUSTOM] or {};
-			liveDB.settings[EME_SETTING_TYPE_CUSTOM][internalName] = getFn() and 1 or 0;
-		end
-	end
-
-	Resync();
-	tinsert(pendingEditModeResyncs, Resync);
-
-	EME:RegisterCustomCheckbox(frame, label,
-		function()
-			-- onChecked() has no marker for "automatic re-run" (unlike
-			-- onUnchecked(true)), but a real click can only happen while the
-			-- library's settings dialog is open - the library hides it before
-			-- re-running the callbacks on a profile/layout change. Outside of
-			-- that, a stale per-layout value must not overwrite our AceDB.
-			if not (EditModeExpandedSystemSettingsDialog and EditModeExpandedSystemSettingsDialog:IsShown()) then
-				Resync();
-				return;
-			end
-
-			setFn(true);
-			SexyInterrupter:UpdateFrames();
-		end,
-		function(isAutomaticInit)
-			-- EditModeExpanded-1.0 re-runs every checkbox callback on each profile
-			-- init and EDIT_MODE_LAYOUTS_UPDATED using ITS OWN per-layout db, which
-			-- is empty for a layout it hasn't seen yet - so it reports "unchecked"
-			-- (onUnchecked(true)) for every box and would overwrite our real AceDB
-			-- values (e.g. the default "Play sound" = true) with false. Only that
-			-- automatic call passes `true`; a real click passes `false`. Push our
-			-- AceDB value into the library's db instead of writing it back.
-			if isAutomaticInit then
-				Resync();
-				return;
-			end
-
-			setFn(false);
-			SexyInterrupter:UpdateFrames();
-		end,
-		internalName);
+-- Edit-Mode-Dialog (SexyEditMode-1.0) ------------------------------------------------
+-- Die Einstellungen liegen weiter in AceDB (einzige Quelle); der Dialog liest und schreibt
+-- sie direkt. Die Helfer bauen die Zeilen-Beschreibungen der Bibliothek.
+local function Header(label, id, collapsed)
+	return { type = "header", name = label, id = id, collapsed = collapsed };
 end
 
-local function RegisterEditModeSlider(EME, frame, internalName, label, min, max, step, getFn, setFn)
-	local function Resync()
-		local liveDB = EME.framesDB and EME.framesDB[frame.system];
-
-		if liveDB then
-			liveDB.settings = liveDB.settings or {};
-			liveDB.settings[EME_SETTING_TYPE_SLIDER] = liveDB.settings[EME_SETTING_TYPE_SLIDER] or {};
-			liveDB.settings[EME_SETTING_TYPE_SLIDER][internalName] = getFn();
-		end
-	end
-
-	Resync();
-	tinsert(pendingEditModeResyncs, Resync);
-
-	-- The library also re-runs this callback with ITS per-layout value on every
-	-- profile refresh (Edit Mode layout switch / layouts update). Only real
-	-- slider input - which requires the library's settings dialog to be open,
-	-- it is hidden before the refresh - may change our AceDB value; otherwise
-	-- push the AceDB value into the library instead.
-	EME:RegisterSlider(frame, label, internalName, function(value)
-		if not (EditModeExpandedSystemSettingsDialog and EditModeExpandedSystemSettingsDialog:IsShown()) then
-			Resync();
-			return;
-		end
-
-		setFn(value);
-		SexyInterrupter:UpdateFrames();
-	end, min, max, step);
+-- Verweis auf ein zugehöriges Fenster (Klick zeigt dessen Einstellungen)
+local function Link(label, frameFn)
+	return { type = "link", name = label, frame = frameFn };
 end
 
--- LSM-backed selects (font/statusbar-texture/background-texture/border) have
--- no ready-made Edit Mode widget, but RegisterDropdown hands back a raw
--- dropdown frame built with LibUIDropDownMenu (same fork this addon already
--- uses for the Edit Mode dropdowns, see LibDD above) that we populate ourselves.
--- Each entry gets a real preview: a texture swatch of the media itself for
--- statusbar/background/border, or the entry's own text rendered in that font
--- for font entries - not just a plain name in a list.
-local previewFontObjects = {};
-local previewFontObjectCount = 0;
-
-local function GetPreviewFontObject(fontPath)
-	local fontObject = previewFontObjects[fontPath];
-
-	if not fontObject then
-		previewFontObjectCount = previewFontObjectCount + 1;
-		fontObject = CreateFont("SexyInterrupterEditModeFontPreview" .. previewFontObjectCount);
-		fontObject:SetFont(fontPath, 14, "");
-		previewFontObjects[fontPath] = fontObject;
-	end
-
-	return fontObject;
+local function Check(label, getFn, setFn)
+	return {
+		type = "check", name = label,
+		get = function() return getFn() and true or false; end,
+		set = function(value) setFn(value); SexyInterrupter:UpdateFrames(); end,
+	};
 end
 
-local function RegisterEditModeMediaDropdown(EME, frame, internalName, label, mediaType, getFn, setFn)
-	local dropdown = EME:RegisterDropdown(frame, LibDD, internalName);
-	local isFont = (mediaType == "font");
-	local isSound = (mediaType == "sound");
+local function Slider(label, min, max, step, getFn, setFn)
+	return {
+		type = "slider", name = label, min = min, max = max, step = step,
+		get = getFn,
+		set = function(value) setFn(value); SexyInterrupter:UpdateFrames(); end,
+	};
+end
 
-	-- Unlike RegisterCustomCheckbox/RegisterSlider/RegisterCustomButton,
-	-- RegisterDropdown takes no `name` parameter at all - there's no built-in
-	-- label for it, so the dialog row would otherwise just show the current
-	-- value with nothing saying what it's for. Add our own label, and move
-	-- the dropdown itself to sit to the right of it within the same row.
-	local layoutFrame = dropdown:GetParent();
+-- options ist eine Liste aus { value = ..., label = "..." } (oder eine Funktion, die sie liefert)
+local function Select(label, options, getFn, setFn)
+	return {
+		type = "select", name = label, options = options,
+		get = getFn,
+		set = function(value) setFn(value); SexyInterrupter:UpdateFrames(); end,
+	};
+end
 
-	-- GameFontHighlightMedium is what Blizzard's own EditModeSettingCheckbox/
-	-- SliderTemplate use for their .Label (see EditModeTemplates.xml) - not a
-	-- guess, matches the native rows exactly instead of eyeballing a font.
-	local labelText = layoutFrame:CreateFontString(nil, nil, "GameFontHighlightMedium");
-	labelText:SetPoint("LEFT", layoutFrame, "LEFT", 0, 0);
-	labelText:SetJustifyH("LEFT");
-	labelText:SetWidth(100);
-	labelText:SetText(label);
-
-	dropdown:ClearAllPoints();
-	dropdown:SetPoint("LEFT", labelText, "RIGHT", 5, -2);
-
-	local function RefreshText()
-		LibDD:UIDropDownMenu_SetText(dropdown, getFn());
-	end
-
-	LibDD:UIDropDownMenu_Initialize(dropdown, function(self, level)
+-- Auswahl aus LibSharedMedia (Schrift, Statusbar, Sound); Sounds spielen beim Wählen kurz
+local function MediaSelect(label, mediaType, getFn, setFn)
+	local function Options()
 		local names = {};
 
 		for name in pairs(LSM:HashTable(mediaType)) do
@@ -530,392 +617,203 @@ local function RegisterEditModeMediaDropdown(EME, frame, internalName, label, me
 
 		table.sort(names);
 
+		local list = {};
+
 		for _, name in ipairs(names) do
-			local info = LibDD:UIDropDownMenu_CreateInfo();
-			info.text = name;
-			info.checked = (name == getFn());
-
-			if isFont then
-				info.fontObject = GetPreviewFontObject(LSM:Fetch(mediaType, name));
-			elseif not isSound then
-				info.icon = LSM:Fetch(mediaType, name);
-			end
-
-			info.func = function()
-				setFn(name);
-
-				-- Sounds have no visual preview - play the picked one instead.
-				if isSound then
-					PlaySoundFile(LSM:Fetch(mediaType, name), "Master");
-				end
-
-				SexyInterrupter:UpdateFrames();
-				RefreshText();
-			end
-
-			LibDD:UIDropDownMenu_AddButton(info, level);
+			list[#list + 1] = { value = name, label = name };
 		end
-	end);
 
-	LibDD:UIDropDownMenu_SetWidth(dropdown, 150);
-	RefreshText();
+		return list;
+	end
+
+	return {
+		type = "select", name = label, options = Options,
+		get = getFn,
+		set = function(value)
+			setFn(value);
+
+			if mediaType == "sound" then
+				PlaySoundFile(LSM:Fetch(mediaType, value), "Master");
+			end
+
+			SexyInterrupter:UpdateFrames();
+		end,
+	};
 end
 
--- Wie RegisterEditModeMediaDropdown oben, aber für eine feste, kleine
--- Werteliste (nicht LibSharedMedia) wie z. B. Wachstumsrichtung. options ist
--- eine Liste aus { value = ..., label = "..." }.
-local function RegisterEditModeSelectDropdown(EME, frame, internalName, label, options, getFn, setFn)
-	local dropdown = EME:RegisterDropdown(frame, LibDD, internalName);
-	local layoutFrame = dropdown:GetParent();
-
-	local labelText = layoutFrame:CreateFontString(nil, nil, "GameFontHighlightMedium");
-	labelText:SetPoint("LEFT", layoutFrame, "LEFT", 0, 0);
-	labelText:SetJustifyH("LEFT");
-	labelText:SetWidth(100);
-	labelText:SetText(label);
-
-	dropdown:ClearAllPoints();
-	dropdown:SetPoint("LEFT", labelText, "RIGHT", 5, -2);
-
-	local function GetCurrentLabel()
-		local current = getFn();
-		for _, option in ipairs(options) do
-			if option.value == current then
-				return option.label;
-			end
-		end
-		return "";
-	end
-
-	local function RefreshText()
-		LibDD:UIDropDownMenu_SetText(dropdown, GetCurrentLabel());
-	end
-
-	LibDD:UIDropDownMenu_Initialize(dropdown, function(self, level)
-		for _, option in ipairs(options) do
-			local info = LibDD:UIDropDownMenu_CreateInfo();
-			info.text = option.label;
-			info.checked = (option.value == getFn());
-			info.func = function()
-				setFn(option.value);
-				SexyInterrupter:UpdateFrames();
-				RefreshText();
-			end
-			LibDD:UIDropDownMenu_AddButton(info, level);
-		end
-	end);
-
-	LibDD:UIDropDownMenu_SetWidth(dropdown, 150);
-	RefreshText();
+local function Color(label, hasAlpha, getFn, setFn)
+	return {
+		type = "color", name = label, hasAlpha = hasAlpha,
+		get = getFn,
+		set = function(r, g, b, a) setFn(r, g, b, a); SexyInterrupter:UpdateFrames(); end,
+	};
 end
 
--- No Edit Mode widget for color pickers either - opens Blizzard's own native
--- ColorPickerFrame (same one the normal AceConfig color swatches use) via a
--- small clickable color swatch (not a full red-bordered button with the
--- label as its face text - stripped down and given its own label instead,
--- to match how the checkbox/dropdown rows look).
-local function RegisterEditModeColorButton(EME, frame, label, hasAlpha, getFn, setFn)
-	local RefreshSwatch;
-
-	local function refresh()
-		if RefreshSwatch then RefreshSwatch(); end
-	end
-
-	EME:RegisterCustomButton(frame, label, function()
-		local r, g, b, a = getFn();
-
-		ColorPickerFrame:SetupColorPickerAndShow({
-			r = r, g = g, b = b,
-			opacity = hasAlpha and a or nil,
-			hasOpacity = hasAlpha,
-			swatchFunc = function()
-				local nr, ng, nb = ColorPickerFrame:GetColorRGB();
-				setFn(nr, ng, nb, hasAlpha and ColorPickerFrame:GetColorAlpha() or a);
-				SexyInterrupter:UpdateFrames();
-				refresh();
-			end,
-			opacityFunc = function()
-				local nr, ng, nb = ColorPickerFrame:GetColorRGB();
-				setFn(nr, ng, nb, ColorPickerFrame:GetColorAlpha());
-				SexyInterrupter:UpdateFrames();
-				refresh();
-			end,
-			cancelFunc = function(previousValues)
-				setFn(previousValues.r, previousValues.g, previousValues.b, hasAlpha and previousValues.a or a);
-				SexyInterrupter:UpdateFrames();
-				refresh();
-			end,
-		});
-	end);
-
-	-- RegisterCustomButton doesn't hand back the button it just created (only
-	-- a getCurrentDB function we don't need here), but it does record it as
-	-- the last entry of EME.framesDialogs[frame.system] (a public field of
-	-- the library, unlike the internal setting-type numbers above) - that's
-	-- our only way to reach the real button and rebuild it into a small
-	-- swatch + label instead of a full-size button with text on its face.
-	local dialog = EME.framesDialogs and EME.framesDialogs[frame.system];
-	local button = dialog and dialog[table.getn(dialog)] and dialog[table.getn(dialog)].settingFrame;
-
-	if button then
-		-- Unlike the dropdown, RegisterCustomButton gives this button no
-		-- per-row wrapper frame of its own - it's parented directly to the
-		-- shared Settings container, and ITS OWN position (button:SetPoint,
-		-- reset on every dialog refresh) is what the row-layout system
-		-- controls. Anchoring a label to button:GetParent() put every color
-		-- row's label at the same spot (the container's own corner), and
-		-- moving the button off its assigned anchor broke the row layout
-		-- entirely. Fix: leave the button's own position alone, just resize
-		-- it to hold both the label and the swatch as its own children.
-		button:SetSize(150, 20);
-		button.Text:SetText("");
-
-		-- Neither SetAlpha(0) nor :Hide() on GetNormalTexture()/etc actually
-		-- removed the red UIPanelButtonTemplate skin - this client's version
-		-- of the template apparently doesn't skin it through those texture
-		-- slots (could be a NineSlice child frame instead). Don't guess
-		-- further: blanket-hide every region and child frame the button has
-		-- right now (before adding our own label/swatch below).
-		for _, region in ipairs({ button:GetRegions() }) do
-			if region.Hide then region:Hide(); end
-		end
-
-		for _, child in ipairs({ button:GetChildren() }) do
-			child:Hide();
-		end
-
-		button:SetScript("OnEnter", nil);
-		button:SetScript("OnLeave", nil);
-
-		local labelText = button:CreateFontString(nil, nil, "GameFontHighlightMedium");
-		labelText:SetPoint("LEFT", button, "LEFT", 0, 0);
-		labelText:SetJustifyH("LEFT");
-		labelText:SetWidth(100);
-		labelText:SetText(label);
-
-		local swatch = button:CreateTexture(nil, "ARTWORK");
-		swatch:SetSize(20, 20);
-		swatch:SetPoint("LEFT", labelText, "RIGHT", 5, 0);
-
-		local swatchBorder = button:CreateTexture(nil, "BORDER");
-		swatchBorder:SetPoint("TOPLEFT", swatch, "TOPLEFT", -1, 1);
-		swatchBorder:SetPoint("BOTTOMRIGHT", swatch, "BOTTOMRIGHT", 1, -1);
-		swatchBorder:SetColorTexture(0, 0, 0, 1);
-
-		RefreshSwatch = function()
-			local r, g, b = getFn();
-			swatch:SetColorTexture(r, g, b, 1);
-		end
-
-		RefreshSwatch();
-	end
-end
-
--- Mirrors the settings that already exist in the normal options panel
--- (settings.lua) into Blizzard's real Edit Mode dialog for these two
--- frames, via checkboxes, sliders, LSM-backed dropdowns (font/statusbar-
--- texture/background-texture/border) and native-ColorPicker buttons (bar/
--- background/border/font color). Only the LSM sound picker and the
--- per-player priority-assignment tab (a whole dynamic sub-list, not a
--- single value) have no sane equivalent here and stay in the normal
--- options panel.
--- Für marks.lua (ruft die Registrierungs-Helfer von dort aus auf).
+-- Für marks.lua
 SexyInterrupter.EditModeHelpers = {
-	Checkbox = RegisterEditModeCheckbox,
-	Slider = RegisterEditModeSlider,
-	Select = RegisterEditModeSelectDropdown,
+	Header = Header,
+	Link = Link,
+	Check = Check,
+	Slider = Slider,
+	Select = Select,
 	GetLiveDB = GetLiveDB,
 	ComputeBottomLeft = ComputeBottomLeft,
 	ApplyBackdrop = ApplyBackdrop,
 };
 
-function SexyInterrupter:RegisterEditModeSettings(EME, anchorFrame, messageFrame)
-	RegisterEditModeCheckbox(EME, anchorFrame, "modeincombat", L["Show in combat only"],
-		function() return self.db.profile.general.modeincombat end,
-		function(value) self.db.profile.general.modeincombat = value; end);
+-- Einstellungen des Fensters "Interrupts"
+function SexyInterrupter:AnchorSettings()
+	local profile = self.db.profile;
 
-	RegisterEditModeCheckbox(EME, anchorFrame, "activeSolo", L["Active when solo"],
-		function() return self.db.profile.general.activeSolo end,
-		function(value) self.db.profile.general.activeSolo = value; end);
+	return {
+		Link(L["Interrupt now"], function() return SexyInterrupterInterruptNowText; end),
+		Link(L["Enemy marks"], function() return SexyInterrupter.markFrame; end),
+		Header(L["Behavior"], "behavior"),
+		Check(L["Show in combat only"],
+			function() return profile.general.modeincombat end,
+			function(value) profile.general.modeincombat = value; end),
+		Check(L["Active when solo"],
+			function() return profile.general.activeSolo end,
+			function(value) profile.general.activeSolo = value; end),
+		Check(L["Ignore healers"],
+			function() return profile.general.ignoreHealer end,
+			function(value) profile.general.ignoreHealer = value; end),
+		Check(L["Fixed rotation order"],
+			function() return profile.general.fixedRotation end,
+			function(value) profile.general.fixedRotation = value; end),
+		Check(L["Highlight own row"],
+			function() return profile.general.highlightOwn end,
+			function(value) profile.general.highlightOwn = value; end),
+		Check(L["Show minimap icon"] or "Show minimap icon",
+			function() return profile.general.minimapIcon end,
+			function(value)
+				profile.general.minimapIcon = value;
 
-	RegisterEditModeCheckbox(EME, anchorFrame, "ignoreHealer", L["Ignore healers"],
-		function() return self.db.profile.general.ignoreHealer end,
-		function(value) self.db.profile.general.ignoreHealer = value; end);
-
-	RegisterEditModeCheckbox(EME, anchorFrame, "fixedRotation", L["Fixed rotation order"],
-		function() return self.db.profile.general.fixedRotation end,
-		function(value) self.db.profile.general.fixedRotation = value; end);
-
-	RegisterEditModeCheckbox(EME, anchorFrame, "highlightOwn", L["Highlight own row"],
-		function() return self.db.profile.general.highlightOwn end,
-		function(value) self.db.profile.general.highlightOwn = value; end);
-
-	RegisterEditModeCheckbox(EME, anchorFrame, "minimapIcon", L["Show minimap icon"] or "Show minimap icon",
-		function() return self.db.profile.general.minimapIcon end,
-		function(value)
-			self.db.profile.general.minimapIcon = value;
-
-			-- self.icon is only assigned in OnInitialize AFTER CreateUi(), and the
-			-- library may call this callback that early.
-			if not self.icon then
-				return;
-			end
-
-			if not self.icon:IsRegistered("SexyInterrupter") then
-				SexyInterrupter:AddIcon();
-			end
-
-			if value then
-				self.icon:Show("SexyInterrupter");
-			else
-				self.icon:Hide("SexyInterrupter");
-			end
-		end);
-
-	RegisterEditModeCheckbox(EME, anchorFrame, "showclassicon", L["Show class icon"],
-		function() return self.db.profile.ui.bars.showclassicon end,
-		function(value) self.db.profile.ui.bars.showclassicon = value; end);
-
-	RegisterEditModeCheckbox(EME, anchorFrame, "barsuseclasscolor", L["Bar color by class"],
-		function() return self.db.profile.ui.bars.useclasscolor end,
-		function(value) self.db.profile.ui.bars.useclasscolor = value; end);
-
-	RegisterEditModeCheckbox(EME, anchorFrame, "textuseclasscolor", L["Text color by class"],
-		function() return self.db.profile.ui.useclasscolor end,
-		function(value) self.db.profile.ui.useclasscolor = value; end);
-
-	RegisterEditModeSlider(EME, anchorFrame, "maxrows", L["Max rows of interrupters"], 3, 30, 1,
-		function() return self.db.profile.general.maxrows end,
-		function(value) self.db.profile.general.maxrows = value; end);
-
-	-- Wachstumsrichtung: siehe ausführlicher Kommentar bei SexyInterrupterAnchor:
-	-- SetSize() in UpdateUI() - der Anker ist BOTTOMLEFT-verankert (Reload-
-	-- Stabilität), wächst also standardmäßig nach oben; diese Option kompensiert
-	-- das rechnerisch, damit stattdessen die obere Kante fix bleibt.
-	RegisterEditModeSelectDropdown(EME, anchorFrame, "growdirection", L["Grow direction"] or "Grow direction",
-		{
-			{ value = false, label = L["Downward"] or "Downward" },
-			{ value = true,  label = L["Upward"] or "Upward" },
-		},
-		function() return self.db.profile.ui.window.growUp end,
-		function(value) self.db.profile.ui.window.growUp = value; end);
-
-	RegisterEditModeSlider(EME, anchorFrame, "width", L["Width"], 100, 400, 1,
-		function() return self.db.profile.ui.window.width end,
-		function(value) self.db.profile.ui.window.width = value; end);
-
-	RegisterEditModeSlider(EME, anchorFrame, "barheight", L["Bar height"], 4, 60, 1,
-		function() return self.db.profile.ui.bars.barheight end,
-		function(value) self.db.profile.ui.bars.barheight = value; end);
-
-	RegisterEditModeSlider(EME, anchorFrame, "fontsize", L["Font size"], 4, 30, 1,
-		function() return self.db.profile.ui.fontsize end,
-		function(value) self.db.profile.ui.fontsize = value; end);
-
-	RegisterEditModeMediaDropdown(EME, anchorFrame, "font", L["Font art"], "font",
-		function() return self.db.profile.ui.font end,
-		function(value) self.db.profile.ui.font = value; end);
-
-	RegisterEditModeMediaDropdown(EME, anchorFrame, "bartexture", L["Statusbar"], "statusbar",
-		function() return self.db.profile.ui.bars.texture end,
-		function(value) self.db.profile.ui.bars.texture = value; end);
-
-	RegisterEditModeMediaDropdown(EME, anchorFrame, "backgroundtexture", L["Background"], "background",
-		function() return self.db.profile.ui.window.backgroundtexture end,
-		function(value) self.db.profile.ui.window.backgroundtexture = value; end);
-
-	RegisterEditModeMediaDropdown(EME, anchorFrame, "bordertexture", L["Border"], "border",
-		function() return self.db.profile.ui.window.border end,
-		function(value) self.db.profile.ui.window.border = value; end);
-
-	RegisterEditModeColorButton(EME, anchorFrame, L["Bar color"], true,
-		function()
-			local c = self.db.profile.ui.bars.barcolor;
-			return c.r, c.g, c.b, c.a;
-		end,
-		function(r, g, b, a)
-			local c = self.db.profile.ui.bars.barcolor;
-			c.r, c.g, c.b, c.a = r, g, b, a;
-		end);
-
-	RegisterEditModeColorButton(EME, anchorFrame, L["Background color"], true,
-		function()
-			local c = self.db.profile.ui.window.background;
-			return c.r, c.g, c.b, c.a;
-		end,
-		function(r, g, b, a)
-			local c = self.db.profile.ui.window.background;
-			c.r, c.g, c.b, c.a = r, g, b, a;
-		end);
-
-	RegisterEditModeColorButton(EME, anchorFrame, L["Border color"], false,
-		function()
-			local c = self.db.profile.ui.window.bordercolor;
-			return c.r, c.g, c.b, 1;
-		end,
-		function(r, g, b)
-			local c = self.db.profile.ui.window.bordercolor;
-			c.r, c.g, c.b = r, g, b;
-		end);
-
-	RegisterEditModeColorButton(EME, anchorFrame, L["Font color"], false,
-		function()
-			local c = self.db.profile.ui.fontcolor;
-			return c.r, c.g, c.b, 1;
-		end,
-		function(r, g, b)
-			local c = self.db.profile.ui.fontcolor;
-			c.r, c.g, c.b = r, g, b;
-		end);
-
-	RegisterEditModeCheckbox(EME, messageFrame, "message", L["Show message"],
-		function() return self.db.profile.notification.message end,
-		function(value) self.db.profile.notification.message = value; end);
-
-	RegisterEditModeCheckbox(EME, messageFrame, "sound", L["Play sound"],
-		function() return self.db.profile.notification.sound end,
-		function(value) self.db.profile.notification.sound = value; end);
-
-	-- soundFile may hold a LibSharedMedia NAME (what the picker stores) or a raw
-	-- file path (the default) - show the matching name either way.
-	RegisterEditModeMediaDropdown(EME, messageFrame, "soundfile", L["Sound file"], "sound",
-		function()
-			local current = self.db.profile.notification.soundFile;
-
-			for name, path in pairs(LSM:HashTable("sound")) do
-				if name == current or path == current then
-					return name;
+				-- self.icon wird erst in OnInitialize nach CreateUi() gesetzt
+				if not self.icon then
+					return;
 				end
-			end
 
-			return current;
-		end,
-		function(value) self.db.profile.notification.soundFile = value; end);
+				if not self.icon:IsRegistered("SexyInterrupter") then
+					SexyInterrupter:AddIcon();
+				end
 
-	RegisterEditModeCheckbox(EME, messageFrame, "flash", L["Flash display"],
-		function() return self.db.profile.notification.flash end,
-		function(value)
-			self.db.profile.notification.flash = value;
+				if value then
+					self.icon:Show("SexyInterrupter");
+				else
+					self.icon:Hide("SexyInterrupter");
+				end
+			end),
+		Slider(L["Max rows of interrupters"], 3, 30, 1,
+			function() return profile.general.maxrows end,
+			function(value) profile.general.maxrows = value; end),
 
-			-- Läuft gerade ein Flash, beim Abschalten sofort beenden.
-			if not value and SexyInterrupterBlueWarningFrame then
-				SexyInterrupterBlueWarningFrame:Hide();
-			end
-		end);
+		Header(L["Look"], "look", true),
+		-- Wachstumsrichtung: siehe Kommentar bei SexyInterrupterAnchor:SetSize() in UpdateUI() -
+		-- der Anker sitzt mit der unteren Kante fest; "Nach unten" hält rechnerisch die obere Kante.
+		Select(L["Grow direction"] or "Grow direction",
+			{
+				{ value = false, label = L["Downward"] or "Downward" },
+				{ value = true,  label = L["Upward"] or "Upward" },
+			},
+			function() return profile.ui.window.growUp end,
+			function(value) profile.ui.window.growUp = value; end),
+		Slider(L["Width"], 100, 400, 1,
+			function() return profile.ui.window.width end,
+			function(value) profile.ui.window.width = value; end),
+		Slider(L["Bar height"], 4, 60, 1,
+			function() return profile.ui.bars.barheight end,
+			function(value) profile.ui.bars.barheight = value; end),
+		Check(L["Show class icon"],
+			function() return profile.ui.bars.showclassicon end,
+			function(value) profile.ui.bars.showclassicon = value; end),
+		Check(L["Bar color by class"],
+			function() return profile.ui.bars.useclasscolor end,
+			function(value) profile.ui.bars.useclasscolor = value; end),
+		Check(L["Text color by class"],
+			function() return profile.ui.useclasscolor end,
+			function(value) profile.ui.useclasscolor = value; end),
+		MediaSelect(L["Statusbar"], "statusbar",
+			function() return profile.ui.bars.texture end,
+			function(value) profile.ui.bars.texture = value; end),
+		Color(L["Bar color"], true,
+			function()
+				local c = profile.ui.bars.barcolor;
+				return c.r, c.g, c.b, c.a;
+			end,
+			function(r, g, b, a)
+				local c = profile.ui.bars.barcolor;
+				c.r, c.g, c.b, c.a = r, g, b, a;
+			end),
 
-	RegisterEditModeCheckbox(EME, messageFrame, "interruptmessage", L["Show chat message"],
-		function() return self.db.profile.notification.interruptmessage end,
-		function(value) self.db.profile.notification.interruptmessage = value; end);
+		Header(L["Text"], "text", true),
+		MediaSelect(L["Font art"], "font",
+			function() return profile.ui.font end,
+			function(value) profile.ui.font = value; end),
+		Slider(L["Font size"], 4, 30, 1,
+			function() return profile.ui.fontsize end,
+			function(value) profile.ui.fontsize = value; end),
+		Color(L["Font color"], false,
+			function()
+				local c = profile.ui.fontcolor;
+				return c.r, c.g, c.b, 1;
+			end,
+			function(r, g, b)
+				local c = profile.ui.fontcolor;
+				c.r, c.g, c.b = r, g, b;
+			end),
+	};
+end
 
+-- Einstellungen der Karte "Unterbrich jetzt"
+function SexyInterrupter:MessageSettings()
+	local profile = self.db.profile;
 	local outputChannelOptions = {};
 
 	for _, channel in ipairs({ 'SAY', 'YELL', 'PARTY', 'RAID' }) do
 		tinsert(outputChannelOptions, { value = channel, label = SexyInterrupter.outputchannels[channel] });
 	end
 
-	RegisterEditModeSelectDropdown(EME, messageFrame, "outputchannel", L["Ouput channel"], outputChannelOptions,
-		function() return self.db.profile.notification.outputchannel end,
-		function(value) self.db.profile.notification.outputchannel = value; end);
+	return {
+		Link(L["Interrupts"], function() return SexyInterrupterAnchor; end),
+		Header(L["Notification"], "notification"),
+		Check(L["Show message"],
+			function() return profile.notification.message end,
+			function(value) profile.notification.message = value; end),
+		Check(L["Play sound"],
+			function() return profile.notification.sound end,
+			function(value) profile.notification.sound = value; end),
+		-- soundFile kann einen LibSharedMedia-NAMEN (Auswahl) oder einen Dateipfad (Standard) enthalten
+		MediaSelect(L["Sound file"], "sound",
+			function()
+				local current = profile.notification.soundFile;
+
+				for name, path in pairs(LSM:HashTable("sound")) do
+					if name == current or path == current then
+						return name;
+					end
+				end
+
+				return current;
+			end,
+			function(value) profile.notification.soundFile = value; end),
+		Check(L["Flash display"],
+			function() return profile.notification.flash end,
+			function(value)
+				profile.notification.flash = value;
+
+				-- Läuft gerade ein Flash, beim Abschalten sofort beenden.
+				if not value and SexyInterrupterBlueWarningFrame then
+					SexyInterrupterBlueWarningFrame:Hide();
+				end
+			end),
+		Check(L["Show chat message"],
+			function() return profile.notification.interruptmessage end,
+			function(value) profile.notification.interruptmessage = value; end),
+		Select(L["Ouput channel"], outputChannelOptions,
+			function() return profile.notification.outputchannel end,
+			function(value) profile.notification.outputchannel = value; end),
+	};
 end
 
 function SexyInterrupter:UpdateFrames()
@@ -924,14 +822,13 @@ function SexyInterrupter:UpdateFrames()
 	-- No SetPoint/ClearAllPoints here anymore: EditModeExpanded-1.0 (see
 	-- CreateUi) owns positioning these two frames from here on, driven by
 	-- Blizzard's real Edit Mode drag UI instead of our own anchor options.
-	ApplyBackdrop(SexyInterrupterAnchor, self.db.profile);
-	SexyInterrupterAnchor:SetBackdropBorderColor(self.db.profile.ui.window.bordercolor.r, self.db.profile.ui.window.bordercolor.g, self.db.profile.ui.window.bordercolor.b, self.db.profile.ui.window.bordercolor.a);
+	ApplyBackdrop(SexyInterrupterAnchor);
 
 	for _, child in ipairs({ SexyInterrupterAnchor:GetChildren() }) do
 		if child:GetName() and string.find(child:GetName(), "SexyInterrupterRow") then
 			for _, subchild in ipairs({ child:GetChildren() }) do
 				if subchild:GetName() and string.find(subchild:GetName(), "SexyInterrupterStatusBar") then
-					subchild:SetSize(self.db.profile.ui.window.width - 10, self.db.profile.ui.bars.barheight)
+					subchild:SetSize(self.db.profile.ui.window.width - 12, self.db.profile.ui.bars.barheight)
 					subchild:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.profile.ui.bars.texture));
 					subchild:SetStatusBarColor(self.db.profile.ui.bars.barcolor.r, self.db.profile.ui.bars.barcolor.g, self.db.profile.ui.bars.barcolor.b, self.db.profile.ui.bars.barcolor.a);
 
@@ -941,8 +838,12 @@ function SexyInterrupter:UpdateFrames()
 						subchild.classicon:Show();
 					end
 
-					subchild.text:SetFont(LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize, "OUTLINE");
-					subchild.cooldownText:SetFont(LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize, "OUTLINE")
+					StyleText(subchild.text, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize);
+					StyleText(subchild.cooldownText, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
+					local iconSize = math.max(12, math.min(20, self.db.profile.ui.bars.barheight - 8));
+					subchild.classicon:SetSize(iconSize, iconSize);
+					subchild.abilityicon:SetSize(iconSize, iconSize);
+					subchild.offlineicon:SetSize(iconSize, iconSize);
 					subchild.cooldownText:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
 				end
 			end
@@ -950,25 +851,14 @@ function SexyInterrupter:UpdateFrames()
 	end
 
 	do
-		-- Die Vorschau-Nachricht liegt in einem eigenen FontString statt im
-		-- MessageFrame: Text im MessageFrame beim Beenden des Edit Mode fuehrte zu
-		-- einer ACCESS_VIOLATION (Client-Absturz). Ein FontString wird beim
-		-- Schliessen einfach versteckt.
-		local msgFrame = SexyInterrupterInterruptNowText;
-		if not msgFrame.previewText then
-			msgFrame.previewText = msgFrame:CreateFontString(nil, "OVERLAY");
-			msgFrame.previewText:SetPoint("CENTER", msgFrame, "CENTER", 0, 0);
-			msgFrame.previewText:SetWidth(500);
-			msgFrame.previewText:Hide();
-		end
+		-- Im Edit Mode zeigt die Karte "Unterbrich jetzt!" Beispieldaten, danach
+		-- verschwindet sie wieder (eine echte Meldung läuft über ShowAlert).
+		local card = SexyInterrupterInterruptNowText;
 
 		if editing then
-			local fontPath = msgFrame:GetFont();
-			msgFrame.previewText:SetFont(fontPath, 25, "OUTLINE");
-			msgFrame.previewText:SetText(GetPreviewMessageText());
-			msgFrame.previewText:Show();
-		else
-			msgFrame.previewText:Hide();
+			card:ShowPreview();
+		elseif card.previewing then
+			card:HideAlert();
 		end
 	end
 
@@ -993,17 +883,18 @@ function SexyInterrupter:UpdateUI(rows)
 			f:SetSize(20, self.db.profile.ui.bars.barheight);
 
 			if (cx == 1) then
-				f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 5, -(cx - 1) * self.db.profile.ui.bars.barheight - 5)
+				-- unter dem Titelband (HEAD) und dem 2-px-Rand
+				f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 6, -(HEAD + 2))
 			else
 				f:SetPoint("TOP", _G["SexyInterrupterRow" .. (cx - 1)], "BOTTOM")
 			end
 
 			local t = f:CreateTexture()
 			t:SetAllPoints(f)
-			t:SetColorTexture(0, 0, 0, 0.4)
+			t:SetColorTexture(CARD[1], CARD[2], CARD[3], CARD[4])
 
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
-			f:SetSize(self.db.profile.ui.window.width - 10, self.db.profile.ui.bars.barheight)
+			f:SetSize(self.db.profile.ui.window.width - 12, self.db.profile.ui.bars.barheight)
 			f:SetPoint("LEFT", "SexyInterrupterRow" .. cx, "LEFT")
 			f:SetOrientation("HORIZONTAL")
 			f:SetStatusBarTexture(LSM:Fetch("statusbar", self.db.profile.ui.bars.texture));
@@ -1012,40 +903,67 @@ function SexyInterrupter:UpdateUI(rows)
 			f:SetMinMaxValues(0, 100)
 			f:SetValue(100)
 
+			-- Karte unter der Leiste, damit der Rest hinter dem Cooldown-Füllstand
+			-- nicht durchscheint, plus Trennlinie
+			f.cardBg = f:CreateTexture(nil, "BACKGROUND")
+			f.cardBg:SetAllPoints(f)
+			f.cardBg:SetColorTexture(CARD[1], CARD[2], CARD[3], CARD[4])
+			-- 1-px-Rahmen um die Leiste (Farbe: Randfarbe des Fensters, gedimmt), siehe
+			-- UpdateInterrupterStatus()
+			f.edges = {};
+			for _, spec in ipairs({
+				{ "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
+				{ "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil },
+			}) do
+				local e = f:CreateTexture(nil, "OVERLAY", nil, -2);
+				e:SetPoint(spec[1], f, spec[1], 0, 0);
+				e:SetPoint(spec[2], f, spec[2], 0, 0);
+
+				if spec[3] then
+					e:SetWidth(spec[3]);
+				else
+					e:SetHeight(spec[4]);
+				end
+
+				f.edges[#f.edges + 1] = e;
+			end
+
 			-- Role icon (Tank/Healer/Damage Dealer) on the left; the specific
 			-- interrupt ability's own icon (once known) on the right, as its
 			-- own separate texture - these are two different pieces of
 			-- information, not one icon that swaps meaning.
-			-- Hervorhebung der eigenen Zeile (Tönung + Akzentstreifen links),
+			-- Hervorhebung der eigenen Zeile (goldene Tönung),
 			-- siehe UpdateInterrupterStatus().
 			f.highlightBG = f:CreateTexture(nil, "ARTWORK");
 			f.highlightBG:SetAllPoints(f);
 			f.highlightBG:SetColorTexture(1, 0.82, 0, 0.25);
 			f.highlightBG:Hide();
 
-			f.highlightEdge = f:CreateTexture(nil, "OVERLAY");
-			f.highlightEdge:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0);
-			f.highlightEdge:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0);
-			f.highlightEdge:SetWidth(3);
-			f.highlightEdge:SetColorTexture(1, 0.82, 0, 1);
-			f.highlightEdge:Hide();
-
+			local iconSize = math.max(12, math.min(20, self.db.profile.ui.bars.barheight - 8));
 			f.classicon = f:CreateTexture(nil, "OVERLAY");
 			f.classicon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES");
-			f.classicon:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", 2, 0);
+			f.classicon:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", 8, 0);
 			f.classicon:SetTexCoord(unpack(self.role_icon_tcoords.DAMAGER));
-			f.classicon:SetSize(16, 16);
+			f.classicon:SetSize(iconSize, iconSize);
 
 			f.abilityicon = f:CreateTexture(nil, "OVERLAY");
-			f.abilityicon:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", -2, 0);
-			f.abilityicon:SetSize(16, 16);
+			f.abilityicon:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", -6, 0);
+			f.abilityicon:SetSize(iconSize, iconSize);
 			f.abilityicon:Hide();
+
+			-- Rahmen um das Fähigkeiten-Icon (Randfarbe des Fensters), folgt dem Icon beim
+			-- Ein- und Ausblenden (siehe UpdateInterrupterStatus)
+			f.abilityborder = f:CreateTexture(nil, "OVERLAY", nil, -1);
+			f.abilityborder:SetPoint("TOPLEFT", f.abilityicon, "TOPLEFT", -2, 2);
+			f.abilityborder:SetPoint("BOTTOMRIGHT", f.abilityicon, "BOTTOMRIGHT", 2, -2);
+			f.abilityborder:SetColorTexture(0.42, 0.34, 0.15, 1);
+			f.abilityborder:Hide();
 
 			-- Offline-Symbol an der Stelle des Fähigkeiten-Icons.
 			f.offlineicon = f:CreateTexture(nil, "OVERLAY");
 			f.offlineicon:SetTexture("Interface\\CharacterFrame\\Disconnect-Icon");
-			f.offlineicon:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", -2, 0);
-			f.offlineicon:SetSize(16, 16);
+			f.offlineicon:SetPoint("RIGHT", "SexyInterrupterStatusBar" .. cx, "RIGHT", -6, 0);
+			f.offlineicon:SetSize(iconSize, iconSize);
 			f.offlineicon:Hide();
 
 			-- Texturen können in WoW keine Mausereignisse empfangen (nur
@@ -1065,18 +983,24 @@ function SexyInterrupter:UpdateUI(rows)
 			f.abilityiconHitbox:Hide();
 
 			f.text = f:CreateFontString("SexyInterrupterStatusBarText" .. cx, nil, "GameFontNormal")
-			f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", self.db.profile.ui.bars.showclassicon and 25 or 5, 0)
-			f.text:SetSize(180 - 5, 20)
+			f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", self.db.profile.ui.bars.showclassicon and 31 or 8, 0)
+			f.text:SetHeight(20)
 			f.text:SetJustifyH("LEFT")
-			f.text:SetFont(LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize, "OUTLINE")
+			StyleText(f.text, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
 			f.text:SetText('Dummy')
 
 			f.cooldownText = f:CreateFontString("SexyInterrupterStatusBarCooldownText" .. cx, nil, "GameFontNormal")
 			f.cooldownText:SetSize(12*3, 12)
 			f.cooldownText:SetJustifyH("RIGHT")
 			f.cooldownText:SetPoint("RIGHT", f.abilityicon, "LEFT", -3, 0)
-			f.cooldownText:SetFont(LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize, "OUTLINE")
+			StyleText(f.cooldownText, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
 			f.cooldownText:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
+
+			-- Status-Etikett (nächster / bereit / tot / offline) an der Stelle der
+			-- Cooldown-Zahl, siehe UpdateInterrupterStatus().
+			f.pill = MakePill(f)
+			f.pill.bg:SetPoint("RIGHT", f.abilityicon, "LEFT", -3, 0)
+			f.pill:Hide()
 		end
 	end
 
@@ -1101,9 +1025,23 @@ function SexyInterrupter:UpdateUI(rows)
 		-- Kante fix bleibt (reines Rechnen auf db.y, kein Skalierungsproblem
 		-- wie bei rohem GetLeft()/GetTop(), da BOTTOMLEFT->UIParent-BOTTOMLEFT
 		-- bei UIParent-Ursprung (0,0) skalierungsunabhängig ist).
-		local oldHeight = SexyInterrupterAnchor:GetHeight();
-		local newHeight = (self.db.profile.ui.bars.barheight * maxRows) + 10;
-		SexyInterrupterAnchor:SetSize(self.db.profile.ui.window.width, newHeight);
+		-- Höhe, auf die sich die gespeicherte Position (db.y = untere Kante) bezieht. Sie wird
+		-- NUR weitergeschaltet, wenn die Kompensation unten wirklich gelaufen ist. Früher wurde
+		-- stattdessen die aktuelle Fensterhöhe als "alt" genommen: lief die Kompensation nicht
+		-- (Drag, Kampf), blieb die Höhe geändert und die Position sprang dauerhaft. Sie wird
+		-- im Profil gespeichert, damit auch nach /reload die richtige Basis gilt.
+		local window = self.db.profile.ui.window;
+		local oldHeight = window.anchoredHeight;
+		-- Titelband plus Rand oben (HEAD + 2), 6 px unten
+		local newHeight = (self.db.profile.ui.bars.barheight * maxRows) + HEAD + 2 + 6;
+		-- Ohne gespeicherte Basis (erster Start mit dieser Version) nichts verschieben
+		oldHeight = oldHeight or newHeight;
+		-- Im Kampf nicht anfassen: an den Zeilen hängen Secure-Buttons (Klick auf
+		-- Spieler), Größe/Anker dieser Frames sind im Kampf gesperrt (ADDON_ACTION_BLOCKED).
+		-- Die Anpassung wird beim nächsten UpdateUI() nach dem Kampf nachgeholt.
+		if not InCombatLockdown() then
+			SexyInterrupterAnchor:SetSize(self.db.profile.ui.window.width, newHeight);
+		end
 
 		-- WICHTIG: NICHT per ClearAllPoints()/SetPoint() eingreifen, während der
 		-- Spieler das Fenster gerade per Maus zieht (frame.isDragging, von
@@ -1115,14 +1053,18 @@ function SexyInterrupter:UpdateUI(rows)
 		-- Logik - beobachtet als "Access denied"-Fehler mit Client-Absturz beim
 		-- Verschieben. Die Kompensation wird einfach beim NÄCHSTEN UpdateUI()
 		-- nach Drag-Ende nachgeholt (kein dauerhafter Datenverlust).
-		if not self.db.profile.ui.window.growUp and not SexyInterrupterAnchor.isDragging then
-			local anchorDB = GetLiveDB(SexyInterrupterAnchor, self.db.profile.ui.editModeAnchorDB);
-			if anchorDB.x and anchorDB.y and oldHeight and oldHeight > 0 then
-				anchorDB.y = anchorDB.y - (newHeight - oldHeight);
-				SexyInterrupterAnchor:ClearAllPoints();
-				SexyInterrupterAnchor:SetPoint(SexyInterrupterAnchor.EMEanchorPoint or "BOTTOMLEFT",
-					SexyInterrupterAnchor.EMEanchorTo or UIParent,
-					SexyInterrupterAnchor.EMEanchorPoint or "BOTTOMLEFT", anchorDB.x, anchorDB.y);
+		if not SEM:IsMoving(SexyInterrupterAnchor) and not InCombatLockdown() then
+			if window.growUp then
+				-- Untere Kante bleibt fix: keine Kompensation, nur die Basis mitführen
+				window.anchoredHeight = newHeight;
+			else
+				local anchorDB = self.db.profile.ui.editModeAnchorDB;
+
+				if anchorDB.x and anchorDB.y and oldHeight and oldHeight > 0 then
+						SEM:SetPosition(SexyInterrupterAnchor, anchorDB.x, anchorDB.y - (newHeight - oldHeight));
+				end
+
+				window.anchoredHeight = newHeight;
 			end
 		end
 
@@ -1223,6 +1165,7 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 	end
 
 	local currentplayer = not editing and SexyInterrupter:GetInterrupter(select(1, UnitName("player"))) or nil;
+	local readyCount = 0;
 
 	for cx, currentRow in pairs(rows) do
 		local dataRow = currentRow;
@@ -1301,10 +1244,13 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 			-- bleibt der Text hinter dem Class-Icon hängen, wenn "Show class
 			-- icon" nachträglich per Edit-Mode-Checkbox umgeschaltet wird.
 			row.text:ClearAllPoints();
-			row.text:SetPoint("LEFT", row, "LEFT", self.db.profile.ui.bars.showclassicon and 25 or 5, 0);
+			-- Ohne Rollen-Symbol (z. B. solo, Rolle "NONE") beginnt der Name ganz links, ohne Platzhalter
+			row.text:SetPoint("LEFT", row, "LEFT", row.classicon:IsShown() and 31 or 8, 0);
+			-- Der Name endet vor Etikett bzw. Cooldown-Zahl und Zaubericon (statt fester Breite).
+			row.text:SetPoint("RIGHT", row.abilityicon, "LEFT", -64, 0);
 
 			if not self.db.profile.ui.bars.showclassicon or not dataRow.spellId then
-				row.abilityicon:Hide();
+				row.abilityicon:Hide(); row.abilityborder:Hide();
 				row.abilityiconHitbox:Hide();
 			else
 				-- One row per known ability: show that ability's own icon
@@ -1313,12 +1259,12 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 
 				if texture then
 					row.abilityicon:SetTexture(texture);
-					row.abilityicon:SetTexCoord(0, 1, 0, 1);
-					row.abilityicon:Show();
+					row.abilityicon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+					row.abilityicon:Show(); row.abilityborder:Show();
 					row.abilityiconHitbox.spellId = dataRow.spellId;
 					row.abilityiconHitbox:Show();
 				else
-					row.abilityicon:Hide();
+					row.abilityicon:Hide(); row.abilityborder:Hide();
 					row.abilityiconHitbox:Hide();
 				end
 			end
@@ -1329,6 +1275,12 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 
 				if dataRow.readyTime - GetTime() > 0 then
 					local readyTime = dataRow.readyTime - GetTime();
+
+					-- Läuft der Cooldown, färbt sich die Leiste bernsteinfarben (außer bei
+					-- Klassenfarben oder offline); bereit zeigt wieder die Leistenfarbe.
+					if not (self.db.profile.ui.bars.useclasscolor and interrupter.classColor) and not interrupter.offline then
+						row:SetStatusBarColor(COOLING[1], COOLING[2], COOLING[3], 1);
+					end
 
 					-- Unformatierte Fließkommazahl (z. B. "15.347293847...")
 					-- sprengte das nur 36px breite cooldownText-Feld und wurde
@@ -1344,21 +1296,44 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 
 			row.text:SetText(interrupter.name);
 
+			-- Rahmen um Leiste und Fähigkeiten-Icon in der Randfarbe des Fensters
+			for _, edge in ipairs(row.edges) do
+				edge:SetColorTexture(WINDOW_EDGE[1] * 0.65, WINDOW_EDGE[2] * 0.65, WINDOW_EDGE[3] * 0.65, 1);
+			end
+			row.abilityborder:SetColorTexture(WINDOW_EDGE[1], WINDOW_EDGE[2], WINDOW_EDGE[3], 1);
+
+			-- Status-Etikett: offline oder tot; läuft der Cooldown, steht stattdessen die Zahl.
+			local pillSize = math.max(8, self.db.profile.ui.fontsize - 2);
+			local cooling = dataRow.cooldown > 0 and dataRow.readyTime - GetTime() > 0;
+
+			if interrupter.offline then
+				row.pill:Set("grey", L["offline"], pillSize);
+			elseif interrupter.dead then
+				row.pill:Set("lack", L["dead"], pillSize);
+			elseif cooling then
+				row.pill:Hide();
+			else
+				-- bereit: kein Etikett, die volle Leiste zeigt es schon
+				row.pill:Hide();
+
+				if cx <= self.db.profile.general.maxrows then
+					readyCount = readyCount + 1;
+				end
+			end
+
 			local isOwn = self.db.profile.general.highlightOwn
 				and ((editing and cx == 1) or (not editing and interrupter.name == UnitName("player")));
 
 			if isOwn then
 				row.highlightBG:Show();
-				row.highlightEdge:Show();
 			else
 				row.highlightBG:Hide();
-				row.highlightEdge:Hide();
 			end
 
 			if interrupter.offline then
 				row:SetMinMaxValues(0, 100);
 				row:SetValue(100);
-				row.abilityicon:Hide();
+				row.abilityicon:Hide(); row.abilityborder:Hide();
 				row.abilityiconHitbox:Hide();
 				row.cooldownText:Hide();
 				row.offlineicon:Show();
@@ -1368,6 +1343,9 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 			end
 		end
 	end
+
+	-- Badge im Titelband: Anzahl der bereiten Unterbrechungen
+	SexyInterrupterAnchor:SetBadge(readyCount > 0 and string.format(L["%d ready"], readyCount) or "");
 end
 
 -- Runs as the anchor frame's OnUpdate script (self = the frame). Throttled:
@@ -1413,6 +1391,7 @@ function SexyInterrupter:OnUpdate(elapsed)
 	local rows = editing and GetPreviewRows() or SexyInterrupter:GetCurrentInterrupters();
 	local currentplayer = not editing and SexyInterrupter:GetInterrupter(select(1, UnitName("player"))) or nil;
 	local now = GetTime();
+	local transitioned = false;   -- ein Cooldown ist abgelaufen: Farbe und Etikett neu setzen
 
 	for cx, value in pairs(rows) do
 		if currentplayer and currentplayer.sortpos and currentplayer.sortpos > SexyInterrupter.db.profile.general.maxrows and SexyInterrupter.db.profile.general.maxrows == cx then
@@ -1430,6 +1409,7 @@ function SexyInterrupter:OnUpdate(elapsed)
 				bar.cooldownText:SetText('');
 				bar:SetMinMaxValues(0, 100);
 				bar:SetValue(100);
+				transitioned = true;
 			end
 		elseif value.readyTime > 0 and not (value.interrupter and value.interrupter.offline) then
 			local bar = _G["SexyInterrupterStatusBar" .. cx];
@@ -1442,6 +1422,7 @@ function SexyInterrupter:OnUpdate(elapsed)
 				if remaining <= 0 then
 					bar.cooldownText:SetText('');
 					value.readyTime = 0;
+					transitioned = true;
 
 					bar:SetMinMaxValues(0, 100);
 					bar:SetValue(100);
@@ -1451,6 +1432,10 @@ function SexyInterrupter:OnUpdate(elapsed)
 				end
 			end
 		end
+	end
+
+	if transitioned then
+		SexyInterrupter:UpdateInterrupterStatus(rows, editing);
 	end
 
 	if not editing then

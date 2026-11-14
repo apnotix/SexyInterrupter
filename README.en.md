@@ -26,9 +26,10 @@ No spreadsheets, no chat spam, no "I thought you had it!" — just a clean rotat
 - Automatically builds a **kick order** for your whole group or raid
 - Sorted by **who's ready first**, then by role priority (🛡️ Tank → ⚔️ Damage → 💚 Healer)
 - The next player in line is always at the top of the list
+- Styled like SexyQuestHelper and SexyLoot: gold frame, title band with the number of **ready kicks**, labels "dead" and "offline", cooldown as a number on an amber bar
 
 ### 📣 "Interrupt now!" prompt
-- Big on-screen message showing **your target's name** when it starts casting and it's *your* turn
+- Alert card with a red frame: **your target's name** in large type plus spell icon, spell name and remaining cast time, when it starts casting and it's *your* turn
 - Optional **sound alert** 🔔 (pick any sound from your SharedMedia library, with preview)
 - Optional **screen flash** ⚡ so you can't miss it
 - Message disappears automatically when the cast ends or you change target
@@ -51,9 +52,9 @@ Everything lives in **Blizzard's Edit Mode** dialog — drag the window where yo
 | | |
 |---|---|
 | 📐 **Layout** | Window width, bar height, max rows, grow direction (up / down) |
-| 🔤 **Fonts** | Font, size and colour (with live font previews) |
-| 🖼️ **Textures** | Status bar, background and border textures (via SharedMedia) |
-| 🌈 **Colours** | Bar, background, border and font colours, optional **class colours** |
+| 🔤 **Fonts** | Font, size and colour (with live font previews; new: bundled Marcellus and Inter) |
+| 🖼️ **Texture** | Status bar texture (via SharedMedia) |
+| 🌈 **Colours** | Bar and font colours, optional **class colours** (background and border are fixed) |
 | 🔔 **Notifications** | Message, sound (with preview), screen flash |
 | 💬 **Chat announce** | Optionally announce your interrupts in Say / Yell / Party / Raid |
 | 👁️ **Visibility** | Show in combat only, minimap button on/off |
@@ -105,6 +106,6 @@ Please open an issue on [GitHub](https://github.com/apnotix/SexyInterrupter/issu
 
 ## 🙏 Credits
 
-Built with [Ace3](https://www.wowace.com/projects/ace3), LibSharedMedia-3.0, LibDBIcon, LibDataBroker and [EditModeExpanded](https://github.com/teelolws/EditModeExpanded) by teelolws.
+Built with [Ace3](https://www.wowace.com/projects/ace3), LibSharedMedia-3.0, LibDBIcon, LibDataBroker and the own SexyEditMode library (Edit Mode dialog).
 
 **Made with ❤️ by apnotix — happy kicking!**
