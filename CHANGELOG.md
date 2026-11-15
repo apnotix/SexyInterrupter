@@ -1,3 +1,9 @@
+3.0.47
+
+- Positions: when switching to the new Edit Mode dialog the old position of some players was not taken over and the window sat at its start position again. The Interrupt window could even be moved back about 2 seconds after loading. The takeover now retries later, falls back to the layout the window was moved in, no longer deletes the old data and no longer lets the computed start position win. Windows that were already reset need to be placed once more
+- Speech (text to speech): optionally speaks "Interrupt!" (or the spell name, or both) when it is your turn, with voice, speed and volume and a test button. Only offered if the client knows text to speech
+- Spell list per instance: every spell your target casts inside a dungeon or raid is remembered and listed (Edit Mode, "Spell list per instance"), one collapsible section per instance with a check box per spell. With the option "Respect the spell list in instances" unticked spells no longer trigger the card, sound, flash or speech there. You can add your own spells by name and clear a list. The "Interrupt now" card has a button to mute or re-enable the current spell. /si kicklist prints the list
+
 3.0.46
 
 - Edit Mode: Oben im Dialog verweisen Links auf zusammengehörige Fenster (Interrupts, Unterbrich jetzt, Gegner-Marker); ein Klick zeigt deren Einstellungen

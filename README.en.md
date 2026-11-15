@@ -65,6 +65,10 @@ Settings are saved per profile and survive `/reload` and Edit Mode layout change
 - Group leaders can **override the priority** of individual players
 - Fine-tune who kicks first for tricky encounters
 
+### 🔊 Speech and spell list
+- **Speech (text to speech):** optionally speaks "Interrupt!", the spell name or both when it is your turn — voice, speed and volume adjustable, with a test button. Only offered if your client knows text to speech.
+- **Spell list per instance:** every spell your target casts in a dungeon or raid is remembered and listed in Edit Mode, one collapsible section per instance with a check box per spell. Untick the noisy ones and, with "Respect the spell list in instances", they no longer trigger the card, sound, flash or speech. Add your own spells by name; the card has a button to mute or re-enable the current spell. `/si kicklist` prints the list.
+
 ### 🧭 Extras
 - 🗺️ **Minimap button** — left-click opens Edit Mode, right-click opens the settings
 - 🌍 **Localized** in English and German

@@ -764,6 +764,182 @@ function SexyInterrupter:LockFrame()
 	end
 end
 
+-- Instanz, in der du gerade bist (Dungeon oder Raid): Id und Name, sonst nil
+function SexyInterrupter:InstanceInfo()
+	local name, instanceType, _, _, _, _, _, instanceID = GetInstanceInfo();
+
+	if instanceID and (instanceType == "party" or instanceType == "raid") then
+		return instanceID, name;
+	end
+end
+
+-- Liste der wichtigen Zauber dieser Instanz (create = true legt sie an)
+function SexyInterrupter:GetKicklist(create)
+	local id, name = self:InstanceInfo();
+
+	if not id then
+		return nil;
+	end
+
+	local lists = self.db.profile.kicklist;
+	local entry = lists[id];
+
+	if not entry and create then
+		entry = { name = name, spells = {} };
+		lists[id] = entry;
+	end
+
+	return entry, name;
+end
+
+-- Soll dieser Zauber gemeldet werden? Immer, ausser die Option "Zauberliste beachten" ist an, du bist in einer
+-- Instanz und der Zauber ist dort abgehakt (stumm geschaltet). Neue Zauber gelten als gemeldet. Ist der Zaubername
+-- nicht lesbar (geheimer Wert), wird gemeldet.
+function SexyInterrupter:IsImportantCast(castName)
+	if not self.db.profile.notification.kickListOnly then
+		return true;
+	end
+
+	local entry = self:GetKicklist(false);
+
+	if not entry or not castName then
+		return true;
+	end
+
+	return entry.spells[castName] ~= false;
+end
+
+local function Say(text)
+	DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: " .. text, 1, 0.5, 0);
+end
+
+-- Zauber der Instanz stumm schalten (false) oder wieder melden (true)
+function SexyInterrupter:ToggleKicklist(castName)
+	if not castName then
+		return;
+	end
+
+	local entry, name = self:GetKicklist(true);
+
+	if not entry then
+		Say(L["Only possible inside an instance."]);
+		return;
+	end
+
+	if entry.spells[castName] == false then
+		entry.spells[castName] = true;
+		Say(L["%s is reported again in %s."]:format(castName, name));
+	else
+		entry.spells[castName] = false;
+		Say(L["%s is not reported in %s anymore."]:format(castName, name));
+	end
+end
+
+-- Zauber merken, den dein Ziel in dieser Instanz wirkt (neue Zauber stehen angehakt in der Liste)
+function SexyInterrupter:LearnCast(castName)
+	if not castName then
+		return;
+	end
+
+	local entry = self:GetKicklist(true);
+
+	if entry and entry.spells[castName] == nil then
+		entry.spells[castName] = true;
+	end
+end
+
+-- Eigenen Zauber (Name) zur Liste der aktuellen Instanz hinzufuegen
+function SexyInterrupter:AddKickSpell(castName)
+	local entry, name = self:GetKicklist(true);
+
+	if not entry then
+		Say(L["Only possible inside an instance."]);
+		return;
+	end
+
+	entry.spells[castName] = true;
+	Say(L["%s added to the list for %s."]:format(castName, name));
+end
+
+function SexyInterrupter:PrintKicklist()
+	local entry, name = self:GetKicklist(false);
+
+	if not name and not entry then
+		local id, instanceName = self:InstanceInfo();
+
+		if not id then
+			Say(L["Only possible inside an instance."]);
+			return;
+		end
+
+		name = instanceName;
+	end
+
+	local names = {};
+
+	if entry then
+		for spell, on in pairs(entry.spells) do
+			names[#names + 1] = (on == false and "(-) " or "") .. spell;
+		end
+	end
+
+	table.sort(names);
+
+	if #names == 0 then
+		Say(L["The list for %s is empty."]:format(name or "?"));
+	else
+		Say(L["List for %s: %s"]:format(name or "?", table.concat(names, ", ")));
+	end
+end
+
+function SexyInterrupter:ClearKicklist()
+	local entry, name = self:GetKicklist(false);
+
+	if entry then
+		wipe(entry.spells);
+		Say(L["List for %s cleared."]:format(name or "?"));
+	else
+		Say(L["Only possible inside an instance."]);
+	end
+end
+
+-- Sprachausgabe (Text-zu-Sprache), nur wenn der Client sie kennt
+local lastSpoken = 0;
+
+function SexyInterrupter:Speak(castName, force)
+	local n = self.db.profile.notification;
+
+	if not (force or n.tts) or not (C_VoiceChat and C_VoiceChat.SpeakText) then
+		return;
+	end
+
+	-- nicht mehrfach hintereinander (jeder Cast, jede Zielwahl loest sonst erneut aus)
+	if not force and GetTime() - lastSpoken < 2 then
+		return;
+	end
+
+	lastSpoken = GetTime();
+
+	local phrase = L["Interrupt!"];
+	local text = phrase;
+
+	if n.ttsText == "spell" and castName then
+		text = castName;
+	elseif n.ttsText == "both" and castName then
+		text = phrase .. " " .. castName;
+	end
+
+	local voice = n.ttsVoice;
+
+	if not voice and C_TTSSettings and C_TTSSettings.GetVoiceOptionID and Enum.TtsVoiceType then
+		voice = C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard);
+	end
+
+	local destination = (Enum.VoiceTtsDestination and Enum.VoiceTtsDestination.LocalPlayback) or 1;
+
+	pcall(C_VoiceChat.SpeakText, voice or 0, text, destination, n.ttsRate or 0, n.ttsVolume or 100);
+end
+
 function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, castName, castTexture)
 	-- notInterruptible (from UnitCastingInfo/UnitChannelInfo) can come through
 	-- as a "secret" value under the same protected-info guard as spellID
@@ -797,6 +973,9 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 	end
 
 	if not notInterruptible and UnitCanAttack('player', 'target') then
+		-- Zauber in der Instanz-Liste vermerken (Name nur, wenn lesbar)
+		self:LearnCast(castName);
+
 		-- Gleicher Bug wie in events.lua's UNIT_SPELLCAST_SUCCEEDED: UnitName()s
 		-- Realm-Rückgabe ist für "player" auf diesem Client NICHT zuverlässig
 		-- leer (liefert einen internen Token statt nil), wodurch die gebaute
@@ -820,7 +999,14 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 				timeVisible = (endTime - startTime) / 1000;
 			end
 
+			-- Nur Zauber der Liste melden (Option, in Instanzen)? Dann bleibt alles andere still.
+			if not self:IsImportantCast(castName) then
+				return;
+			end
+
 			local tName = UnitName('target');
+
+			self:Speak(castName);
 
 			if self.db.profile.notification.message then
 				SexyInterrupterInterruptNowText:ShowAlert(tName, castName, castTexture, endTime, timeVisible);

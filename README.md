@@ -65,6 +65,10 @@ Einstellungen werden pro Profil gespeichert und überstehen `/reload` sowie Wech
 - Gruppenleiter können die **Priorität einzelner Spieler überschreiben**
 - So legst du für knifflige Bosskämpfe genau fest, wer zuerst kickt
 
+### 🔊 Sprachausgabe und Zauberliste
+- **Sprachausgabe (Text-zu-Sprache):** Spricht auf Wunsch „Unterbrechen!“, den Zaubernamen oder beides, wenn du dran bist. Stimme, Tempo und Lautstärke einstellbar, mit Testknopf. Nur, wenn dein Client Text-zu-Sprache kennt.
+- **Zauberliste je Instanz:** Jeder Zauber, den dein Ziel in einem Dungeon oder Raid wirkt, wird gemerkt und im Edit Mode aufgelistet, mit einem einklappbaren Abschnitt je Instanz und einem Haken je Zauber. Nimm bei den lästigen den Haken weg, dann lösen sie mit „Zauberliste in Instanzen beachten“ weder Karte noch Ton, Blitz oder Sprache aus. Eigene Zauber fügst du per Namen hinzu, und auf der Karte stellt ein Knopf den aktuellen Zauber stumm oder wieder an. `/si kicklist` zeigt die Liste im Chat.
+
 ### 🧭 Extras
 - 🗺️ **Minimap-Symbol** – Linksklick öffnet den Bearbeitungsmodus, Rechtsklick die Einstellungen
 - 🌍 **Lokalisiert** auf Deutsch und Englisch

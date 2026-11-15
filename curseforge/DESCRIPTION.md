@@ -15,6 +15,8 @@ Works on **World of Warcraft: Forever** and **Retail**. Styled like the other Se
 - 🧠 **Learns interrupts by itself** - every player's interrupt is detected as it is used. Several interrupts per player each get their own row, icon and cooldown.
 - 🔄 **Live group sync** - cooldowns, roles and spec changes are shared between everyone running the addon. Out-of-range players are dimmed.
 - 💀 **Enemy marks window** - lists attackable targets with a raid symbol, with health and cast bar; interruptible casts are highlighted and a click targets the mob.
+- 🔊 **Speech** - optionally speaks "Interrupt!" (or the spell name) when it is your turn, with voice, speed and volume.
+- 📋 **Spell list per instance** - the spells your target casts in dungeons and raids are collected in Edit Mode with a check box each; untick the noisy ones so they stay quiet. Add your own, mute a spell right from the card.
 - 🥇 **Priority overrides** - group leaders can change who kicks first.
 
 ## Edit Mode
@@ -55,6 +57,7 @@ Built with Ace3, LibSharedMedia-3.0, LibDBIcon, LibDataBroker and the own SexyEd
 - Kick-Reihenfolge der ganzen Gruppe mit Abklingzeiten, Karte „Unterbrich jetzt!“ mit Ton und Blitz
 - Erkennt Unterbrechungen selbstständig, Gruppen-Abgleich in Echtzeit
 - Gegner-Marker-Fenster für Ziele mit Zeichen, Prioritäten für Gruppenleiter
+- Sprachausgabe und Zauberliste je Instanz (Haken für lästige Zauber)
 - Alles im Edit Mode einstellbar, funktioniert auf Deutsch und Englisch
 
 Ausführliche deutsche Beschreibung: https://github.com/apnotix/SexyInterrupter

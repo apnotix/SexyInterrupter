@@ -265,8 +265,14 @@ local defaults = {
 			flash = true,
 			message = true,
 			interruptmessage = true,
-			outputchannel = 'SAY'
-		}
+			outputchannel = 'SAY',
+			tts = false,            -- Sprachausgabe, wenn du dran bist
+			ttsText = 'phrase',     -- 'phrase' (Satz), 'spell' (Zaubername) oder 'both'
+			ttsRate = 2,            -- Tempo -10 .. 10
+			ttsVolume = 100,        -- Lautstaerke 0 .. 100
+			kickListOnly = false    -- in Instanzen nur Zauber der Liste melden
+		},
+		kicklist = {}               -- [Instanz-ID] = { name = "...", spells = { [Zaubername] = true } }
 	}
 }
 
@@ -527,6 +533,8 @@ function SexyInterrupter:InitOptions()
     local function handler(msg, editbox)
         if msg == 'lock' then
             SexyInterrupter:LockFrame();
+        elseif msg == 'kicklist' then
+            SexyInterrupter:PrintKicklist();
         elseif msg == 'version' then
             DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: Version " .. SI.Version, 1, 0.5, 0);
         elseif msg == 'debug' then

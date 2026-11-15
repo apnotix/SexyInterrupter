@@ -337,8 +337,44 @@ local function CreateAlertCard(addon)
 	p.spellPill.bg:SetPoint("TOPLEFT", p.name, "BOTTOMLEFT", 0, -6);
 	p.timePill.bg:SetPoint("LEFT", p.spellPill.bg, "RIGHT", 6, 0);
 
+	-- Kleiner Knopf unten rechts: den Zauber auf die Liste der Instanz setzen oder wieder entfernen
+	local mark = CreateFrame("Button", nil, p);
+	mark:SetSize(112, 18);
+	mark:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -12, 10);
+	mark:RegisterForClicks("LeftButtonUp");
+	mark.bg = mark:CreateTexture(nil, "BACKGROUND");
+	mark.bg:SetAllPoints();
+	mark.bg:SetColorTexture(0.165, 0.14, 0.10, 1);
+	mark.hl = mark:CreateTexture(nil, "HIGHLIGHT");
+	mark.hl:SetAllPoints();
+	mark.hl:SetColorTexture(1, 1, 1, 0.12);
+	mark.text = mark:CreateFontString(nil, "OVERLAY");
+	StyleText(mark.text, LSM:Fetch("font", "Inter") or STANDARD_TEXT_FONT, 10);
+	mark.text:SetPoint("CENTER");
+	mark.text:SetTextColor(0.91, 0.76, 0.42);
+	mark:SetScript("OnClick", function()
+		addon:ToggleKicklist(c.cast);
+		c:UpdateMark();
+	end);
+	mark:Hide();
+	p.mark = mark;
+
+	function c:UpdateMark()
+		local entry = self.cast and addon:GetKicklist(false);
+		local muted = entry and entry.spells[self.cast] == false;
+
+		-- nur in Instanzen und mit lesbarem Zaubernamen
+		if self.cast and addon:InstanceInfo() and not self.previewing then
+			self.panel.mark.text:SetText(muted and L["Report again"] or L["Mute spell"]);
+			self.panel.mark:Show();
+		else
+			self.panel.mark:Hide();
+		end
+	end
+
 	function c:ShowAlert(targetName, spellName, texture, endTime, seconds)
 		local p = self.panel;
+		self.cast = spellName;
 
 		p.name:SetText(targetName or "");
 
@@ -361,6 +397,7 @@ local function CreateAlertCard(addon)
 		self.endAt = endTime and endTime / 1000 or nil;
 		self.hideAt = seconds and (GetTime() + seconds) or nil;
 		self.previewing = false;
+		self:UpdateMark();
 
 		if self.endAt then
 			p.timePill:Set("grey", string.format("%.1f s", math.max(0, self.endAt - GetTime())), 12);
@@ -375,6 +412,8 @@ local function CreateAlertCard(addon)
 		local p = self.panel;
 
 		self.endAt, self.hideAt, self.previewing = nil, nil, true;
+		self.cast = nil;
+		p.mark:Hide();
 		p.name:SetText(L["Preview Target"]);
 		p.icon:SetTexture("Interface\\Icons\\Spell_Shadow_ShadowBolt");
 		p.spellPill:Set("lack", L["Preview Spell"], 12);
@@ -765,6 +804,52 @@ function SexyInterrupter:AnchorSettings()
 	};
 end
 
+-- Zeilen der Zauberliste: je Instanz ein einklappbarer Abschnitt mit einem Haken je Zauber
+function SexyInterrupter:KicklistSpecs()
+	local profile = self.db.profile;
+	local instances = {};
+
+	for id, entry in pairs(profile.kicklist) do
+		instances[#instances + 1] = { id = id, name = entry.name or tostring(id), entry = entry };
+	end
+
+	table.sort(instances, function(a, b) return a.name < b.name; end);
+
+	local list = {};
+
+	for _, inst in ipairs(instances) do
+		local spells, count = {}, 0;
+
+		for spell in pairs(inst.entry.spells) do
+			spells[#spells + 1] = spell;
+			count = count + 1;
+		end
+
+		table.sort(spells);
+
+		local header = Header(inst.name .. " (" .. count .. ")", "kl" .. inst.id, true);
+		header.key = "klh" .. inst.id;
+		list[#list + 1] = header;
+
+		for _, spell in ipairs(spells) do
+			local row = {
+				type = "check", name = spell, key = "kls" .. inst.id .. ":" .. spell,
+				get = function() return inst.entry.spells[spell] ~= false; end,
+				set = function(value) inst.entry.spells[spell] = value and true or false; end,
+			};
+			list[#list + 1] = row;
+		end
+
+		list[#list + 1] = { type = "button", name = L["Clear the list of this instance"], key = "klc" .. inst.id,
+			onClick = function()
+				wipe(inst.entry.spells);
+				SEM:RebuildDialog();
+			end };
+	end
+
+	return list;
+end
+
 -- Einstellungen der Karte "Unterbrich jetzt"
 function SexyInterrupter:MessageSettings()
 	local profile = self.db.profile;
@@ -774,7 +859,7 @@ function SexyInterrupter:MessageSettings()
 		tinsert(outputChannelOptions, { value = channel, label = SexyInterrupter.outputchannels[channel] });
 	end
 
-	return {
+	local list = {
 		Link(L["Interrupts"], function() return SexyInterrupterAnchor; end),
 		Header(L["Notification"], "notification"),
 		Check(L["Show message"],
@@ -814,6 +899,73 @@ function SexyInterrupter:MessageSettings()
 			function() return profile.notification.outputchannel end,
 			function(value) profile.notification.outputchannel = value; end),
 	};
+
+	-- Sprachausgabe: nur, wenn der Client Text-zu-Sprache kennt
+	if C_VoiceChat and C_VoiceChat.SpeakText then
+		local function VoiceOptions()
+			local list = {};
+
+			if C_VoiceChat.GetTtsVoices then
+				for _, voice in ipairs(C_VoiceChat.GetTtsVoices() or {}) do
+					list[#list + 1] = { value = voice.voiceID, label = voice.name };
+				end
+			end
+
+			return list;
+		end
+
+		local function CurrentVoice()
+			local id = profile.notification.ttsVoice;
+
+			if not id and C_TTSSettings and C_TTSSettings.GetVoiceOptionID and Enum.TtsVoiceType then
+				id = C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard);
+			end
+
+			return id;
+		end
+
+		local speech = {
+			Header(L["Speech"], "speech", true),
+			Check(L["Speak when it is your turn"],
+				function() return profile.notification.tts end,
+				function(value) profile.notification.tts = value; end),
+			Select(L["Spoken text"],
+				{
+					{ value = 'phrase', label = L["Phrase"] },
+					{ value = 'spell', label = L["Spell name"] },
+					{ value = 'both', label = L["Phrase and spell name"] },
+				},
+				function() return profile.notification.ttsText end,
+				function(value) profile.notification.ttsText = value; end),
+			Select(L["Voice"], VoiceOptions, CurrentVoice,
+				function(value) profile.notification.ttsVoice = value; end),
+			Slider(L["Speech speed"], -10, 10, 1,
+				function() return profile.notification.ttsRate end,
+				function(value) profile.notification.ttsRate = value; end),
+			Slider(L["Speech volume"], 0, 100, 5,
+				function() return profile.notification.ttsVolume end,
+				function(value) profile.notification.ttsVolume = value; end),
+			{ type = "button", name = L["Test speech"], onClick = function()
+				SexyInterrupter:Speak(L["Preview Spell"], true);
+			end },
+		};
+
+		for _, spec in ipairs(speech) do
+			list[#list + 1] = spec;
+		end
+	end
+
+	-- Zauberliste je Instanz: jeder Zauber, den dein Ziel in einer Instanz wirkt, steht angehakt in der Liste.
+	-- Nimmst du den Haken weg, wird er dort nicht mehr gemeldet (wenn die Option an ist).
+	list[#list + 1] = Header(L["Spell list per instance"], "kicklist", true);
+	list[#list + 1] = Check(L["Respect the spell list in instances"],
+		function() return profile.notification.kickListOnly end,
+		function(value) profile.notification.kickListOnly = value; end);
+	list[#list + 1] = { type = "edit", name = L["Add your own spell (current instance)"],
+		onSubmit = function(text) SexyInterrupter:AddKickSpell(text); end };
+	list[#list + 1] = { type = "dynamic", build = function() return SexyInterrupter:KicklistSpecs(); end };
+
+	return list;
 end
 
 function SexyInterrupter:UpdateFrames()
