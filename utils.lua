@@ -692,6 +692,21 @@ function SexyInterrupter:ShowInterruptMessage(destName, spellId, spellName)
 	end
 end
 
+-- Farbe des Bildschirm-Blitzes: Die Blizzard-Textur ist von sich aus blau; entsaettigt und mit der gewaehlten
+-- Farbe eingefaerbt wird daraus jede Farbe.
+function SexyInterrupter:ApplyFlashColor()
+	local flasher = SexyInterrupterBlueWarningFrame;
+
+	if not (flasher and flasher.texture and self.db) then
+		return;
+	end
+
+	local c = self.db.profile.notification.flashcolor or { r = 0.3, g = 0.5, b = 1 };
+
+	flasher.texture:SetDesaturated(true);
+	flasher.texture:SetVertexColor(c.r, c.g, c.b);
+end
+
 function SexyInterrupter:CreateFlasher(color)
     local frameImage = "None";
 
@@ -717,6 +732,7 @@ function SexyInterrupter:CreateFlasher(color)
         flasher.texture:SetAllPoints(UIParent)
         flasher.texture:SetBlendMode("ADD")
         flasher:Hide()
+        SexyInterrupter:ApplyFlashColor()
 
         flasher:SetScript("OnShow", function(self)
             self.elapsed = 0;
@@ -950,31 +966,19 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 		notInterruptible = false;
 	end
 
-	-- startTime/endTime (also from UnitCastingInfo/UnitChannelInfo) can be
-	-- secret too - not just booleans, any value from those calls apparently.
-	-- Can't do arithmetic on a secret number, so drop down to nil (same as
-	-- "this client didn't give us a cast length") and let the existing
-	-- fallback below use the default timeVisible.
-	if issecretvalue and issecretvalue(startTime) then
-		startTime = nil;
-	end
+	-- Name, Symbol und Zeiten des Zaubers koennen im Kampf "geheime Werte" sein. Rechnen und Vergleichen geht
+	-- damit nicht, wohl aber das Weiterreichen an Anzeigefunktionen (SetText, SetTexture, SetMinMaxValues).
+	-- Darum bleiben sie erhalten (frueher wurden sie weggeworfen, und die Karte zeigte weder Zaubername noch
+	-- Symbol noch Zeit). Wo gerechnet wird, steht ein pcall; Liste und Sprache nutzen nur den lesbaren Namen.
+	local readableName = castName;
 
-	if issecretvalue and issecretvalue(endTime) then
-		endTime = nil;
-	end
-
-	-- Zaubername und -symbol fürs Etikett: bei "secret values" weglassen.
-	if issecretvalue and issecretvalue(castName) then
-		castName = nil;
-	end
-
-	if issecretvalue and issecretvalue(castTexture) then
-		castTexture = nil;
+	if issecretvalue and issecretvalue(readableName) then
+		readableName = nil;
 	end
 
 	if not notInterruptible and UnitCanAttack('player', 'target') then
 		-- Zauber in der Instanz-Liste vermerken (Name nur, wenn lesbar)
-		self:LearnCast(castName);
+		self:LearnCast(readableName);
 
 		-- Gleicher Bug wie in events.lua's UNIT_SPELLCAST_SUCCEEDED: UnitName()s
 		-- Realm-Rückgabe ist für "player" auf diesem Client NICHT zuverlässig
@@ -994,22 +998,29 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 		if interrupter and interrupter.sortpos == 1 and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then
 			local timeVisible = 10;
 
-			-- Anzeigedauer = Zauberlänge in Sekunden (startTime/endTime sind Millisekunden)
-			if (startTime and endTime and endTime/1000 - startTime/1000 < 10) then
-				timeVisible = (endTime - startTime) / 1000;
+			-- Anzeigedauer = Zauberlänge in Sekunden (startTime/endTime sind Millisekunden); ist sie nicht lesbar,
+			-- bleibt es bei den 10 Sekunden
+			if startTime ~= nil and endTime ~= nil then
+				pcall(function()
+					local length = (endTime - startTime) / 1000;
+
+					if length < 10 then
+						timeVisible = length;
+					end
+				end);
 			end
 
 			-- Nur Zauber der Liste melden (Option, in Instanzen)? Dann bleibt alles andere still.
-			if not self:IsImportantCast(castName) then
+			if not self:IsImportantCast(readableName) then
 				return;
 			end
 
 			local tName = UnitName('target');
 
-			self:Speak(castName);
+			self:Speak(readableName);
 
 			if self.db.profile.notification.message then
-				SexyInterrupterInterruptNowText:ShowAlert(tName, castName, castTexture, endTime, timeVisible);
+				SexyInterrupterInterruptNowText:ShowAlert(tName, castName, castTexture, endTime, timeVisible, startTime);
 			end
 
 			if self.db.profile.notification.sound then

@@ -128,3 +128,5 @@ L["%s is reported again in %s."] = "%s wird in %s wieder gemeldet.";
 L["Spell list per instance"] = "Zauberliste je Instanz";
 L["Respect the spell list in instances"] = "Zauberliste in Instanzen beachten (abgewählte nicht melden)";
 L["Add your own spell (current instance)"] = "Eigenen Zauber hinzufügen (aktuelle Instanz)";
+L["Flash color"] = "Blitzfarbe";
+L["Test flash"] = "Blitz testen";

@@ -154,7 +154,11 @@ local function MakePill(parent)
 		self.text:SetText(text);
 		self.text:SetTextColor(t.fg[1], t.fg[2], t.fg[3]);
 		self.bg:SetColorTexture(t.bg[1], t.bg[2], t.bg[3], 1);
-		self.bg:SetSize(self.text:GetStringWidth() + 14, (size or 11) + 5);
+
+		-- Ist der Text ein "geheimer Wert", laesst sich seine Breite nicht rechnen: dann feste Breite
+		local ok, width = pcall(function() return self.text:GetStringWidth() + 14; end);
+
+		self.bg:SetSize(ok and width or 130, (size or 11) + 5);
 		self.bg:Show();
 		self.text:Show();
 	end
@@ -235,7 +239,7 @@ SexyInterrupter.Look = {
 -- Karte "Unterbrich jetzt!" (oberes Mockup): Band mit rotem Rand, Zaubersymbol, Name des
 -- Ziels groß, Etiketten für Zaubername und Restzeit. Der Frame selbst bleibt immer
 -- sichtbar (Edit-Mode-Auswahl), die Karte (c.panel) wird ein- und ausgeblendet.
-local ALERT_W, ALERT_H = 440, HEAD + 72;
+local ALERT_W, ALERT_H = 440, HEAD + 96;   -- unten Platz für Zauberbalken und Restzeit-Abzeichen
 local ALERT_EDGE = { 0.54, 0.20, 0.15, 1 };
 local ALERT_BAND = { 0.18, 0.08, 0.07, 0.96 };
 
@@ -340,7 +344,7 @@ local function CreateAlertCard(addon)
 	-- Kleiner Knopf unten rechts: den Zauber auf die Liste der Instanz setzen oder wieder entfernen
 	local mark = CreateFrame("Button", nil, p);
 	mark:SetSize(112, 18);
-	mark:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -12, 10);
+	mark:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -12, 36);
 	mark:RegisterForClicks("LeftButtonUp");
 	mark.bg = mark:CreateTexture(nil, "BACKGROUND");
 	mark.bg:SetAllPoints();
@@ -372,37 +376,88 @@ local function CreateAlertCard(addon)
 		end
 	end
 
-	function c:ShowAlert(targetName, spellName, texture, endTime, seconds)
+	-- Fortschrittsbalken des Zaubers: die geheimen Zeiten gehen direkt an SetMinMaxValues, der Wert
+	-- kommt aus GetTime() - so laesst sich der Fortschritt zeigen, ohne die Zahlen zu lesen
+	local bar = CreateFrame("StatusBar", nil, p);
+	bar:SetHeight(10);
+	bar:SetPoint("LEFT", p, "BOTTOMLEFT", 18, 21);
+	bar:SetPoint("RIGHT", p, "BOTTOMRIGHT", -18, 21);
+	bar:SetStatusBarTexture(LSM:Fetch("statusbar", "Flat") or "Interface\\Buttons\\WHITE8X8");
+	bar:SetStatusBarColor(0.94, 0.75, 0.29, 1);
+	bar.bg = bar:CreateTexture(nil, "BACKGROUND");
+	bar.bg:SetAllPoints();
+	bar.bg:SetColorTexture(0.21, 0.19, 0.14, 1);
+	bar:Hide();
+	p.bar = bar;
+
+	function c:ShowAlert(targetName, spellName, texture, endTime, seconds, startTime)
 		local p = self.panel;
 		self.cast = spellName;
 
 		p.name:SetText(targetName or "");
 
-		if texture then
-			p.icon:SetTexture(texture);
-		else
+		-- Symbol: auch ein geheimer Wert darf direkt an SetTexture
+		local textured = false;
+
+		if texture ~= nil then
+			textured = pcall(p.icon.SetTexture, p.icon, texture);
+		end
+
+		if not textured then
 			p.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark");
 		end
 
-		if spellName then
-			p.spellPill:Set("lack", spellName, 12);
-			p.timePill.bg:ClearAllPoints();
-			p.timePill.bg:SetPoint("LEFT", p.spellPill.bg, "RIGHT", 6, 0);
-		else
-			p.spellPill:Hide();
-			p.timePill.bg:ClearAllPoints();
-			p.timePill.bg:SetPoint("TOPLEFT", p.name, "BOTTOMLEFT", 0, -6);
+		-- Zaubername als Etikett (auch ein geheimer Name wird angezeigt)
+		local named = false;
+
+		if spellName ~= nil then
+			named = pcall(p.spellPill.Set, p.spellPill, "lack", spellName, 12);
 		end
 
-		self.endAt = endTime and endTime / 1000 or nil;
+		if not named then
+			p.spellPill:Hide();
+		end
+
+		-- Restzeit als Abzeichen ganz hinten am Zauberbalken
+		p.timePill.bg:ClearAllPoints();
+		p.timePill.bg:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -18, 12.5);
+
+		-- Restzeit als Zahl, wenn sie lesbar ist; sonst nur der Balken
+		self.endAt = nil;
 		self.hideAt = seconds and (GetTime() + seconds) or nil;
 		self.previewing = false;
 		self:UpdateMark();
+
+		if endTime ~= nil then
+			pcall(function() self.endAt = endTime / 1000; end);
+		end
 
 		if self.endAt then
 			p.timePill:Set("grey", string.format("%.1f s", math.max(0, self.endAt - GetTime())), 12);
 		else
 			p.timePill:Hide();
+		end
+
+		-- Der Balken reicht bis zum Abzeichen; fehlt die Zeit, geht er bis zum Rand
+		p.bar:ClearAllPoints();
+		p.bar:SetPoint("LEFT", p, "BOTTOMLEFT", 18, 21);
+
+		if self.endAt then
+			p.bar:SetPoint("RIGHT", p.timePill.bg, "LEFT", -6, 0);
+		else
+			p.bar:SetPoint("RIGHT", p, "BOTTOMRIGHT", -18, 21);
+		end
+
+		self.barOn = false;
+		p.bar:Hide();
+
+		if startTime ~= nil and endTime ~= nil then
+			self.barOn = pcall(p.bar.SetMinMaxValues, p.bar, startTime, endTime);
+
+			if self.barOn then
+				p.bar:SetValue(GetTime() * 1000);
+				p.bar:Show();
+			end
 		end
 
 		p:Show();
@@ -412,6 +467,7 @@ local function CreateAlertCard(addon)
 		local p = self.panel;
 
 		self.endAt, self.hideAt, self.previewing = nil, nil, true;
+		self.barOn = false;
 		self.cast = nil;
 		p.mark:Hide();
 		p.name:SetText(L["Preview Target"]);
@@ -419,7 +475,13 @@ local function CreateAlertCard(addon)
 		p.spellPill:Set("lack", L["Preview Spell"], 12);
 		p.timePill:Set("grey", "1.8 s", 12);
 		p.timePill.bg:ClearAllPoints();
-		p.timePill.bg:SetPoint("LEFT", p.spellPill.bg, "RIGHT", 6, 0);
+		p.timePill.bg:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -18, 12.5);
+		p.bar:ClearAllPoints();
+		p.bar:SetPoint("LEFT", p, "BOTTOMLEFT", 18, 21);
+		p.bar:SetPoint("RIGHT", p.timePill.bg, "LEFT", -6, 0);
+		p.bar:SetMinMaxValues(0, 1);
+		p.bar:SetValue(0.6);
+		p.bar:Show();
 		p:Show();
 	end
 
@@ -443,6 +505,10 @@ local function CreateAlertCard(addon)
 
 		if self.endAt then
 			self.panel.timePill:Set("grey", string.format("%.1f s", math.max(0, self.endAt - now)), 12);
+		end
+
+		if self.barOn then
+			self.panel.bar:SetValue(now * 1000);
 		end
 	end);
 
@@ -882,6 +948,24 @@ function SexyInterrupter:MessageSettings()
 				return current;
 			end,
 			function(value) profile.notification.soundFile = value; end),
+		Color(L["Flash color"], false,
+			function()
+				local c = profile.notification.flashcolor;
+				return c.r, c.g, c.b, 1;
+			end,
+			function(r, g, b)
+				local c = profile.notification.flashcolor;
+				c.r, c.g, c.b = r, g, b;
+				SexyInterrupter:ApplyFlashColor();
+			end),
+		{ type = "button", name = L["Test flash"], onClick = function()
+			local flasher = SexyInterrupterBlueWarningFrame;
+
+			if flasher then
+				flasher:Show();
+				C_Timer.After(1.5, function() flasher:Hide(); end);
+			end
+		end },
 		Check(L["Flash display"],
 			function() return profile.notification.flash end,
 			function(value)

@@ -270,7 +270,8 @@ local defaults = {
 			ttsText = 'phrase',     -- 'phrase' (Satz), 'spell' (Zaubername) oder 'both'
 			ttsRate = 2,            -- Tempo -10 .. 10
 			ttsVolume = 100,        -- Lautstaerke 0 .. 100
-			kickListOnly = false    -- in Instanzen nur Zauber der Liste melden
+			kickListOnly = false,   -- in Instanzen nur Zauber der Liste melden
+			flashcolor = { r = 0.3, g = 0.5, b = 1 }   -- Farbe des Bildschirm-Blitzes (Standard: Blau)
 		},
 		kicklist = {}               -- [Instanz-ID] = { name = "...", spells = { [Zaubername] = true } }
 	}

@@ -1,3 +1,8 @@
+3.0.48
+
+- The screen flash has an adjustable color (Edit Mode, "Interrupt now" dialog) and a test button; the default stays blue
+- "Interrupt now" card: spell name, icon and cast progress show up again. In combat the client hands these over as protected values; they were thrown away and the card stayed empty. They are now passed straight to the display (text, icon, progress bar) and only calculated inside protected calls, so a protected value no longer breaks the card
+
 3.0.47
 
 - Positions: when switching to the new Edit Mode dialog the old position of some players was not taken over and the window sat at its start position again. The Interrupt window could even be moved back about 2 seconds after loading. The takeover now retries later, falls back to the layout the window was moved in, no longer deletes the old data and no longer lets the computed start position win. Windows that were already reset need to be placed once more

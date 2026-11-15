@@ -128,3 +128,5 @@ L["%s is reported again in %s."] = "%s is reported again in %s.";
 L["Spell list per instance"] = "Spell list per instance";
 L["Respect the spell list in instances"] = "Respect the spell list in instances";
 L["Add your own spell (current instance)"] = "Add your own spell (current instance)";
+L["Flash color"] = "Flash color";
+L["Test flash"] = "Test flash";
