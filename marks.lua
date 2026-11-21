@@ -981,8 +981,18 @@ function SexyInterrupter:CreateMarkFrame(helpers)
 				function(value) P().symbols[index] = value; end);
 		end
 
+		local behavior = { L["Show enemy marks"], L["Marks: show in combat only"], L["Marks sort"] };
+
+		for index = 1, 8 do
+			behavior[#behavior + 1] = SYMBOL_NAMES[index];
+		end
+
+		H.MarkBehavior(settings, behavior);
+
 		SEM:Register(f, {
 			name = L["Addon name"] .. " " .. L["Enemy marks"],
+			addon = "SexyInterrupter", group = "si", groupName = "SexyInterrupter",
+			description = (GetLocale() == "deDE" and "Gegner mit Raid-Symbol samt Lebens- und Zauberbalken; ein Klick wählt das Ziel." or "Enemies with a raid marker, with health and cast bars; a click targets them."),
 			db = db,
 			settings = settings,
 			visibility = false, -- das Fenster steuert seine Transparenz selbst

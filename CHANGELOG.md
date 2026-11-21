@@ -1,3 +1,21 @@
+3.0.49
+
+- SexyEditMode is now a required dependency (CurseForge installs it automatically).
+- Docking: every window can be docked to another window (also of other Sexy addons), with side and alignment (needs the SexyEditMode addon).
+- Minimap button / /si lock: Edit Mode only for the windows of SexyInterrupter (needs the SexyEditMode addon).
+- Edit Mode: the three windows (list, Interrupt now, enemy marks) have tabs at the top of their dialog (needs the SexyEditMode addon).
+- The "Interrupts" window no longer stays visible when it has no rows (it used to count every known player, even those filtered out, e.g. by "Ignore healers" or "Active when solo").
+- With the SexyEditMode addon the Edit Mode dialogs of the windows show only visual options (look, size, position, visibility); behavior options (when it shows, sounds, speech, minimap icon, symbols, ...) are in the shared settings window. Without the addon everything stays in the dialogs.
+- Minimap button: with the SexyEditMode addon, left click opens the settings window at SexyInterrupter, right click toggles Edit Mode (without it, as before). The options with assignments and profiles still open with /si.
+- "Interrupt now" sound: the game sounds of "Quests nearby" (quest list, ready check, raid warning, ...) are offered at the top of the sound list, before the LibSharedMedia sounds.
+- The sound list no longer offers "None"; the "Play sound" checkbox switches the sound off.
+- New text field "Spoken phrase" (Edit Mode / shared settings, Speech): type the sentence that is spoken when it is your turn. Empty or the default text means "Interrupt!". It is used for "Phrase" and "Phrase and spell name"; "Test speech" speaks it too.
+- "Test speech" works again: the text-to-speech call used an old parameter order, so speed and volume were shifted. A failing call now shows its error in the chat.
+- The spell list per instance is its own page in the shared settings window (SexyEditMode, /sem) instead of a section in the "Interrupt now" dialog.
+- Voice selection: the voice names are shortened ("Hedda - German" instead of "Microsoft Hedda Desktop - German"), and long entries no longer run out of the list.
+- Registers with the new SexyEditMode addon: if it is installed, the windows (list, Interrupt now card, enemy marks) also appear in its shared settings window (/sem). Nothing changes without it.
+- Font selection: every font in the list is shown in its own typeface, and so is the current choice.
+
 3.0.48
 
 - The screen flash has an adjustable color (Edit Mode, "Interrupt now" dialog) and a test button; the default stays blue

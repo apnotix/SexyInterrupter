@@ -599,18 +599,40 @@ function SexyInterrupter:CreateUi()
 	-- Größe und Sichtbarkeit speichert sie in editModeAnchorDB/editModeMessageDB (BOTTOMLEFT
 	-- von UIParent: die untere Kante bleibt fest, auch wenn sich die Zeilenzahl ändert).
 	-- Nach den SetPoint-Aufrufen oben registrieren, damit die berechnete Startposition gilt.
+	-- Gemeinsames Einstellungsfenster (Addon SexyEditMode, /sem); ohne das Addon bleibt alles beim Alten
+	if SEM.RegisterAddon then SEM:RegisterAddon("SexyInterrupter", { title = "SexyInterrupter" }); end
 	SEM:Register(f, {
 		name = L["Addon name"] .. " " .. L["Window"],
+		addon = "SexyInterrupter", group = "si", groupName = "SexyInterrupter",
+		description = (GetLocale() == "deDE" and "Liste der Interrupter deiner Gruppe mit Abklingzeit und Reihenfolge." or "Your group's interrupters with cooldown and order."),
 		db = self.db.profile.ui.editModeAnchorDB,
-		settings = self:AnchorSettings(),
+		settings = SexyInterrupter.MarkBehavior(self:AnchorSettings(), {
+			L["Show in combat only"], L["Active when solo"], L["Ignore healers"], L["Fixed rotation order"],
+			L["Show minimap icon"] or "Show minimap icon",
+		}),
 		onEditMode = function() SexyInterrupter:UpdateFrames(); end,
 	});
 	SEM:Register(c, {
 		name = L["Addon name"] .. " " .. L["Interrupt now"],
+		addon = "SexyInterrupter", group = "si", groupName = "SexyInterrupter",
+		description = (GetLocale() == "deDE" and "Karte, die dir sagt, wann du unterbrechen sollst, mit Zauber, Zauberbalken, Ton und Sprachausgabe." or "Card that tells you when to interrupt, with spell, cast bar, sound and speech."),
 		db = self.db.profile.ui.editModeMessageDB,
-		settings = self:MessageSettings(),
+		settings = SexyInterrupter.MarkBehavior(self:MessageSettings(), {
+			L["Show message"], L["Play sound"], L["Sound file"], L["Flash display"], L["Show chat message"], L["Ouput channel"],
+			L["Speak when it is your turn"], L["Spoken text"], L["Spoken phrase"], L["Voice"], L["Speech speed"], L["Speech volume"],
+			L["Test speech"], L["Respect the spell list in instances"], L["Add your own spell (current instance)"],
+		}),
 		visibility = false, -- die Karte blendet sich selbst ein und aus
 	});
+
+	if SEM.RegisterPage then
+		SEM:RegisterPage({
+			name = L["Addon name"] .. ": " .. L["Spell list per instance"],
+			addon = "SexyInterrupter",
+			description = (GetLocale() == "deDE" and "Welche Zauber deines Ziels in einer Instanz gemeldet werden. Neue Zauber erscheinen hier von selbst." or "Which spells of your target are reported in an instance. New spells show up here by themselves."),
+			settings = self:KicklistPageSettings(),
+		});
+	end
 
 	-- "autoSeeded" markiert nur einen von UNS berechneten Startwert und muss verschwinden,
 	-- sobald der Spieler die Position selbst setzt - sonst überschreibt der Korrektur-Timer
@@ -717,15 +739,27 @@ local function MediaSelect(label, mediaType, getFn, setFn)
 		local names = {};
 
 		for name in pairs(LSM:HashTable(mediaType)) do
-			tinsert(names, name);
+			-- "None" (stiller Sound) braucht es nicht: "Play sound" schaltet den Ton ab
+			if not (mediaType == "sound" and name == "None") then
+				tinsert(names, name);
+			end
 		end
 
 		table.sort(names);
 
 		local list = {};
 
+		-- Spielsounds stehen oben in der Liste, danach die Töne aus LibSharedMedia
+		if mediaType == "sound" then
+			for _, kit in ipairs(SexyInterrupter:SoundKitOptions()) do
+				list[#list + 1] = kit;
+			end
+		end
+
 		for _, name in ipairs(names) do
-			list[#list + 1] = { value = name, label = name };
+			-- Schriften werden in ihrer eigenen Schrift angezeigt
+			local font = mediaType == "font" and LSM:Fetch("font", name, true) or nil;
+			list[#list + 1] = { value = name, label = name, font = font };
 		end
 
 		return list;
@@ -738,7 +772,7 @@ local function MediaSelect(label, mediaType, getFn, setFn)
 			setFn(value);
 
 			if mediaType == "sound" then
-				PlaySoundFile(LSM:Fetch(mediaType, value), "Master");
+				SexyInterrupter:PlayAlertSound(value);
 			end
 
 			SexyInterrupter:UpdateFrames();
@@ -754,8 +788,28 @@ local function Color(label, hasAlpha, getFn, setFn)
 	};
 end
 
+-- Einstellungen mit diesen Namen gelten als Verhalten statt Aussehen: Mit dem Addon SexyEditMode erscheinen
+-- sie nur im Einstellungsfenster (/sem), nicht im Edit-Mode-Dialog des Fensters.
+-- (als Feld statt lokaler Funktion: CreateUi() steht weiter oben in der Datei und müsste sie sonst vor ihrer Deklaration sehen)
+function SexyInterrupter.MarkBehavior(list, names)
+	local set = {};
+
+	for _, name in ipairs(names) do
+		set[name] = true;
+	end
+
+	for _, spec in ipairs(list) do
+		if spec.name and set[spec.name] then
+			spec.behavior = true;
+		end
+	end
+
+	return list;
+end
+
 -- Für marks.lua
 SexyInterrupter.EditModeHelpers = {
+	MarkBehavior = SexyInterrupter.MarkBehavior,
 	Header = Header,
 	Link = Link,
 	Check = Check,
@@ -991,7 +1045,9 @@ function SexyInterrupter:MessageSettings()
 
 			if C_VoiceChat.GetTtsVoices then
 				for _, voice in ipairs(C_VoiceChat.GetTtsVoices() or {}) do
-					list[#list + 1] = { value = voice.voiceID, label = voice.name };
+					-- "Microsoft Hedda Desktop - German" wird zu "Hedda - German"
+					local label = tostring(voice.name):gsub("^Microsoft ", ""):gsub(" Desktop", "");
+					list[#list + 1] = { value = voice.voiceID, label = label };
 				end
 			end
 
@@ -1021,6 +1077,12 @@ function SexyInterrupter:MessageSettings()
 				},
 				function() return profile.notification.ttsText end,
 				function(value) profile.notification.ttsText = value; end),
+			{ type = "input", name = L["Spoken phrase"], maxLetters = 80,
+				get = function() return profile.notification.ttsPhrase or L["Interrupt!"] end,
+				set = function(text)
+					text = (text or ""):gsub("^%s+", ""):gsub("%s+$", "");
+					profile.notification.ttsPhrase = (text ~= "" and text ~= L["Interrupt!"]) and text or nil;
+				end },
 			Select(L["Voice"], VoiceOptions, CurrentVoice,
 				function(value) profile.notification.ttsVoice = value; end),
 			Slider(L["Speech speed"], -10, 10, 1,
@@ -1039,17 +1101,32 @@ function SexyInterrupter:MessageSettings()
 		end
 	end
 
-	-- Zauberliste je Instanz: jeder Zauber, den dein Ziel in einer Instanz wirkt, steht angehakt in der Liste.
-	-- Nimmst du den Haken weg, wird er dort nicht mehr gemeldet (wenn die Option an ist).
-	list[#list + 1] = Header(L["Spell list per instance"], "kicklist", true);
-	list[#list + 1] = Check(L["Respect the spell list in instances"],
-		function() return profile.notification.kickListOnly end,
-		function(value) profile.notification.kickListOnly = value; end);
-	list[#list + 1] = { type = "edit", name = L["Add your own spell (current instance)"],
-		onSubmit = function(text) SexyInterrupter:AddKickSpell(text); end };
-	list[#list + 1] = { type = "dynamic", build = function() return SexyInterrupter:KicklistSpecs(); end };
+	-- Zauberliste je Instanz: eigene Seite im gemeinsamen Einstellungsfenster (SexyEditMode, /sem);
+	-- ohne dieses Addon bleibt sie hier im Dialog
+	if not SEM.RegisterAddon then
+		list[#list + 1] = Header(L["Spell list per instance"], "kicklist", true);
+
+		for _, spec in ipairs(self:KicklistPageSettings()) do
+			list[#list + 1] = spec;
+		end
+	end
 
 	return list;
+end
+
+-- Zauberliste je Instanz: jeder Zauber, den dein Ziel in einer Instanz wirkt, steht angehakt in der Liste.
+-- Nimmst du den Haken weg, wird er dort nicht mehr gemeldet (wenn die Option an ist).
+function SexyInterrupter:KicklistPageSettings()
+	local profile = self.db.profile;
+
+	return {
+		Check(L["Respect the spell list in instances"],
+			function() return profile.notification.kickListOnly end,
+			function(value) profile.notification.kickListOnly = value; end),
+		{ type = "edit", name = L["Add your own spell (current instance)"],
+			onSubmit = function(text) SexyInterrupter:AddKickSpell(text); end },
+		{ type = "dynamic", build = function() return SexyInterrupter:KicklistSpecs(); end },
+	};
 end
 
 function SexyInterrupter:UpdateFrames()
@@ -1241,7 +1318,8 @@ function SexyInterrupter:UpdateUI(rows)
 	end
 
 	local editing = SexyInterrupter:IsEditingUi();
-	local numRows = editing and #rows or SI_Globals.numInterrupters;
+	-- Zeilen, die wirklich angezeigt werden: ohne sie (z. B. niemand kann unterbrechen oder alle sind ausgefiltert) bleibt das Fenster weg
+	local numRows = #rows;
 
 	if editing or numRows > 0 then
 		local maxRows = numRows;

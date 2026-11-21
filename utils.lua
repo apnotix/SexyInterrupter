@@ -16,17 +16,31 @@ function SexyInterrupter:AddIcon()
 		icon = "Interface\\AddOns\\SexyInterrupter\\icon.tga",
 		text = "SexyInterrupter",
 		OnClick = function(self,btn)
-		   if btn == "RightButton" then
-			   LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
-		   else
+		   -- Mit dem Addon SexyEditMode: Linksklick = Einstellungsfenster, Rechtsklick = Edit Mode.
+		   -- Ohne: Linksklick = Edit Mode, Rechtsklick = Optionen (wie bisher).
+		   local SEM = LibStub("SexyEditMode-1.0", true);
+		   local hub = SEM and SEM.OpenHub;
+
+		   if (btn == "RightButton") == (hub and true or false) then
 			   SexyInterrupter:LockFrame();
+		   elseif hub then
+			   SEM:OpenHub("SexyInterrupter");
+		   else
+			   LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
 		   end
 	   end,
 	   OnTooltipShow = function(self)
 		   if not self or not self.AddLine then return end
 		   self:AddLine("SexyInterrupter");
-		   self:AddLine(L["Left click to toggle Frame"],1,1,1);
-		   self:AddLine(L["Right click to open settings"],1,1,1);
+		   local SEM = LibStub("SexyEditMode-1.0", true);
+
+		   if SEM and SEM.OpenHub then
+			   self:AddLine(GetLocale() == "deDE" and "Linksklick: Einstellungen" or "Left click: settings",1,1,1);
+			   self:AddLine(GetLocale() == "deDE" and "Rechtsklick: Edit Mode" or "Right click: Edit Mode",1,1,1);
+		   else
+			   self:AddLine(L["Left click to toggle Frame"],1,1,1);
+			   self:AddLine(L["Right click to open settings"],1,1,1);
+		   end
 	   end
    })
 
@@ -160,6 +174,48 @@ end
 -- picker stores) or a raw file path (the default). PlaySoundFile only
 -- understands paths, so resolve names first.
 local DEFAULT_SOUND_PATH = "Sound\\Spells\\PVPFlagTaken.ogg";
+
+-- Spielsounds (SOUNDKIT), zusätzlich zu den LibSharedMedia-Tönen; gespeichert als "kit:NAME"
+local KIT_NAMES = {
+	{ "IG_QUEST_LIST_OPEN", GetLocale() == "deDE" and "Questliste öffnen" or "Quest list open" },
+	{ "READY_CHECK", GetLocale() == "deDE" and "Bereitschaftscheck" or "Ready check" },
+	{ "RAID_WARNING", GetLocale() == "deDE" and "Schlachtzugswarnung" or "Raid warning" },
+	{ "ALARM_CLOCK_WARNING_3", GetLocale() == "deDE" and "Wecker" or "Alarm clock" },
+	{ "MAP_PING", GetLocale() == "deDE" and "Kartenping" or "Map ping" },
+	{ "UI_QUEST_ROLLING_FORWARD_01", GetLocale() == "deDE" and "Quest abgegeben" or "Quest turned in" },
+	{ "TELL_MESSAGE", GetLocale() == "deDE" and "Flüstern" or "Whisper" },
+	{ "AUCTION_WINDOW_OPEN", GetLocale() == "deDE" and "Auktionshaus" or "Auction house" },
+	{ "UI_EPICLOOT_TOAST", GetLocale() == "deDE" and "Epische Beute" or "Epic loot" },
+	{ "IG_PLAYER_INVITE", GetLocale() == "deDE" and "Einladung" or "Invitation" },
+};
+
+function SexyInterrupter:SoundKitOptions()
+	local list = {};
+
+	for _, kit in ipairs(KIT_NAMES) do
+		if SOUNDKIT and SOUNDKIT[kit[1]] then
+			list[#list + 1] = { value = "kit:" .. kit[1], label = kit[2] };
+		end
+	end
+
+	return list;
+end
+
+-- Spielt den gewählten Alarmton: Spielsound ("kit:NAME") oder LibSharedMedia-Name bzw. Dateipfad
+function SexyInterrupter:PlayAlertSound(value)
+	if type(value) == "string" and value:sub(1, 4) == "kit:" then
+		local id = SOUNDKIT and SOUNDKIT[value:sub(5)];
+
+		if id then
+			PlaySound(id, "Master");
+			return;
+		end
+
+		value = nil; -- unbekannt: Standardton
+	end
+
+	PlaySoundFile(self:ResolveSoundPath(value), "Master");
+end
 
 function SexyInterrupter:ResolveSoundPath(value)
 	if not value then
@@ -765,7 +821,7 @@ function SexyInterrupter:IsEditingUi()
 	local SEM = LibStub("SexyEditMode-1.0", true);
 
 	if SEM then
-		return SEM:IsEditing();
+		return SEM:IsEditing("SexyInterrupter");
 	end
 
 	return EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive() or false;
@@ -775,6 +831,14 @@ end
 -- Mode to reposition" option, the minimap icon left click, and `/si lock`).
 -- Positioning itself is handled entirely by SexyEditMode-1.0 from here.
 function SexyInterrupter:LockFrame()
+	local SEM = LibStub("SexyEditMode-1.0", true);
+
+	-- mit SexyEditMode nur für die Fenster dieses Addons
+	if SEM and SEM.ToggleEditMode then
+		SEM:ToggleEditMode("SexyInterrupter");
+		return;
+	end
+
 	if EditModeManagerFrame then
 		ShowUIPanel(EditModeManagerFrame);
 	end
@@ -936,7 +1000,7 @@ function SexyInterrupter:Speak(castName, force)
 
 	lastSpoken = GetTime();
 
-	local phrase = L["Interrupt!"];
+	local phrase = (n.ttsPhrase and n.ttsPhrase ~= "") and n.ttsPhrase or L["Interrupt!"];
 	local text = phrase;
 
 	if n.ttsText == "spell" and castName then
@@ -951,9 +1015,13 @@ function SexyInterrupter:Speak(castName, force)
 		voice = C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard);
 	end
 
-	local destination = (Enum.VoiceTtsDestination and Enum.VoiceTtsDestination.LocalPlayback) or 1;
+	-- Alle Clients nutzen jetzt dieselbe Schnittstelle: SpeakText(voiceID, text, rate, volume, allowOverlappedSpeech).
+	-- Der frühere Parameter "destination" gibt es nicht mehr, mit ihm verrutschten Tempo und Lautstärke.
+	local ok, err = pcall(C_VoiceChat.SpeakText, voice or 0, text, n.ttsRate or 0, n.ttsVolume or 100, false);
 
-	pcall(C_VoiceChat.SpeakText, voice or 0, text, destination, n.ttsRate or 0, n.ttsVolume or 100);
+	if not ok then
+		DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: " .. tostring(err), 1, 0.3, 0.3);
+	end
 end
 
 function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, castName, castTexture)
@@ -1024,7 +1092,7 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 			end
 
 			if self.db.profile.notification.sound then
-				PlaySoundFile(SexyInterrupter:ResolveSoundPath(self.db.profile.notification.soundFile), "Master");
+				SexyInterrupter:PlayAlertSound(self.db.profile.notification.soundFile);
 			end
 
 			if self.db.profile.notification.flash then

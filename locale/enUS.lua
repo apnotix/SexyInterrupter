@@ -102,6 +102,7 @@ L["Interrupt!"] = "Interrupt!";
 L["Speech"] = "Speech";
 L["Speak when it is your turn"] = "Speak when it is your turn";
 L["Spoken text"] = "Spoken text";
+L["Spoken phrase"] = "Spoken phrase";
 L["Phrase"] = "Phrase";
 L["Spell name"] = "Spell name";
 L["Phrase and spell name"] = "Phrase and spell name";

@@ -102,6 +102,7 @@ L["Interrupt!"] = "Unterbrechen!";
 L["Speech"] = "Sprachausgabe";
 L["Speak when it is your turn"] = "Sprechen, wenn du dran bist";
 L["Spoken text"] = "Gesprochener Text";
+L["Spoken phrase"] = "Gesprochener Satz";
 L["Phrase"] = "Satz";
 L["Spell name"] = "Zaubername";
 L["Phrase and spell name"] = "Satz und Zaubername";

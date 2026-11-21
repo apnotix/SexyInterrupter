@@ -1,4 +1,7 @@
 package-as: SexyInterrupter
 
+required-dependencies:
+  - sexyeditmode
+
 ignore:
   - curseforge
