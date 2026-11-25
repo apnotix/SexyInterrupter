@@ -56,7 +56,7 @@ The `interrupt` comm message (communication.lua's `SendInterrupt`/`ReceiveInterr
 
 ### Edit Mode settings & persistence (SexyEditMode-1.0)
 
-- The dialog comes from the own library `lib/SexyEditMode/SexyEditMode.lua` (source of truth: sibling repo `SexyEditMode`, copied into each addon). `CreateUi` registers the anchor and the message card with `SEM:Register(frame, { name, db, settings, onEditMode, visibility })`; `marks.lua` registers its own frame. Position (BOTTOMLEFT of UIParent), scale and visibility are stored by the library in `editModeAnchorDB`/`editModeMessageDB`/`editModeMarksDB`.
+- The dialog comes from the own library SexyEditMode-1.0 of the required addon `SexyEditMode` (sibling repo `SexyEditMode`; it is no longer embedded in this addon). `CreateUi` registers the anchor and the message card with `SEM:Register(frame, { name, db, settings, onEditMode, visibility })`; `marks.lua` registers its own frame. Position (BOTTOMLEFT of UIParent), scale and visibility are stored by the library in `editModeAnchorDB`/`editModeMessageDB`/`editModeMarksDB`.
 - **All user-facing options except the priority-assignment tab live in the dialog** (`AnchorSettings`/`MessageSettings` in [ui.lua](ui.lua), helpers `Header/Check/Slider/Select/MediaSelect/Color`), including font, statusbar, sound and output channel. AceConfig only keeps the "Open Edit Mode" button, the assignments tab and the profiles tab — don't add a group with zero visible children (AceGUI TabGroup divides by zero).
 - **AceDB is the single source of truth**; getters/setters read and write it directly, no resync needed.
 - Move a frame in code only via `SEM:SetPosition(frame, x, y)` and not while `SEM:IsMoving(frame)` (the growth compensation in `UpdateUI` follows this).

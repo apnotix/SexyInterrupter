@@ -1,11 +1,10 @@
 ## Interface: 120100, 16001
 ## Version: 3.0.49
-## Title: SexyInterrupter
+## Title: |cffb48cffSexy|r|cffbb96ffI|cffc2a1ffn|cffc8abfft|cffcfb6ffe|cffd6c0ffr|cffddcbffr|cffe4d5ffu|cffebe0ffp|cfff1eafft|cfff8f5ffe|cffffffffr|r
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
 ## X-Curse-Project-ID: 255069
 ## X-WoWI-ID: 24320
-## Category: Party & Raid
 ## IconTexture: Interface\AddOns\SexyInterrupter\icon.tga
 ## DefaultState: Enabled
 ## LoadOnDemand: 0
@@ -14,6 +13,7 @@
 
 ## OptionalDeps: Ace3, LibSharedMedia-3.0
 ## Dependencies: SexyEditMode
+## Group: SexyEditMode
 
 #@no-lib-strip@
 embeds.xml
@@ -24,10 +24,12 @@ locale\enUS.lua
 
 core.lua
 version.lua
+news.lua
 settings.lua
 events.lua
 utils.lua
 communication.lua
 ui.lua
 marks.lua
+samples.lua
 SexyInterrupter.xml

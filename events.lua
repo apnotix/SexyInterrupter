@@ -443,7 +443,7 @@ function SexyInterrupter:UNIT_SPELLCAST_CHANNEL_START(...)
 	if unitTag == "target" and SI_Globals.numInterrupters > 0 then
 		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID = UnitChannelInfo("target");
 
-		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, name, texture);
+		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, name, texture, spellID);
 	end
 end
 
@@ -457,7 +457,37 @@ function SexyInterrupter:UNIT_SPELLCAST_START(...)
 		-- declared in this function) instead of the ones actually captured
 		-- above, so ShowInterruptWarning's timeVisible-from-cast-length logic
 		-- never triggered and silently always fell back to its 10s default.
-		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTimeMS, endTimeMS, name, texture);
+		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTimeMS, endTimeMS, name, texture, spellId);
+	end
+end
+
+-- Ein Zauber am Ziel wird mitten im Wirken nicht mehr unterbrechbar (z. B. ein Schild): der Hinweis verschwindet
+function SexyInterrupter:UNIT_SPELLCAST_NOT_INTERRUPTIBLE(...)
+	local event, unitTag = ...;
+
+	if unitTag == "target" then
+		SexyInterrupterBlueWarningFrame:Hide();
+		SexyInterrupterInterruptNowText:HideAlert();
+	end
+end
+
+-- ... oder wird unterbrechbar, nachdem er beim Start gesperrt war: dann kommt der Hinweis nachtraeglich (nur wenn der Start
+-- wegen "nicht unterbrechbar" still blieb, sonst gaebe es ihn doppelt)
+function SexyInterrupter:UNIT_SPELLCAST_INTERRUPTIBLE(...)
+	local event, unitTag = ...;
+
+	if unitTag ~= "target" or not self.castLocked or SI_Globals.numInterrupters <= 0 then
+		return;
+	end
+
+	local name, text, texture, startMS, endMS, _, castID, notInterruptible, spellId = UnitCastingInfo("target");
+
+	if name == nil then
+		name, text, texture, startMS, endMS, _, notInterruptible, spellId = UnitChannelInfo("target");
+	end
+
+	if name ~= nil then
+		self:ShowInterruptWarning(notInterruptible, startMS, endMS, name, texture, spellId);
 	end
 end
 
@@ -465,6 +495,8 @@ function SexyInterrupter:UNIT_SPELLCAST_STOP(...)
 	local event, unitTag, castGUID, spellID = ...;
 
     if unitTag == "target" then
+        self.castLocked = false;
+
         -- Flash unabhängig vom Text beenden: ist "Show message" aus, wird der Text
         -- nie sichtbar und der Flash blieb sonst endlos stehen.
 		SexyInterrupterBlueWarningFrame:Hide();
@@ -591,6 +623,86 @@ function SexyInterrupter:UNIT_SPELLCAST_SUCCEEDED(...)
 	if UnitName("player") == interrupter.name then
 		SexyInterrupter:SendInterrupt(interrupter.name, spellID, cooldownLeft);
 	end
+end
+
+-- Ein Zauber wurde unterbrochen: Wer ihn unterbrochen hat (interruptedBy, eine GUID), liefern neuere Clients mit. So
+-- werden Kicks auch von Spielern ohne Addon erkannt, solange wir den Zauber des Gegners sehen. Welcher Zauber
+-- benutzt wurde, steht nicht dabei: es zaehlt ein schon gesehener Kick des Spielers, der bereit war, sonst der
+-- typische Kick seiner Klasse (SI.defaultInterrupt). /si debug schreibt jedes Ereignis mit, um zu sehen, ob der
+-- Client die Angabe mitschickt.
+function SexyInterrupter:UNIT_SPELLCAST_INTERRUPTED(...)
+	local event, unitTarget, castGUID, spellID, interruptedBy = ...;
+	local secret = issecretvalue and issecretvalue(interruptedBy);
+
+	if self.debug then
+		local who;
+
+		if secret then
+			who = "SECRET";
+		elseif interruptedBy then
+			local _, _, _, _, _, pname = GetPlayerInfoByGUID(interruptedBy);
+			who = tostring(pname or interruptedBy);
+		else
+			who = "nil";
+		end
+
+		DEFAULT_CHAT_FRAME:AddMessage(string.format("SI debug: INTERRUPTED unit=%s interruptedBy=%s",
+			tostring(unitTarget), who), 0.6, 0.8, 1);
+	end
+
+	if not interruptedBy or secret or SI_Globals.numInterrupters == 0 then
+		return;
+	end
+
+	local ok, _, _, _, _, _, name = pcall(GetPlayerInfoByGUID, interruptedBy);
+
+	-- eigene Kicks erkennt UNIT_SPELLCAST_SUCCEEDED; Pets und NPCs liefern keinen Spielernamen
+	if not ok or not name or name == UnitName("player") then
+		return;
+	end
+
+	local interrupter = SexyInterrupter:GetInterrupter(name);
+
+	if not interrupter or not interrupter.active or not interrupter.canInterrupt then
+		return;
+	end
+
+	-- Welcher Zauber? Ein bekannter, der bereit war (oder gerade erst benutzt wurde), sonst der typische der Klasse.
+	local now, spellId = GetTime(), nil;
+
+	if interrupter.abilities and next(interrupter.abilities) then
+		for id, ability in pairs(interrupter.abilities) do
+			if (ability.readyTime or 0) <= now + 1 then
+				spellId = id;
+				break;
+			end
+		end
+
+		-- alle bekannten Kicks liefen noch: dieser Kick war ein anderer, unbekannter Zauber - nicht zuordnen
+		if not spellId then
+			return;
+		end
+	else
+		spellId = interrupter.classEN and self.defaultInterrupt and self.defaultInterrupt[strlower(interrupter.classEN)];
+	end
+
+	if not spellId then
+		return;
+	end
+
+	local cooldown = GetBaseCooldownSeconds(spellId) or self.fallbackCooldowns[spellId];
+
+	if not cooldown then
+		return;
+	end
+
+	interrupter.abilities = interrupter.abilities or {};
+	interrupter.abilities[spellId] = {
+		cooldown = cooldown,
+		readyTime = now + cooldown,
+	};
+	SexyInterrupter.lastKicker = interrupter;
+	SexyInterrupter:UpdateInterrupterStatus();
 end
 
 -- Neuer Zauber gelernt (z. B. Level-Up): der Gruppe melden, sobald sich ändert,

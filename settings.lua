@@ -125,6 +125,24 @@ for _, spellId in ipairs(SI.interruptSpells) do
     SI.interruptSpellSet[spellId] = true;
 end
 
+-- Voraussichtlicher Kick je Klasse, solange von einem Spieler noch keiner gesehen wurde (nur fuer das Symbol in der
+-- Zeile; sobald er wirklich kickt, gilt der tatsaechlich benutzte Zauber mit echtem Cooldown).
+SI.defaultInterrupt = {
+    warrior = 6552,       -- Pummel
+    deathknight = 47528,  -- Mind Freeze
+    druid = 106839,       -- Skull Bash
+    shaman = 57994,       -- Wind Shear
+    monk = 116705,        -- Spear Hand Strike
+    paladin = 96231,      -- Rebuke
+    rogue = 1766,         -- Kick
+    mage = 2139,          -- Counterspell
+    hunter = 147362,      -- Counter Shot
+    warlock = 119910,     -- Spell Lock
+    demonhunter = 183752, -- Consume Magic
+    evoker = 351338,      -- Quell
+    priest = 15487,       -- Silence (Schatten)
+};
+
 SI.unitCanInterrupt = {
     priest = {
         healer = false,
@@ -220,12 +238,13 @@ local defaults = {
 			font = 'Inter',
 			fontsize = 13,
 			fontcolor = {
-				r = 0.95,
-				g = 0.92,
-				b = 0.86,
+				r = 1,
+				g = 1,
+				b = 1,
 				a = 1
             },
-            useclasscolor = true,
+            useclasscolor = false,
+			outline = true,           -- Kontur um die Schrift der Zeilen
 			window = {
                 width = 200,
                 -- false = wächst nach unten (obere Kante bleibt fix), true =
@@ -233,7 +252,11 @@ local defaults = {
                 -- bisher automatisch verhalten). "Nach unten" als Standard,
                 -- da das eher der Erwartung entspricht (neue Zeilen kommen
                 -- unten dazu, wie z. B. bei einer Buff-Liste).
-                growUp = false
+                growUp = false,
+                rowgap = 3,           -- Abstand zwischen den Zeilen (Pixel)
+                opacity = 0.96,       -- Deckkraft des Fensterhintergrunds
+                showBadge = true,     -- Abzeichen "2 bereit" in der Kopfzeile
+                square = false        -- eckige statt runde Leisten
 			},
 			bars = {
                 showclassicon = true,
@@ -245,7 +268,9 @@ local defaults = {
 					b = 0.13,
 					a = 1
 				},
-				texture = 'Flat'
+				texture = 'Sexy',
+				showabilityicon = true,   -- Zaubersymbol rechts (unabhängig vom Rollensymbol)
+				showcooldown = true       -- Abklingzeit als Zahl
 			}
 		},
 		marks = {
@@ -256,6 +281,19 @@ local defaults = {
 			maxrows = 8,
 			width = 260,
 			sort = 'symbol',
+			rowGap = 6,                 -- Abstand zwischen den Karten
+			castBarHeight = 14,         -- Höhe der Zauberleiste (Name und Zeit stehen in der Leiste); eigener Schlüssel, weil castHeight früher 2-10 px war
+			hpColor = { r = 0.70, g = 0.27, b = 0.23 },            -- Gesundheitsleiste
+			castColor = { r = 0.91, g = 0.72, b = 0.23 },         -- unterbrechbarer Zauber
+			castColorLocked = { r = 0.54, g = 0.54, b = 0.54 },   -- nicht unterbrechbarer Zauber
+			glowColor = { r = 1, g = 0.83, b = 0.3 },             -- Hervorhebung
+			glowAlpha = 0.12,
+			opacity = 0.96,             -- Deckkraft des Fensters
+			showTarget = true,          -- weißer Rahmen um das Ziel
+			showBadge = true,           -- Abzeichen "N aktiv"
+			showIcon = true,            -- Raid-Symbol
+			showPct = true,             -- Gesundheit in Prozent
+			showCastName = true,        -- Name des Zaubers
 			-- Raid-Symbol-Index (1 Stern .. 8 Totenkopf) -> anzeigen
 			symbols = { true, true, true, true, true, true, true, true },
 		},
@@ -271,14 +309,36 @@ local defaults = {
 			ttsRate = 2,            -- Tempo -10 .. 10
 			ttsVolume = 100,        -- Lautstaerke 0 .. 100
 			kickListOnly = false,   -- in Instanzen nur Zauber der Liste melden
-			flashcolor = { r = 0.3, g = 0.5, b = 1 }   -- Farbe des Bildschirm-Blitzes (Standard: Blau)
-		},
+			healOnly = false,       -- nur Heilzauber melden (wenn sich das feststellen laesst)
+			soloGap = 8,            -- allein: Sekunden Pause zwischen zwei Hinweisen (0 = aus)
+			minCast = 0,            -- Zauber kuerzer als diese Sekunden nicht melden (0 = aus)
+			flashcolor = { r = 0.3, g = 0.5, b = 1 },  -- Farbe des Bildschirm-Blitzes (Standard: Blau)
+			glow = true,            -- pulsierender Schein um die Karte
+			glowcolor = { r = 1, g = 0.3, b = 0.2 },
+			cardWidth = 440,
+			iconSize = 44,
+			nameSize = 26,
+			showBar = true,         -- Zauberbalken
+			showSpell = true,       -- Etikett mit dem Zaubernamen
+			showTime = true,        -- Etikett mit der Restzeit
+			showBadge = true        -- Abzeichen "Du bist dran"
+		}
+	},
+	-- Zauberlisten pro Instanz gelten für den ganzen Account, nicht pro Profil (siehe SexyInterrupter:Kicklists)
+	global = {
 		kicklist = {}               -- [Instanz-ID] = { name = "...", spells = { [Zaubername] = true } }
 	}
 }
 
 function SexyInterrupter:InitOptions() 
     self.db = LibStub('AceDB-3.0'):New(addonName.."DB", defaults, true);
+
+    -- Profildaten fuer SexyEditMode: das aktuelle Ace-Profil (Einstellungen und Fensterpositionen)
+    local SEM = LibStub("SexyEditMode-1.0", true);
+
+    if SEM and SEM.RegisterProfile then
+        SEM:RegisterProfile("SexyInterrupter", { db = function() return SexyInterrupter.db and SexyInterrupter.db.profile; end });
+    end
 
     SI.optionsTable = {
         type = "group",

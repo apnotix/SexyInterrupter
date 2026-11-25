@@ -1,4 +1,6 @@
 local LSM = LibStub("LibSharedMedia-3.0");
+-- Eigene Leistentextur (aus dem Addon SexyEditMode), wählbar unter den Leisten-Texturen
+LSM:Register("statusbar", "Sexy", "Interface/AddOns/SexyEditMode/media/bar.tga");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 local SEM = LibStub("SexyEditMode-1.0");
 
@@ -58,40 +60,93 @@ end
 -- changed since the last generation) so the cooldown bars actually count
 -- down like the real ones instead of resetting on every options change or
 -- OnUpdate tick.
--- Vorlagen, aus denen die Vorschau-Zeilen zyklisch aufgebaut werden - vorher
--- waren das genau 3 feste Zeilen, unabhängig von "Max rows of interrupters"
--- (Standard 5), wodurch der Edit-Mode-Dialog nie zeigte, wie viele Zeilen
--- tatsächlich Platz haben.
-local PREVIEW_TEMPLATES = {
-	{ name = L["Preview Tank"],    classColor = RAID_CLASS_COLORS["WARRIOR"], role = "TANK",    spellId = nil, cooldown = 0,  readyOffset = 0 },
-	{ name = L["Preview Healer"],  classColor = RAID_CLASS_COLORS["PRIEST"],  role = "HEALER",   spellId = nil, cooldown = 15, readyOffset = 4 },
-	{ name = L["Preview Damager"], classColor = RAID_CLASS_COLORS["MAGE"],    role = "DAMAGER",  spellId = 2139, cooldown = 24, readyOffset = 18 },
+-- Vorschau-Zeilen: ausgedachte Spieler mit Klasse, Rolle, Kick und Abklingzeit {Name, Klasse, Rolle, Zauber, Abklingzeit,
+-- Sekunden bis bereit}. Sie werden wie die echten Zeilen sortiert (bereite zuerst, dann nach Restzeit, bei Gleichstand Tank vor
+-- Schaden vor Heiler) und laufen nach einer Weile von vorn, damit die Balken in der Vorschau wirklich herunterzählen.
+local PREVIEW_PEOPLE = {
+	{ "Brom",    "WARRIOR",     "TANK",    6552,   15, 0 },
+	{ "Kael",    "MAGE",        "DAMAGER", 2139,   24, 0 },
+	{ "Mira",    "SHAMAN",      "DAMAGER", 57994,  12, 5 },
+	{ "Selene",  "PRIEST",      "HEALER",  15487,  45, 8 },
+	{ "Thessa",  "ROGUE",       "DAMAGER", 1766,   15, 11 },
+	{ "Garrick", "DRUID",       "TANK",    5211,   15, 14 },
+	{ "Torvin",  "HUNTER",      "DAMAGER", 147362, 24, 17 },
+	{ "Lyra",    "WARLOCK",     "DAMAGER", 19647,  24, 20 },
+	{ "Dunkan",  "PALADIN",     "TANK",    96231,  15, 23 },
+	{ "Nyx",     "SHAMAN",      "DAMAGER", 8042,   12, 26 },
 };
+local PREVIEW_PRIO = { TANK = 1, DAMAGER = 2, HEALER = 3 };
+local PREVIEW_CYCLE = 40;   -- Sekunden, dann beginnt die Vorschau von vorn
 
-local previewRows = nil;
+local previewRows, previewAt, previewKey = nil, 0, nil;
 
 local function GetPreviewRows(forceRegenerate)
-	local maxRows = (SexyInterrupter.db and SexyInterrupter.db.profile.general.maxrows) or 5;
+	local general = (SexyInterrupter.db and SexyInterrupter.db.profile.general) or {};
+	local maxRows = general.maxrows or 5;
+	local ignoreHealer = general.ignoreHealer and true or false;
+	local fixed = general.fixedRotation and true or false;
+	local now = GetTime();
+	local key = maxRows .. "|" .. tostring(ignoreHealer);
 
-	if forceRegenerate or not previewRows or #previewRows ~= maxRows then
-		previewRows = {};
+	-- neu aufbauen: Zeilenzahl oder "Heiler ignorieren" geändert, oder die Vorschau beginnt von vorn
+	if forceRegenerate or not previewRows or previewKey ~= key or now - previewAt > PREVIEW_CYCLE then
+		previewRows, previewAt, previewKey = {}, now, key;
 
-		for i = 1, maxRows do
-			local template = PREVIEW_TEMPLATES[((i - 1) % #PREVIEW_TEMPLATES) + 1];
+		local i = 0;
+		local n = 0;
 
-			previewRows[i] = {
-				interrupter = {
-					name = template.name .. " " .. i,
-					classColor = template.classColor,
-					role = template.role,
-					offline = false, dead = false, afk = false, inrange = true,
-				},
-				spellId = template.spellId,
-				cooldown = template.cooldown,
-				readyTime = template.cooldown > 0 and (GetTime() + template.readyOffset) or 0,
-			};
+		while n < maxRows and i < maxRows + #PREVIEW_PEOPLE do
+			i = i + 1;
+			local p = PREVIEW_PEOPLE[((i - 1) % #PREVIEW_PEOPLE) + 1];
+
+			-- wie die echte Liste: Heiler fallen weg, wenn sie ignoriert werden
+			if not (ignoreHealer and p[3] == "HEALER") then
+				n = n + 1;
+				previewRows[n] = {
+					interrupter = {
+						name = p[1],
+						classColor = RAID_CLASS_COLORS[p[2]],
+						role = p[3],
+						offline = false, dead = false, afk = false, inrange = true,
+					},
+					spellId = p[4],
+					cooldown = p[5],
+					readyTime = p[6] > 0 and (now + p[6]) or 0,
+				};
+			end
 		end
 	end
+
+	-- Wie die echte Liste sortieren. Normal: wer zuerst bereit ist, steht oben (bei Gleichstand Tank vor Schaden vor Heiler).
+	-- Feste Reihenfolge: bereite Spieler zuerst, innerhalb der Gruppen nach Priorität und Name, unabhängig von der Restzeit.
+	table.sort(previewRows, function(x, y)
+		local rx, ry = math.max((x.readyTime or 0) - now, 0), math.max((y.readyTime or 0) - now, 0);
+		local px, py = PREVIEW_PRIO[x.interrupter.role] or 9, PREVIEW_PRIO[y.interrupter.role] or 9;
+
+		if fixed then
+			local readyX, readyY = rx == 0, ry == 0;
+
+			if readyX ~= readyY then
+				return readyX;
+			end
+
+			if px ~= py then
+				return px < py;
+			end
+
+			return x.interrupter.name < y.interrupter.name;
+		end
+
+		if rx ~= ry then
+			return rx < ry;
+		end
+
+		if px ~= py then
+			return px < py;
+		end
+
+		return x.interrupter.name < y.interrupter.name;
+	end);
 
 	return previewRows;
 end
@@ -105,6 +160,26 @@ local FONT_DIR = "Interface\\AddOns\\SexyInterrupter\\media\\fonts\\";
 local FLAT = "Interface\\Buttons\\WHITE8x8";
 local HEAD = 30;           -- Rahmen oben plus Titelband
 local CARD = { 0.145, 0.125, 0.10, 1 };      -- Zeilenfläche
+-- Abstand zwischen den Zeilen (einstellbar, Standard 3)
+local function RowGap()
+	local p = SexyInterrupter.db and SexyInterrupter.db.profile;
+
+	return p and p.ui.window.rowgap or 3;
+end
+
+-- Abstand der ersten Zeile zur Oberkante des Listenfensters: unter dem Titelband, oder (Kopfzeile ausgeblendet) nur
+-- unter dem Rand
+function SexyInterrupter:ListTopPad()
+	return self.db.profile.ui.window.hideHeader and 6 or (HEAD + 2);
+end
+
+-- Klassenfarben etwas gedämpft (weniger Sättigung, etwas dunkler): das Gelb des Schurken ist sonst sehr grell
+local function SoftClassColor(c)
+	local gray = 0.3 * c.r + 0.59 * c.g + 0.11 * c.b;
+	local function soft(v) return (v * 0.8 + gray * 0.2) * 0.82; end
+
+	return soft(c.r), soft(c.g), soft(c.b);
+end
 local DIVIDER = { 0.21, 0.19, 0.14, 1 };     -- Trennlinie
 local BAND = { 0.15, 0.12, 0.07, 0.96 };     -- Titelband
 local COOLING = { 0.22, 0.17, 0.08 };        -- Leiste, solange der Cooldown läuft (dunkles Braun)
@@ -123,6 +198,15 @@ end
 -- Text ohne Kontur, mit leichtem Schatten (flacher Look)
 local function StyleText(fs, font, size)
 	fs:SetFont(font, size, "");
+	fs:SetShadowColor(0, 0, 0, 1);
+	fs:SetShadowOffset(1, -1);
+end
+
+-- Text der Zeilen: schwarzer Umriss (statt nur Schatten), damit er auf jeder Leiste lesbar bleibt
+local function StyleOutlined(fs, font, size)
+	local p = SexyInterrupter.db and SexyInterrupter.db.profile;
+
+	fs:SetFont(font, size, (not p or p.ui.outline ~= false) and "OUTLINE" or "");
 	fs:SetShadowColor(0, 0, 0, 1);
 	fs:SetShadowOffset(1, -1);
 end
@@ -199,7 +283,8 @@ local function CreateBand(frame, title, bandColor, titleColor)
 	badgeText:SetTextColor(0.78, 0.73, 0.64);
 
 	function frame:SetBadge(text)
-		local show = text ~= nil and text ~= "";
+		self.badgeValue = text;
+		local show = text ~= nil and text ~= "" and not self.headerHidden;
 
 		badgeBg:SetShown(show);
 		badgeText:SetShown(show);
@@ -211,6 +296,14 @@ local function CreateBand(frame, title, bandColor, titleColor)
 	end
 
 	frame:SetBadge("");
+
+	-- Titelband samt Titel und Badge ausblenden (Fenster ohne Kopfzeile)
+	function frame:SetHeaderShown(show)
+		self.headerHidden = not show;
+		band:SetShown(show);
+		self.title:SetShown(show);
+		self:SetBadge(self.badgeValue);
+	end
 end
 
 -- Rahmen wie im SexyQuestHelper-Fenster: Tooltip-Fläche und Tooltip-Rand (12 px, gold gefärbt).
@@ -225,21 +318,48 @@ local BACKDROP = {
 local WINDOW_BG = { 0.08, 0.065, 0.05, 0.96 };
 local WINDOW_EDGE = { 0.42, 0.34, 0.15, 1 };
 
-local function ApplyBackdrop(frame)
+local function ApplyBackdrop(frame, alphaOverride)
+	-- die Liste hat eine einstellbare Deckkraft (die Markierungen reichen ihre eigene herein); andere Fenster nutzen den festen Wert
+	local p = SexyInterrupter.db and SexyInterrupter.db.profile;
+	local custom = alphaOverride or (frame == SexyInterrupterAnchor and p and p.ui.window.opacity) or nil;
+	local alpha = custom or WINDOW_BG[4];
+
+	-- Titelband gehört dazu, sonst wäre nur der Rand durchsichtig
+	if custom and frame.band then
+		frame.band:SetColorTexture(BAND[1], BAND[2], BAND[3], custom);
+	end
+
 	frame:SetBackdrop(BACKDROP);
-	frame:SetBackdropColor(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], WINDOW_BG[4]);
+	frame:SetBackdropColor(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], alpha);
 	frame:SetBackdropBorderColor(WINDOW_EDGE[1], WINDOW_EDGE[2], WINDOW_EDGE[3], WINDOW_EDGE[4]);
 end
 
 SexyInterrupter.Look = {
 	HEAD = HEAD, CARD = CARD, DIVIDER = DIVIDER, TONES = TONES,
 	MakePill = MakePill, CreateBand = CreateBand, TextFont = TextFont, TitleFont = TitleFont, StyleText = StyleText,
+	BACKDROP = BACKDROP, WINDOW_BG = WINDOW_BG, WINDOW_EDGE = WINDOW_EDGE, COOLING = COOLING,   -- für die Vorschau (samples.lua)
 };
+SexyInterrupter.SoftClassColor = SoftClassColor;
 
 -- Karte "Unterbrich jetzt!" (oberes Mockup): Band mit rotem Rand, Zaubersymbol, Name des
 -- Ziels groß, Etiketten für Zaubername und Restzeit. Der Frame selbst bleibt immer
 -- sichtbar (Edit-Mode-Auswahl), die Karte (c.panel) wird ein- und ausgeblendet.
 local ALERT_W, ALERT_H = 440, HEAD + 96;   -- unten Platz für Zauberbalken und Restzeit-Abzeichen
+local ALERT_BODY = ALERT_H - HEAD;          -- Höhe ohne Kopfzeile (Mindesthöhe)
+
+-- Maße der Karte nach Einstellung: Breite, Symbolgröße, Höhe ohne Kopfzeile (wächst mit dem Symbol)
+local function CardWidth()
+	local p = SexyInterrupter.db and SexyInterrupter.db.profile;
+
+	return p and p.notification.cardWidth or ALERT_W;
+end
+
+local function CardBody()
+	local p = SexyInterrupter.db and SexyInterrupter.db.profile;
+	local icon = p and p.notification.iconSize or 44;
+
+	return math.max(ALERT_BODY, icon + 52);
+end
 local ALERT_EDGE = { 0.54, 0.20, 0.15, 1 };
 local ALERT_BAND = { 0.18, 0.08, 0.07, 0.96 };
 
@@ -282,6 +402,9 @@ local function NineSliceGlow(parent, target, texSize, tc, disp, out)
 	return obj;
 end
 
+-- für die Vorschau (samples.lua)
+SexyInterrupter.Look.ALERT = { W = ALERT_W, BODY = ALERT_BODY, EDGE = ALERT_EDGE, BAND = ALERT_BAND, NineSliceGlow = NineSliceGlow, Width = CardWidth, Body = CardBody };
+
 local function CreateAlertCard(addon)
 	local c = CreateFrame("Frame", "SexyInterrupterInterruptNowText", UIParent);
 	c:SetSize(ALERT_W, ALERT_H);
@@ -300,7 +423,9 @@ local function CreateAlertCard(addon)
 	-- liegt in einem eigenen Frame über der Karte und ist innen durchsichtig.
 	local glow = CreateFrame("Frame", nil, p);
 	glow:SetAllPoints(p);
-	NineSliceGlow(glow, p, 128, 48, 48, 32):SetColor(1, 0.3, 0.2, 1);
+	p.glowObj = NineSliceGlow(glow, p, 128, 48, 48, 32);
+	p.glowObj:SetColor(1, 0.3, 0.2, 1);
+	p.glow = glow;
 
 	local pulse = glow:CreateAnimationGroup();
 	local fade = pulse:CreateAnimation("Alpha");
@@ -323,7 +448,7 @@ local function CreateAlertCard(addon)
 	p.iconBorder:SetColorTexture(1, 0.6, 0.53, 1);
 	p.icon = p:CreateTexture(nil, "OVERLAY");
 	p.icon:SetSize(44, 44);
-	p.icon:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -(HEAD + 12));
+	p.icon:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -(HEAD + 12));   -- siehe SetHeaderHidden
 	p.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
 	p.iconBorder:SetPoint("TOPLEFT", p.icon, "TOPLEFT", -2, 2);
 	p.iconBorder:SetPoint("BOTTOMRIGHT", p.icon, "BOTTOMRIGHT", 2, -2);
@@ -363,6 +488,39 @@ local function CreateAlertCard(addon)
 	mark:Hide();
 	p.mark = mark;
 
+	-- Aussehen nach Einstellung: Schein, Symbolgröße, Namensgröße, Abzeichen, Balken und Etiketten
+	function c:ApplyLook()
+		local n = addon.db.profile.notification;
+		local p = self.panel;
+		local top = n.hideHeader and 6 or HEAD;
+
+		p.glow:SetShown(n.glow ~= false);
+		p.glowObj:SetColor(n.glowcolor.r, n.glowcolor.g, n.glowcolor.b, 1);
+
+		local size = n.iconSize or 44;
+		p.icon:SetSize(size, size);
+		p.icon:ClearAllPoints();
+		p.icon:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -(top + 12));
+		p.name:SetFont(TitleFont(), n.nameSize or 26, "");
+		p:SetBadge(n.showBadge ~= false and L["You are up"] or "");
+
+		if n.showSpell == false then
+			p.spellPill:Hide();
+		end
+
+		if n.showTime == false then
+			p.timePill:Hide();
+			p.bar:ClearAllPoints();
+			p.bar:SetPoint("LEFT", p, "BOTTOMLEFT", 18, 21);
+			p.bar:SetPoint("RIGHT", p, "BOTTOMRIGHT", -18, 21);
+		end
+
+		if n.showBar == false then
+			self.barOn = false;
+			p.bar:Hide();
+		end
+	end
+
 	function c:UpdateMark()
 		local entry = self.cast and addon:GetKicklist(false);
 		local muted = entry and entry.spells[self.cast] == false;
@@ -389,6 +547,7 @@ local function CreateAlertCard(addon)
 	bar.bg:SetColorTexture(0.21, 0.19, 0.14, 1);
 	bar:Hide();
 	p.bar = bar;
+	if SEM.ShineBar then SEM:ShineBar(bar); end
 
 	function c:ShowAlert(targetName, spellName, texture, endTime, seconds, startTime)
 		local p = self.panel;
@@ -432,8 +591,18 @@ local function CreateAlertCard(addon)
 			pcall(function() self.endAt = endTime / 1000; end);
 		end
 
+		-- Geheime Endzeit: die Zahl laesst sich nicht rechnen, aber das Dauer-Objekt des Ziels (UnitCastingDuration) liefert die
+		-- Restzeit, und SetFormattedText nimmt auch geheime Zahlen
+		self.durUnit = nil;
+
+		if not self.endAt and endTime ~= nil and (UnitCastingDuration or UnitChannelDuration) then
+			self.durUnit = "target";
+		end
+
 		if self.endAt then
 			p.timePill:Set("grey", string.format("%.1f s", math.max(0, self.endAt - GetTime())), 12);
+		elseif self.durUnit then
+			p.timePill:Set("grey", "0.0 s", 12);
 		else
 			p.timePill:Hide();
 		end
@@ -442,7 +611,7 @@ local function CreateAlertCard(addon)
 		p.bar:ClearAllPoints();
 		p.bar:SetPoint("LEFT", p, "BOTTOMLEFT", 18, 21);
 
-		if self.endAt then
+		if self.endAt or self.durUnit then
 			p.bar:SetPoint("RIGHT", p.timePill.bg, "LEFT", -6, 0);
 		else
 			p.bar:SetPoint("RIGHT", p, "BOTTOMRIGHT", -18, 21);
@@ -460,13 +629,14 @@ local function CreateAlertCard(addon)
 			end
 		end
 
+		self:ApplyLook();
 		p:Show();
 	end
 
 	function c:ShowPreview()
 		local p = self.panel;
 
-		self.endAt, self.hideAt, self.previewing = nil, nil, true;
+		self.endAt, self.hideAt, self.previewing, self.durUnit = nil, nil, true, nil;
 		self.barOn = false;
 		self.cast = nil;
 		p.mark:Hide();
@@ -482,11 +652,12 @@ local function CreateAlertCard(addon)
 		p.bar:SetMinMaxValues(0, 1);
 		p.bar:SetValue(0.6);
 		p.bar:Show();
+		self:ApplyLook();
 		p:Show();
 	end
 
 	function c:HideAlert()
-		self.endAt, self.hideAt, self.previewing = nil, nil, false;
+		self.endAt, self.hideAt, self.previewing, self.durUnit = nil, nil, false, nil;
 		self.panel:Hide();
 	end
 
@@ -503,8 +674,17 @@ local function CreateAlertCard(addon)
 			return;
 		end
 
-		if self.endAt then
+		if self.endAt and addon.db.profile.notification.showTime ~= false then
 			self.panel.timePill:Set("grey", string.format("%.1f s", math.max(0, self.endAt - now)), 12);
+		elseif self.durUnit and addon.db.profile.notification.showTime ~= false then
+			pcall(function()
+				local dur = (UnitCastingDuration and UnitCastingDuration(self.durUnit)) or (UnitChannelDuration and UnitChannelDuration(self.durUnit));
+
+				if dur and dur.GetRemainingDuration then
+					self.panel.timePill.text:SetFormattedText("%.1f s", dur:GetRemainingDuration());
+					self.panel.timePill.bg:SetWidth(58);
+				end
+			end);
 		end
 
 		if self.barOn then
@@ -515,7 +695,57 @@ local function CreateAlertCard(addon)
 	return c;
 end
 
+-- "Interrupt now": Kopfzeile ausblenden (notification.hideHeader). Das Symbol rückt nach oben, die Karte wird niedriger.
+function SexyInterrupter:ApplyAlertHeader()
+	local c = SexyInterrupterInterruptNowText;
+	if not (c and c.panel) or InCombatLockdown() then return; end
+
+	local hide = self.db.profile.notification.hideHeader and true or false;
+	local top = hide and 6 or HEAD;
+
+	if c.panel.SetHeaderShown then c.panel:SetHeaderShown(not hide); end
+
+	c.panel.icon:ClearAllPoints();
+	c.panel.icon:SetPoint("TOPLEFT", c.panel, "TOPLEFT", 18, -(top + 12));
+	c:SetSize(CardWidth(), top + CardBody());
+	c:ApplyLook();
+end
+
+-- Vorschau im Einstellungsfenster (SexyEditMode-Hub): das ECHTE Fenster wird kurz in den Vorschaubereich gehängt und mit den
+-- Beispieldaten des Edit Mode gezeigt (hubPreview, siehe IsEditingUi). Klickbereiche: Kopfzeile (Kopfzeile ausblenden)
+-- und Inhalt (bodyJump).
+function SexyInterrupter:LiveEntry(getFrame, getBand, bodyJump)
+	local addon = self;
+
+	return {
+		frame = getFrame,
+		enter = function() addon.hubPreview = true; addon:UpdateFrames(); end,
+		leave = function() addon.hubPreview = false; addon:UpdateFrames(); end,
+		parts = function(rel, w, h)
+			local bx, by, bw, bh = rel(getBand());
+			local head = bx and (by + bh + 3) or 6;
+
+			return {
+				{ name = L["Hide header"], x = 0, y = 0, w = w, h = head, jump = L["Hide header"] },
+				{ name = L["Look"], x = 4, y = head, w = w - 8, h = math.max(8, h - head - 4), jump = bodyJump },
+			};
+		end,
+	};
+end
+
 function SexyInterrupter:CreateUi()
+	-- Einmalig: statt der schlichten Standardtextur "Flat" die neue Leistentextur "Sexy" (eigene Wahl bleibt)
+	local bars = self.db.profile.ui.bars;
+	if not bars.sexyTexture then
+		bars.sexyTexture = true;
+		if bars.texture == "Flat" then bars.texture = "Sexy"; end
+	end
+	local uiCfg = self.db.profile.ui;
+	if not uiCfg.whiteText then
+		uiCfg.whiteText = true;
+		uiCfg.useclasscolor = false;
+		uiCfg.fontcolor.r, uiCfg.fontcolor.g, uiCfg.fontcolor.b = 1, 1, 1;
+	end
 	-- Frame: Anchor
 	local f = CreateFrame("Frame", "SexyInterrupterAnchor", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil);
 
@@ -591,7 +821,7 @@ function SexyInterrupter:CreateUi()
     if not (self.db.profile.ui.editModeMessageDB.x and self.db.profile.ui.editModeMessageDB.y) then
         self.db.profile.ui.editModeMessageDB.x, self.db.profile.ui.editModeMessageDB.y = ComputeBottomLeft(
             self.db.profile.ui.messagePosition.point, UIParent, self.db.profile.ui.messagePosition.relativePoint,
-            self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, ALERT_W, c:GetHeight())
+            self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, CardWidth(), c:GetHeight())
         self.db.profile.ui.editModeMessageDB.autoSeeded = true
     end
 
@@ -606,8 +836,9 @@ function SexyInterrupter:CreateUi()
 		addon = "SexyInterrupter", group = "si", groupName = "SexyInterrupter",
 		description = (GetLocale() == "deDE" and "Liste der Interrupter deiner Gruppe mit Abklingzeit und Reihenfolge." or "Your group's interrupters with cooldown and order."),
 		db = self.db.profile.ui.editModeAnchorDB,
+		sample = SexyInterrupterSamples and SexyInterrupterSamples.list,   -- Vorschau im Einstellungsfenster: eigenes Fenster mit eigener Logik (samples.lua)
 		settings = SexyInterrupter.MarkBehavior(self:AnchorSettings(), {
-			L["Show in combat only"], L["Active when solo"], L["Ignore healers"], L["Fixed rotation order"],
+			L["Show in combat only"], L["Active when solo"], L["Grow direction"] or "Grow direction",
 			L["Show minimap icon"] or "Show minimap icon",
 		}),
 		onEditMode = function() SexyInterrupter:UpdateFrames(); end,
@@ -617,20 +848,22 @@ function SexyInterrupter:CreateUi()
 		addon = "SexyInterrupter", group = "si", groupName = "SexyInterrupter",
 		description = (GetLocale() == "deDE" and "Karte, die dir sagt, wann du unterbrechen sollst, mit Zauber, Zauberbalken, Ton und Sprachausgabe." or "Card that tells you when to interrupt, with spell, cast bar, sound and speech."),
 		db = self.db.profile.ui.editModeMessageDB,
+		sample = SexyInterrupterSamples and SexyInterrupterSamples.card,   -- Vorschau im Einstellungsfenster: eigenes Fenster mit eigener Logik (samples.lua)
 		settings = SexyInterrupter.MarkBehavior(self:MessageSettings(), {
-			L["Show message"], L["Play sound"], L["Sound file"], L["Flash display"], L["Show chat message"], L["Ouput channel"],
+			L["Show message"], L["Flash display"], L["Flash color"], L["Test flash"], L["Play sound"], L["Only report healing spells"], L["Pause between hints when solo (seconds)"], L["Ignore casts shorter than (seconds)"], L["Sound file"], L["Show chat message"], L["Ouput channel"],
 			L["Speak when it is your turn"], L["Spoken text"], L["Spoken phrase"], L["Voice"], L["Speech speed"], L["Speech volume"],
 			L["Test speech"], L["Respect the spell list in instances"], L["Add your own spell (current instance)"],
 		}),
 		visibility = false, -- die Karte blendet sich selbst ein und aus
 	});
+	self:ApplyAlertHeader();   -- Größe und Aussehen der Karte nach Einstellung
 
 	if SEM.RegisterPage then
 		SEM:RegisterPage({
 			name = L["Addon name"] .. ": " .. L["Spell list per instance"],
 			addon = "SexyInterrupter",
 			description = (GetLocale() == "deDE" and "Welche Zauber deines Ziels in einer Instanz gemeldet werden. Neue Zauber erscheinen hier von selbst." or "Which spells of your target are reported in an instance. New spells show up here by themselves."),
-			settings = self:KicklistPageSettings(),
+			settings = self:KicklistPageSettings(true),
 		});
 	end
 
@@ -687,7 +920,7 @@ function SexyInterrupter:CreateUi()
 		if messageDB.autoSeeded and not SEM:IsMoving(c) then
 			local mx, my = ComputeBottomLeft(
 				self.db.profile.ui.messagePosition.point, UIParent, self.db.profile.ui.messagePosition.relativePoint,
-				self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, ALERT_W, c:GetHeight())
+				self.db.profile.ui.messagePosition.x, self.db.profile.ui.messagePosition.y, CardWidth(), c:GetHeight())
 			if mx and my then
 				messageDB.x, messageDB.y = mx, my
 					SEM:SetPosition(c, mx, my)
@@ -815,6 +1048,7 @@ SexyInterrupter.EditModeHelpers = {
 	Check = Check,
 	Slider = Slider,
 	Select = Select,
+	Color = Color,
 	GetLiveDB = GetLiveDB,
 	ComputeBottomLeft = ComputeBottomLeft,
 	ApplyBackdrop = ApplyBackdrop,
@@ -825,24 +1059,121 @@ function SexyInterrupter:AnchorSettings()
 	local profile = self.db.profile;
 
 	return {
-		Link(L["Interrupt now"], function() return SexyInterrupterInterruptNowText; end),
-		Link(L["Enemy marks"], function() return SexyInterrupter.markFrame; end),
-		Header(L["Behavior"], "behavior"),
-		Check(L["Show in combat only"],
-			function() return profile.general.modeincombat end,
-			function(value) profile.general.modeincombat = value; end),
-		Check(L["Active when solo"],
-			function() return profile.general.activeSolo end,
-			function(value) profile.general.activeSolo = value; end),
+		-- Gruppe 1: alles, was die Vorschau verändert (mit Trennlinien); Gruppe 2: Verhalten
+		Header(L["Look"], "look"),
+		Slider(L["Width"], 100, 400, 1,
+			function() return profile.ui.window.width end,
+			function(value) profile.ui.window.width = value; end),
+		Slider(L["Bar height"], 4, 60, 1,
+			function() return profile.ui.bars.barheight end,
+			function(value) profile.ui.bars.barheight = value; end),
+		(function()
+			local spec = Slider(L["Row spacing"], 0, 10, 1,
+				function() return profile.ui.window.rowgap end,
+				function(value) profile.ui.window.rowgap = value; end);
+			spec.format = function(v) return v .. " px"; end;
+			return spec;
+		end)(),
+		(function()
+			local spec = Slider(L["Window opacity"], 30, 100, 2,
+				function() return math.floor((profile.ui.window.opacity or 0.96) * 100 + 0.5); end,
+				function(value) profile.ui.window.opacity = value / 100; end);
+			spec.format = function(v) return v .. " %"; end;
+			return spec;
+		end)(),
+		Check(L["Hide header"],
+			function() return profile.ui.window.hideHeader end,
+			function(value) profile.ui.window.hideHeader = value and true or false; end),
+		Check(L["Show ready counter"],
+			function() return profile.ui.window.showBadge ~= false end,
+			function(value) profile.ui.window.showBadge = value and true or false; end),
+		Check(L["Highlight own row"],
+			function() return profile.general.highlightOwn end,
+			function(value) profile.general.highlightOwn = value; end),
+		Check(L["Square bars"],
+			function() return profile.ui.window.square end,
+			function(value) profile.ui.window.square = value and true or false; end),
+		Check(L["Show role icon"],
+			function() return profile.ui.bars.showclassicon end,
+			function(value) profile.ui.bars.showclassicon = value; end),
+		Check(L["Show spell icon"],
+			function() return profile.ui.bars.showabilityicon ~= false end,
+			function(value) profile.ui.bars.showabilityicon = value and true or false; end),
+		Check(L["Show cooldown number"],
+			function() return profile.ui.bars.showcooldown ~= false end,
+			function(value) profile.ui.bars.showcooldown = value and true or false; end),
+		MediaSelect(L["Statusbar"], "statusbar",
+			function() return profile.ui.bars.texture end,
+			function(value) profile.ui.bars.texture = value; end),
+		(function()
+			local spec = Check(L["Bar color by class"],
+				function() return profile.ui.bars.useclasscolor end,
+				function(value) profile.ui.bars.useclasscolor = value; end);
+			spec.relayout = true;   -- "Balkenfarbe" entfällt, solange der Haken drin ist
+			return spec;
+		end)(),
+		(function()
+			local spec = Color(L["Bar color"], true,
+				function()
+					local c = profile.ui.bars.barcolor;
+					return c.r, c.g, c.b, c.a;
+				end,
+				function(r, g, b, a)
+					local c = profile.ui.bars.barcolor;
+					c.r, c.g, c.b, c.a = r, g, b, a;
+				end);
+			spec.hidden = function() return profile.ui.bars.useclasscolor; end;
+			return spec;
+		end)(),
+		{ type = "divider", name = L["Interrupts"] },
+		Slider(L["Max rows of interrupters"], 3, 30, 1,
+			function() return profile.general.maxrows end,
+			function(value) profile.general.maxrows = value; end),
 		Check(L["Ignore healers"],
 			function() return profile.general.ignoreHealer end,
 			function(value) profile.general.ignoreHealer = value; end),
 		Check(L["Fixed rotation order"],
 			function() return profile.general.fixedRotation end,
 			function(value) profile.general.fixedRotation = value; end),
-		Check(L["Highlight own row"],
-			function() return profile.general.highlightOwn end,
-			function(value) profile.general.highlightOwn = value; end),
+		{ type = "divider", name = L["Text"] },
+		MediaSelect(L["Font art"], "font",
+			function() return profile.ui.font end,
+			function(value) profile.ui.font = value; end),
+		Slider(L["Font size"], 4, 30, 1,
+			function() return profile.ui.fontsize end,
+			function(value) profile.ui.fontsize = value; end),
+		Check(L["Text outline"],
+			function() return profile.ui.outline ~= false end,
+			function(value) profile.ui.outline = value and true or false; end),
+		Color(L["Font color"], false,
+			function()
+				local c = profile.ui.fontcolor;
+				return c.r, c.g, c.b, 1;
+			end,
+			function(r, g, b)
+				local c = profile.ui.fontcolor;
+				c.r, c.g, c.b = r, g, b;
+			end),
+		Check(L["Text color by class"],
+			function() return profile.ui.useclasscolor end,
+			function(value) profile.ui.useclasscolor = value; end),
+
+		Header(L["Behavior"], "behavior", true),
+		Check(L["Show in combat only"],
+			function() return profile.general.modeincombat end,
+			function(value) profile.general.modeincombat = value; end),
+		Check(L["Active when solo"],
+			function() return profile.general.activeSolo end,
+			function(value) profile.general.activeSolo = value; end),
+		-- Wachstumsrichtung: siehe Kommentar bei SexyInterrupterAnchor:SetSize() in UpdateUI() -
+		-- der Anker sitzt mit der unteren Kante fest; "Nach unten" hält rechnerisch die obere Kante.
+		Select(L["Grow direction"] or "Grow direction",
+			{
+				{ value = false, label = L["Downward"] or "Downward" },
+				{ value = true,  label = L["Upward"] or "Upward" },
+			},
+			function() return profile.ui.window.growUp end,
+			function(value) profile.ui.window.growUp = value; end),
 		Check(L["Show minimap icon"] or "Show minimap icon",
 			function() return profile.general.minimapIcon end,
 			function(value)
@@ -863,64 +1194,8 @@ function SexyInterrupter:AnchorSettings()
 					self.icon:Hide("SexyInterrupter");
 				end
 			end),
-		Slider(L["Max rows of interrupters"], 3, 30, 1,
-			function() return profile.general.maxrows end,
-			function(value) profile.general.maxrows = value; end),
-
-		Header(L["Look"], "look", true),
-		-- Wachstumsrichtung: siehe Kommentar bei SexyInterrupterAnchor:SetSize() in UpdateUI() -
-		-- der Anker sitzt mit der unteren Kante fest; "Nach unten" hält rechnerisch die obere Kante.
-		Select(L["Grow direction"] or "Grow direction",
-			{
-				{ value = false, label = L["Downward"] or "Downward" },
-				{ value = true,  label = L["Upward"] or "Upward" },
-			},
-			function() return profile.ui.window.growUp end,
-			function(value) profile.ui.window.growUp = value; end),
-		Slider(L["Width"], 100, 400, 1,
-			function() return profile.ui.window.width end,
-			function(value) profile.ui.window.width = value; end),
-		Slider(L["Bar height"], 4, 60, 1,
-			function() return profile.ui.bars.barheight end,
-			function(value) profile.ui.bars.barheight = value; end),
-		Check(L["Show class icon"],
-			function() return profile.ui.bars.showclassicon end,
-			function(value) profile.ui.bars.showclassicon = value; end),
-		Check(L["Bar color by class"],
-			function() return profile.ui.bars.useclasscolor end,
-			function(value) profile.ui.bars.useclasscolor = value; end),
-		Check(L["Text color by class"],
-			function() return profile.ui.useclasscolor end,
-			function(value) profile.ui.useclasscolor = value; end),
-		MediaSelect(L["Statusbar"], "statusbar",
-			function() return profile.ui.bars.texture end,
-			function(value) profile.ui.bars.texture = value; end),
-		Color(L["Bar color"], true,
-			function()
-				local c = profile.ui.bars.barcolor;
-				return c.r, c.g, c.b, c.a;
-			end,
-			function(r, g, b, a)
-				local c = profile.ui.bars.barcolor;
-				c.r, c.g, c.b, c.a = r, g, b, a;
-			end),
-
-		Header(L["Text"], "text", true),
-		MediaSelect(L["Font art"], "font",
-			function() return profile.ui.font end,
-			function(value) profile.ui.font = value; end),
-		Slider(L["Font size"], 4, 30, 1,
-			function() return profile.ui.fontsize end,
-			function(value) profile.ui.fontsize = value; end),
-		Color(L["Font color"], false,
-			function()
-				local c = profile.ui.fontcolor;
-				return c.r, c.g, c.b, 1;
-			end,
-			function(r, g, b)
-				local c = profile.ui.fontcolor;
-				c.r, c.g, c.b = r, g, b;
-			end),
+		Link(L["Interrupt now"], function() return SexyInterrupterInterruptNowText; end),
+		Link(L["Enemy marks"], function() return SexyInterrupter.markFrame; end),
 	};
 end
 
@@ -929,7 +1204,7 @@ function SexyInterrupter:KicklistSpecs()
 	local profile = self.db.profile;
 	local instances = {};
 
-	for id, entry in pairs(profile.kicklist) do
+	for id, entry in pairs(self:Kicklists()) do
 		instances[#instances + 1] = { id = id, name = entry.name or tostring(id), entry = entry };
 	end
 
@@ -980,7 +1255,49 @@ function SexyInterrupter:MessageSettings()
 	end
 
 	local list = {
-		Link(L["Interrupts"], function() return SexyInterrupterAnchor; end),
+		-- Gruppe 1: was die Vorschau verändert; Gruppe 2: Benachrichtigung (Verhalten)
+		Header(L["Look"], "look"),
+		(function()
+			local spec = Slider(L["Card width"], 300, 700, 10,
+				function() return profile.notification.cardWidth end,
+				function(value) profile.notification.cardWidth = value; SexyInterrupter:ApplyAlertHeader(); end);
+			spec.format = function(v) return v .. " px"; end;
+			return spec;
+		end)(),
+		Slider(L["Icon size"], 24, 80, 2,
+			function() return profile.notification.iconSize end,
+			function(value) profile.notification.iconSize = value; SexyInterrupter:ApplyAlertHeader(); end),
+		Slider(L["Name size"], 14, 40, 1,
+			function() return profile.notification.nameSize end,
+			function(value) profile.notification.nameSize = value; SexyInterrupter:ApplyAlertHeader(); end),
+		Check(L["Hide header"],
+			function() return profile.notification.hideHeader end,
+			function(value) profile.notification.hideHeader = value and true or false; SexyInterrupter:ApplyAlertHeader(); end),
+		Check(L["Show badge"],
+			function() return profile.notification.showBadge ~= false end,
+			function(value) profile.notification.showBadge = value and true or false; SexyInterrupter:ApplyAlertHeader(); end),
+		Check(L["Show spell label"],
+			function() return profile.notification.showSpell ~= false end,
+			function(value) profile.notification.showSpell = value and true or false; SexyInterrupter:UpdateFrames(); end),
+		Check(L["Show time label"],
+			function() return profile.notification.showTime ~= false end,
+			function(value) profile.notification.showTime = value and true or false; SexyInterrupter:UpdateFrames(); end),
+		Check(L["Show cast bar"],
+			function() return profile.notification.showBar ~= false end,
+			function(value) profile.notification.showBar = value and true or false; SexyInterrupter:UpdateFrames(); end),
+		Check(L["Glow"],
+			function() return profile.notification.glow ~= false end,
+			function(value) profile.notification.glow = value and true or false; SexyInterrupter:ApplyAlertHeader(); end),
+		Color(L["Glow color"], false,
+			function()
+				local c = profile.notification.glowcolor;
+				return c.r, c.g, c.b, 1;
+			end,
+			function(r, g, b)
+				local c = profile.notification.glowcolor;
+				c.r, c.g, c.b = r, g, b;
+				SexyInterrupter:ApplyAlertHeader();
+			end),
 		Header(L["Notification"], "notification"),
 		Check(L["Show message"],
 			function() return profile.notification.message end,
@@ -988,6 +1305,15 @@ function SexyInterrupter:MessageSettings()
 		Check(L["Play sound"],
 			function() return profile.notification.sound end,
 			function(value) profile.notification.sound = value; end),
+		Check(L["Only report healing spells"],
+			function() return profile.notification.healOnly end,
+			function(value) profile.notification.healOnly = value; end),
+		Slider(L["Pause between hints when solo (seconds)"], 0, 30, 1,
+			function() return profile.notification.soloGap or 8 end,
+			function(value) profile.notification.soloGap = value; end),
+		Slider(L["Ignore casts shorter than (seconds)"], 0, 3, 0.1,
+			function() return profile.notification.minCast or 0 end,
+			function(value) profile.notification.minCast = value; end),
 		-- soundFile kann einen LibSharedMedia-NAMEN (Auswahl) oder einen Dateipfad (Standard) enthalten
 		MediaSelect(L["Sound file"], "sound",
 			function()
@@ -1002,6 +1328,16 @@ function SexyInterrupter:MessageSettings()
 				return current;
 			end,
 			function(value) profile.notification.soundFile = value; end),
+		Check(L["Flash display"],
+			function() return profile.notification.flash end,
+			function(value)
+				profile.notification.flash = value;
+
+				-- Läuft gerade ein Flash, beim Abschalten sofort beenden.
+				if not value and SexyInterrupterBlueWarningFrame then
+					SexyInterrupterBlueWarningFrame:Hide();
+				end
+			end),
 		Color(L["Flash color"], false,
 			function()
 				local c = profile.notification.flashcolor;
@@ -1020,16 +1356,6 @@ function SexyInterrupter:MessageSettings()
 				C_Timer.After(1.5, function() flasher:Hide(); end);
 			end
 		end },
-		Check(L["Flash display"],
-			function() return profile.notification.flash end,
-			function(value)
-				profile.notification.flash = value;
-
-				-- Läuft gerade ein Flash, beim Abschalten sofort beenden.
-				if not value and SexyInterrupterBlueWarningFrame then
-					SexyInterrupterBlueWarningFrame:Hide();
-				end
-			end),
 		Check(L["Show chat message"],
 			function() return profile.notification.interruptmessage end,
 			function(value) profile.notification.interruptmessage = value; end),
@@ -1101,6 +1427,8 @@ function SexyInterrupter:MessageSettings()
 		end
 	end
 
+	list[#list + 1] = Link(L["Interrupts"], function() return SexyInterrupterAnchor; end);
+
 	-- Zauberliste je Instanz: eigene Seite im gemeinsamen Einstellungsfenster (SexyEditMode, /sem);
 	-- ohne dieses Addon bleibt sie hier im Dialog
 	if not SEM.RegisterAddon then
@@ -1116,8 +1444,108 @@ end
 
 -- Zauberliste je Instanz: jeder Zauber, den dein Ziel in einer Instanz wirkt, steht angehakt in der Liste.
 -- Nimmst du den Haken weg, wird er dort nicht mehr gemeldet (wenn die Option an ist).
-function SexyInterrupter:KicklistPageSettings()
+function SexyInterrupter:KicklistPageSettings(hub)
 	local profile = self.db.profile;
+
+	-- Im gemeinsamen Einstellungsfenster: links die Instanzen, rechts die Zauber der gewählten (mit Suche, Hinzufügen, Entfernen)
+	if hub and SEM.hasMasterDetail then
+		-- create = true legt die Liste der Instanz an, in der du gerade bist, falls es sie noch nicht gibt
+		local function Spells(key, create)
+			local lists = self:Kicklists();
+			local entry = lists[key];
+
+			if not entry and create then
+				local id, name = self:InstanceInfo();
+
+				if id and id == key then
+					entry = { name = name, spells = {} };
+					lists[key] = entry;
+				end
+			end
+
+			return entry and entry.spells;
+		end
+
+		return {
+			Check(L["Respect the spell list in instances"],
+				function() return profile.notification.kickListOnly end,
+				function(value) profile.notification.kickListOnly = value; end),
+			{ type = "masterdetail", height = 360,
+				addText = L["Add spell"], hint = L["Search or type a new spell ..."],
+				clearText = L["Clear the list of this instance"],
+				emptyText = L["No instance yet. Spells your target casts in an instance appear here by themselves."],
+				noneHint = L["Only possible inside an instance."],
+				lists = function()
+					local currentId, currentName = self:InstanceInfo();
+					local out = {};
+					local lists = self:Kicklists();
+
+					-- die Instanz, in der du bist, steht auch ohne Liste da, damit du gleich Zauber hinzufügen kannst
+					if currentId and not lists[currentId] then
+						out[#out + 1] = { key = currentId, name = currentName or tostring(currentId), badge = "0", marker = true };
+					end
+
+					for id, entry in pairs(lists) do
+						local count = 0;
+
+						for _ in pairs(entry.spells) do count = count + 1; end
+
+						out[#out + 1] = { key = id, name = entry.name or tostring(id), badge = tostring(count), marker = (id == currentId) };
+					end
+
+					-- die Instanz, in der du gerade bist, zuerst
+					table.sort(out, function(a, b)
+						if a.marker ~= b.marker then return a.marker; end
+
+						return a.name < b.name;
+					end);
+
+					return out;
+				end,
+				selected = function() return self.kicklistSelected; end,
+				select = function(key) self.kicklistSelected = key; end,
+				items = function(key)
+					local out = {};
+
+					for spell, on in pairs(Spells(key) or {}) do
+						out[#out + 1] = { name = spell, on = on ~= false };
+					end
+
+					table.sort(out, function(a, b) return a.name < b.name; end);
+
+					return out;
+				end,
+				toggle = function(key, spell, on)
+					local spells = Spells(key);
+
+					if spells then spells[spell] = on and true or false; end
+				end,
+				remove = function(key, spell)
+					local spells = Spells(key);
+
+					if spells then spells[spell] = nil; end
+				end,
+				add = function(key, text)
+					local spells = Spells(key, true);
+
+					if spells then spells[text] = true; end
+				end,
+				clear = function(key)
+					local spells = Spells(key);
+
+					if spells then wipe(spells); end
+				end,
+				footer = function(key, shown, total)
+					local text = total .. " " .. L["spells"];
+
+					if shown ~= total then text = shown .. " / " .. text .. " (" .. L["shown"] .. ")"; end
+
+					if key == self:InstanceInfo() then text = text .. " · " .. L["active here"]; end
+
+					return text;
+				end },
+		};
+	end
 
 	return {
 		Check(L["Respect the spell list in instances"],
@@ -1151,12 +1579,18 @@ function SexyInterrupter:UpdateFrames()
 						subchild.classicon:Show();
 					end
 
-					StyleText(subchild.text, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize);
-					StyleText(subchild.cooldownText, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
+					StyleOutlined(subchild.text, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize);
+					StyleOutlined(subchild.cooldownText, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
 					local iconSize = math.max(12, math.min(20, self.db.profile.ui.bars.barheight - 8));
 					subchild.classicon:SetSize(iconSize, iconSize);
 					subchild.abilityicon:SetSize(iconSize, iconSize);
 					subchild.offlineicon:SetSize(iconSize, iconSize);
+					subchild.cooldownText:SetAlpha(self.db.profile.ui.bars.showcooldown == false and 0 or 1);
+						-- Karte unter der Zeile mit der Deckkraft des Fensters
+						local opacity = self.db.profile.ui.window.opacity or CARD[4];
+						subchild.cardBg:SetColorTexture(CARD[1], CARD[2], CARD[3], opacity);
+						if child.cardTex then child.cardTex:SetColorTexture(CARD[1], CARD[2], CARD[3], opacity); end
+					if subchild.sxCorners then subchild.sxCorners:SetShown(not self.db.profile.ui.window.square); end
 					subchild.cooldownText:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
 				end
 			end
@@ -1197,14 +1631,15 @@ function SexyInterrupter:UpdateUI(rows)
 
 			if (cx == 1) then
 				-- unter dem Titelband (HEAD) und dem 2-px-Rand
-				f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 6, -(HEAD + 2))
+				f:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 6, -self:ListTopPad())
 			else
-				f:SetPoint("TOP", _G["SexyInterrupterRow" .. (cx - 1)], "BOTTOM")
+				f:SetPoint("TOP", _G["SexyInterrupterRow" .. (cx - 1)], "BOTTOM", 0, -RowGap())
 			end
 
 			local t = f:CreateTexture()
 			t:SetAllPoints(f)
-			t:SetColorTexture(CARD[1], CARD[2], CARD[3], CARD[4])
+			t:SetColorTexture(CARD[1], CARD[2], CARD[3], self.db.profile.ui.window.opacity or CARD[4])
+			f.cardTex = t
 
 			f = CreateFrame("StatusBar", "SexyInterrupterStatusBar" .. cx, _G["SexyInterrupterRow" .. cx])
 			f:SetSize(self.db.profile.ui.window.width - 12, self.db.profile.ui.bars.barheight)
@@ -1215,12 +1650,13 @@ function SexyInterrupter:UpdateUI(rows)
 			f:SetFrameLevel(3)
 			f:SetMinMaxValues(0, 100)
 			f:SetValue(100)
+			if SEM.ShineBar then SEM:ShineBar(f, { radius = 5, surround = CARD, texture = false, gloss = false }) end   -- runde Ecken; die Textur kommt aus den Einstellungen
 
 			-- Karte unter der Leiste, damit der Rest hinter dem Cooldown-Füllstand
 			-- nicht durchscheint, plus Trennlinie
 			f.cardBg = f:CreateTexture(nil, "BACKGROUND")
 			f.cardBg:SetAllPoints(f)
-			f.cardBg:SetColorTexture(CARD[1], CARD[2], CARD[3], CARD[4])
+			f.cardBg:SetColorTexture(CARD[1], CARD[2], CARD[3], self.db.profile.ui.window.opacity or CARD[4])
 			-- 1-px-Rahmen um die Leiste (Farbe: Randfarbe des Fensters, gedimmt), siehe
 			-- UpdateInterrupterStatus()
 			f.edges = {};
@@ -1299,14 +1735,14 @@ function SexyInterrupter:UpdateUI(rows)
 			f.text:SetPoint("LEFT", "SexyInterrupterStatusBar" .. cx, "LEFT", self.db.profile.ui.bars.showclassicon and 31 or 8, 0)
 			f.text:SetHeight(20)
 			f.text:SetJustifyH("LEFT")
-			StyleText(f.text, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
+			StyleOutlined(f.text, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
 			f.text:SetText('Dummy')
 
 			f.cooldownText = f:CreateFontString("SexyInterrupterStatusBarCooldownText" .. cx, nil, "GameFontNormal")
 			f.cooldownText:SetSize(12*3, 12)
 			f.cooldownText:SetJustifyH("RIGHT")
 			f.cooldownText:SetPoint("RIGHT", f.abilityicon, "LEFT", -3, 0)
-			StyleText(f.cooldownText, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
+			StyleOutlined(f.cooldownText, LSM:Fetch("font", self.db.profile.ui.font), self.db.profile.ui.fontsize)
 			f.cooldownText:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, self.db.profile.ui.fontcolor.a)
 
 			-- Status-Etikett (nächster / bereit / tot / offline) an der Stelle der
@@ -1347,7 +1783,7 @@ function SexyInterrupter:UpdateUI(rows)
 		local window = self.db.profile.ui.window;
 		local oldHeight = window.anchoredHeight;
 		-- Titelband plus Rand oben (HEAD + 2), 6 px unten
-		local newHeight = (self.db.profile.ui.bars.barheight * maxRows) + HEAD + 2 + 6;
+		local newHeight = (self.db.profile.ui.bars.barheight * maxRows) + RowGap() * math.max(0, maxRows - 1) + self:ListTopPad() + 6;
 		-- Ohne gespeicherte Basis (erster Start mit dieser Version) nichts verschieben
 		oldHeight = oldHeight or newHeight;
 		-- Im Kampf nicht anfassen: an den Zeilen hängen Secure-Buttons (Klick auf
@@ -1355,6 +1791,28 @@ function SexyInterrupter:UpdateUI(rows)
 		-- Die Anpassung wird beim nächsten UpdateUI() nach dem Kampf nachgeholt.
 		if not InCombatLockdown() then
 			SexyInterrupterAnchor:SetSize(self.db.profile.ui.window.width, newHeight);
+
+			-- Kopfzeile nach Einstellung zeigen oder ausblenden; die erste Zeile rückt entsprechend
+			if SexyInterrupterAnchor.SetHeaderShown then
+				SexyInterrupterAnchor:SetHeaderShown(not window.hideHeader);
+			end
+
+			local first = _G["SexyInterrupterRow1"];
+
+			if first then
+				first:ClearAllPoints();
+				first:SetPoint("TOPLEFT", SexyInterrupterAnchor, "TOPLEFT", 6, -self:ListTopPad());
+			end
+
+			-- weitere Zeilen: Abstand nach Einstellung
+			local gap = RowGap();
+			local i = 2;
+
+			while _G["SexyInterrupterRow" .. i] do
+				_G["SexyInterrupterRow" .. i]:ClearAllPoints();
+				_G["SexyInterrupterRow" .. i]:SetPoint("TOP", _G["SexyInterrupterRow" .. (i - 1)], "BOTTOM", 0, -gap);
+				i = i + 1;
+			end
 		end
 
 		-- WICHTIG: NICHT per ClearAllPoints()/SetPoint() eingreifen, während der
@@ -1509,7 +1967,7 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 
 		-- Out of range: dim the whole row (bar included), not just the name.
 		if interrupter.inrange == false then
-			rowParent:SetAlpha(0.4);
+			rowParent:SetAlpha(0.6);
 		end
 
 		if row and rowParent then
@@ -1521,7 +1979,7 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 			row:SetStatusBarColor(barcolor.r, barcolor.g, barcolor.b, barcolor.a);
 
 			if self.db.profile.ui.bars.useclasscolor and interrupter.classColor then
-				row:SetStatusBarColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
+				row:SetStatusBarColor(SoftClassColor(interrupter.classColor))
 			end
 
 			if interrupter.offline then
@@ -1534,10 +1992,10 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 			elseif interrupter.afk then
 				row.text:SetTextColor(1, 1, 0, 1);
 			elseif not interrupter.inrange then
-				row.text:SetTextColor(1, 1, 1, 0.3);
+				row.text:SetTextColor(1, 1, 1, 1);
 			else
 				if interrupter.classColor and self.db.profile.ui.useclasscolor then
-            		row.text:SetTextColor(interrupter.classColor.r, interrupter.classColor.g, interrupter.classColor.b, 1)
+            		row.text:SetTextColor(SoftClassColor(interrupter.classColor))
 				else
 					row.text:SetTextColor(self.db.profile.ui.fontcolor.r, self.db.profile.ui.fontcolor.g, self.db.profile.ui.fontcolor.b, 1);
 				end
@@ -1563,7 +2021,7 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 			-- Der Name endet vor Etikett bzw. Cooldown-Zahl und Zaubericon (statt fester Breite).
 			row.text:SetPoint("RIGHT", row.abilityicon, "LEFT", -64, 0);
 
-			if not self.db.profile.ui.bars.showclassicon or not dataRow.spellId then
+			if self.db.profile.ui.bars.showabilityicon == false or not dataRow.spellId then
 				row.abilityicon:Hide(); row.abilityborder:Hide();
 				row.abilityiconHitbox:Hide();
 			else
@@ -1574,6 +2032,8 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 				if texture then
 					row.abilityicon:SetTexture(texture);
 					row.abilityicon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+					-- aus der Klasse abgeleitet, noch nicht gesehen: etwas gedaempft
+					row.abilityicon:SetAlpha(dataRow.assumed and 0.55 or 1);
 					row.abilityicon:Show(); row.abilityborder:Show();
 					row.abilityiconHitbox.spellId = dataRow.spellId;
 					row.abilityiconHitbox:Show();
@@ -1659,7 +2119,7 @@ function SexyInterrupter:UpdateInterrupterStatus(rows, editing)
 	end
 
 	-- Badge im Titelband: Anzahl der bereiten Unterbrechungen
-	SexyInterrupterAnchor:SetBadge(readyCount > 0 and string.format(L["%d ready"], readyCount) or "");
+	SexyInterrupterAnchor:SetBadge((readyCount > 0 and self.db.profile.ui.window.showBadge ~= false) and string.format(L["%d ready"], readyCount) or "");
 end
 
 -- Runs as the anchor frame's OnUpdate script (self = the frame). Throttled:

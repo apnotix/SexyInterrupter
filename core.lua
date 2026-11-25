@@ -48,10 +48,14 @@ function SexyInterrupter:RegisterEvents()
     self:RegisterEvent("UNIT_SPELLCAST_START", "UNIT_SPELLCAST_START");
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_CHANNEL_START");
     self:RegisterEvent("UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_STOP");
+    -- geschuetzt: gibt es ein Ereignis auf einem Client nicht, soll nicht das ganze Addon abbrechen
+    pcall(self.RegisterEvent, self, "UNIT_SPELLCAST_INTERRUPTIBLE", "UNIT_SPELLCAST_INTERRUPTIBLE");
+    pcall(self.RegisterEvent, self, "UNIT_SPELLCAST_NOT_INTERRUPTIBLE", "UNIT_SPELLCAST_NOT_INTERRUPTIBLE");
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_STOP");
     -- Not combat-log-gated (same event family as the above) - see events.lua
     -- for why this replaces COMBAT_LOG_EVENT_UNFILTERED for cooldown detection.
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_SUCCEEDED");
+    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_INTERRUPTED");
 	self:RegisterEvent("PLAYER_TARGET_CHANGED", "PLAYER_TARGET_CHANGED");
 	self:RegisterEvent("SPELLS_CHANGED", "SPELLS_CHANGED");
 	self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN");

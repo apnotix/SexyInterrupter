@@ -7,8 +7,10 @@ local LSM = LibStub("LibSharedMedia-3.0");
 local L = LibStub("AceLocale-3.0"):GetLocale("SexyInterrupter", false);
 
 local ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons";
+local function Head(profile)
+	return profile.hideHeader and 6 or 30;   -- Kopfzeile ausgeblendet: nur der Rand
+end
 local HEADER_HEIGHT = 30;  -- Rahmen oben plus Titelband (wie im Interrupter-Fenster)
-local ROW_GAP = 0;
 local PADDING = 6;
 local TICK = 0.15;
 
@@ -25,6 +27,8 @@ local PREVIEW = {
 	{ index = 4, name = "Thorn Weaver", pct = 100, cast = { name = "Healing Wave", progress = 0.35, interruptible = false } },
 	{ index = 5, name = "Cult Summoner", pct = 31 },
 };
+
+SexyInterrupter.MarksPreview = PREVIEW;   -- auch für die Vorschau im Einstellungsfenster (samples.lua)
 
 -- "Secret values" (Blizzards Schutz im Kampf) werfen bei Boolean-Tests Fehler.
 local function IsSecret(value)
@@ -147,14 +151,44 @@ local function P()
 	return SexyInterrupter.db.profile.marks;
 end
 
-local CAST_HEIGHT = 4;   -- schmale Cast-Leiste am unteren Rand der Gesundheitsleiste
+-- Abstand zwischen den Zeilen (Einstellung, Standard 0)
+local function Gap(profile)
+	return profile.rowGap or 0;
+end
 
--- Zeilenhöhe exakt wie im Interrupter-Fenster (Option "Bar height"); die
--- Cast-Leiste liegt als schmaler Streifen INNERHALB der Leiste.
+-- Farben der Zauberleiste: unterbrechbar / nicht unterbrechbar (Einstellungen)
+local function CastColor(profile, interruptible)
+	local c = interruptible and (profile.castColor or { r = 0.91, g = 0.72, b = 0.23 }) or (profile.castColorLocked or { r = 0.54, g = 0.54, b = 0.54 });
+
+	return c.r, c.g, c.b, 1;
+end
+
+local CAST_HEIGHT = 14;   -- Zauberleiste (mit Name und Zeit in der Leiste)
+
+-- Höhe des Kopfteils der Karte (Symbol, Name, Prozent, Gesundheit, Luft): eigene Zeilenhöhe, Standard 40
+local function HpHeight(profile)
+	return profile.rowHeight or 40;
+end
+
+local function CastBarHeight(profile)
+	return profile.castBarHeight or CAST_HEIGHT;
+end
+
+-- Höhe einer Karte mit Zauberleiste: Kopfteil plus die Zauberleiste und 6 px Luft darunter
 local function RowHeight(profile)
-	local barHeight = SexyInterrupter.db.profile.ui.bars.barheight;
+	return HpHeight(profile) + (profile.showCast and (CastBarHeight(profile) + 6) or 0);
+end
 
-	return barHeight;
+-- Platz einer Karte im Fenster: Abstand von oben und Höhe. Karten mit Zauber sind höher als solche ohne; die Plätze (und damit die
+-- Klickflächen) werden nur außerhalb des Kampfes neu berechnet (UpdateMarkFrame), im Kampf bleiben sie wie zuletzt.
+local function SlotBox(f, profile, position)
+	if f.slotY and f.slotY[position] then
+		return f.slotY[position], f.slotH[position];
+	end
+
+	local h = RowHeight(profile);
+
+	return (position - 1) * (h + Gap(profile)), h;
 end
 
 -- Klick auf die Zeile = Gegner anvisieren. Secure-Buttons (TargetUnit ist im
@@ -209,8 +243,15 @@ function SexyInterrupter:LayoutMarkClickButtons(editing)
 
 	local f = self.markFrame;
 	local profile = self.db.profile.marks;
-	local rowHeight = RowHeight(profile);
-	local key = table.concat({ profile.width, rowHeight, tostring(editing) }, "|");
+	local boxes = {};
+
+	for index = 1, #f.clickButtons do
+		local y, h = SlotBox(f, profile, index);
+
+		boxes[index] = y .. "/" .. h;
+	end
+
+	local key = table.concat({ profile.width, tostring(editing), tostring(profile.hideHeader), table.concat(boxes, ",") }, "|");
 
 	if f.clickLayoutKey == key then
 		return;
@@ -219,11 +260,77 @@ function SexyInterrupter:LayoutMarkClickButtons(editing)
 	f.clickLayoutKey = key;
 
 	for index, button in ipairs(f.clickButtons) do
+		local y, h = SlotBox(f, profile, index);
+
 		button:ClearAllPoints();
-		button:SetPoint("TOPLEFT", f, "TOPLEFT", PADDING, -(HEADER_HEIGHT + (index - 1) * (rowHeight + ROW_GAP)));
-		button:SetSize(profile.width - 2 * PADDING, rowHeight);
+		button:SetPoint("TOPLEFT", f, "TOPLEFT", PADDING, -(Head(profile) + y));
+		button:SetSize(profile.width - 2 * PADDING, h);
 		-- Im Edit Mode dürfen die Buttons das Verschieben des Fensters nicht blockieren.
 		button:EnableMouse(not editing and button.clickKey ~= nil);
+	end
+end
+
+-- Karte je Gegner: Streifen in der Farbe des Symbols, oben Symbol, Name und Prozent, darunter die Gesundheit und, solange ein Gegner
+-- zaubert, die Zauberleiste mit Zaubername links und Restzeit ganz hinten in der Leiste. Ohne Zauber gibt es keine Zauberleiste und
+-- die Karte ist nur so hoch wie der Kopfteil und die Karten darunter rücken nach (außerhalb des Kampfes; im Kampf bleiben die Plätze, weil sich die Klickflächen dort nicht verschieben lassen).
+-- Alles liegt auf dem textLayer über den Leisten (Kind-Frames liegen über den Regionen des Elternteils).
+local EDGE_COLOR = { 0.227, 0.184, 0.11 };
+local EDGE_HOT = { 0.78, 0.6, 0.17 };
+local STRIPE_DEFAULT = { 0.91, 0.76, 0.42 };
+local SYMBOL_COLORS = {
+	{ 1, 0.92, 0.2 }, { 1, 0.55, 0.1 }, { 0.75, 0.3, 0.9 }, { 0.3, 0.8, 0.4 },
+	{ 0.78, 0.83, 0.9 }, { 0.27, 0.63, 0.9 }, { 0.9, 0.28, 0.25 }, { 0.95, 0.95, 0.95 },
+};
+local PAD_Y, LINE_H, ICON_SIZE, GAP_HP, HP_BAR_H, GAP_CAST = 6, 16, 14, 4, 8, 6;
+
+-- Streifen links in der Farbe des Symbols; ein geheimer Index (im Kampf) fällt auf Gold zurück
+local function SetStripe(row, index)
+	local c = (not IsSecret(index) and type(index) == "number" and SYMBOL_COLORS[index]) or STRIPE_DEFAULT;
+
+	row.stripe:SetColorTexture(c[1], c[2], c[3], 1);
+end
+
+-- Rand der Karte: golden bei einem unterbrechbaren Zauber
+local function SetCardEdge(row, hot)
+	local c = hot and EDGE_HOT or EDGE_COLOR;
+
+	for _, edge in ipairs(row.edges) do
+		edge:SetColorTexture(c[1], c[2], c[3], 1);
+	end
+end
+
+-- Text in der Zauberleiste: hell, auf Gold wie auf Grau und auf dem leeren Rest der Leiste lesbar
+local function SetCastTextColor(row, interruptible)
+	row.castName:SetTextColor(0.97, 0.94, 0.86, 1);
+	row.castTime:SetTextColor(0.97, 0.94, 0.86, 1);
+end
+
+-- Zauberleiste und Text nur zeigen, solange gezaubert wird. Eine Karte mit Platz für die Zauberleiste ("full") zeigt sie unter der
+-- Gesundheit; eine ohne ("overlay": der Zauber begann im Kampf, wo sich die Plätze nicht mehr ändern) lässt sie die Gesundheit ersetzen.
+local function SetCastShown(row, show, profile)
+	show = (show and profile.showCast) and true or false;
+
+	local mode = show and (row.slotFull and "full" or "overlay") or "none";
+
+	row.cast:SetShown(show);
+	row.castName:SetShown(show and profile.showCastName ~= false);
+	row.castTime:SetShown(show);
+
+	if row.castMode ~= mode then
+		row.castMode = mode;
+		row.cast:ClearAllPoints();
+
+		if mode == "overlay" then
+			row.cast:SetPoint("TOPLEFT", row, "TOPLEFT", 10, -(row.hpTop or 26));
+			row.cast:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -(row.hpTop or 26));
+			row.hp:Hide();
+		else
+			row.cast:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 10, PAD_Y);
+			row.cast:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -8, PAD_Y);
+			row.hp:Show();
+		end
+
+		row.body:SetHeight(mode == "full" and RowHeight(profile) or HpHeight(profile));
 	end
 end
 
@@ -231,41 +338,77 @@ function SexyInterrupter:CreateMarkRow(index)
 	local f = self.markFrame;
 	local row = CreateFrame("Frame", nil, f);
 
-	-- Wie im Interrupter-Fenster: eine Leiste (Gesundheit) mit Symbol, Name und
-	-- Prozent IN der Leiste. Alles liegt auf dem hp-Frame, damit es nicht hinter
-	-- der Leiste verschwindet (Kind-Frames liegen über den Regionen des Elternteils).
+	-- Kartengrund, Glanz, Rand und Streifen auf einem Rahmen, dessen Höhe mit der Zauberleiste wechselt
+	row.body = CreateFrame("Frame", nil, row);
+	row.body:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0);
+	row.body:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0);
+
+	row.bg = row.body:CreateTexture(nil, "BACKGROUND");
+	row.bg:SetAllPoints(row.body);
+	row.bg:SetColorTexture(0.114, 0.094, 0.063, 1);
+
+	-- Hervorhebung unterbrechbarer Zauber über dem Kartengrund
+	row.glow = row.body:CreateTexture(nil, "BORDER");
+	row.glow:SetAllPoints(row.body);
+	row.glow:SetColorTexture(1, 0.83, 0.3, 0.12);
+	row.glow:Hide();
+
+	-- Rand: vier Kanten von 1 px
+	row.edges = {};
+
+	for i, e in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+		{ "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
+		local t = row.body:CreateTexture(nil, "ARTWORK");
+
+		t:SetPoint(e[1], row.body, e[1], 0, 0);
+		t:SetPoint(e[2], row.body, e[2], 0, 0);
+
+		if e[3] then t:SetHeight(1); else t:SetWidth(1); end
+
+		row.edges[i] = t;
+	end
+
+	row.stripe = row.body:CreateTexture(nil, "ARTWORK", nil, 1);
+	row.stripe:SetPoint("TOPLEFT", row.body, "TOPLEFT", 0, 0);
+	row.stripe:SetPoint("BOTTOMLEFT", row.body, "BOTTOMLEFT", 0, 0);
+	row.stripe:SetWidth(3);
+	SetStripe(row, nil);
+	SetCardEdge(row, false);
+
+	-- Gesundheit unter der Kopfzeile der Karte
 	row.hp = CreateFrame("StatusBar", nil, row);
 	row.hp.bg = row.hp:CreateTexture(nil, "BACKGROUND");
 	row.hp.bg:SetAllPoints(row.hp);
-	row.hp.bg:SetColorTexture(0, 0, 0, 0.4);
+	row.hp.bg:SetColorTexture(0.055, 0.043, 0.03, 1);
 
-	row.targetBorder = self:CreateTargetBorder(row.hp);
-
-	row.glow = row.hp:CreateTexture(nil, "ARTWORK");
-	row.glow:SetAllPoints(row.hp);
-	row.glow:SetColorTexture(1, 0.83, 0.3, 0.3);
-	row.glow:Hide();
-
-	row.icon = row.hp:CreateTexture(nil, "OVERLAY");
-
-	row.name = row.hp:CreateFontString(nil, "OVERLAY");
-	row.name:SetJustifyH("LEFT");
-	row.name:SetWordWrap(false);
-
-	row.pct = row.hp:CreateFontString(nil, "OVERLAY");
-	row.pct:SetJustifyH("RIGHT");
-
+	-- Zauberleiste ganz unten; Name und Zeit stehen in der Leiste
 	row.cast = CreateFrame("StatusBar", nil, row);
 	row.cast.bg = row.cast:CreateTexture(nil, "BACKGROUND");
 	row.cast.bg:SetAllPoints(row.cast);
-	row.cast.bg:SetColorTexture(0, 0, 0, 0.4);
+	row.cast.bg:SetColorTexture(0.055, 0.043, 0.03, 1);
+	row.cast:Hide();
 
-	row.castName = row.cast:CreateFontString(nil, "OVERLAY");
-	row.castName:SetJustifyH("RIGHT");
+	row.textLayer = CreateFrame("Frame", nil, row);
+	row.textLayer:SetAllPoints(row);
+	row.targetBorder = self:CreateTargetBorder(row.body);
 
-	row.castTime = row.cast:CreateFontString(nil, "OVERLAY");
+	row.icon = row.textLayer:CreateTexture(nil, "OVERLAY");
+
+	row.name = row.textLayer:CreateFontString(nil, "OVERLAY");
+	row.name:SetJustifyH("LEFT");
+	row.name:SetWordWrap(false);
+
+	row.pct = row.textLayer:CreateFontString(nil, "OVERLAY");
+	row.pct:SetJustifyH("RIGHT");
+
+	row.castName = row.textLayer:CreateFontString(nil, "OVERLAY");
+	row.castName:SetJustifyH("LEFT");
+	row.castName:SetWordWrap(false);
+	row.castName:Hide();
+
+	row.castTime = row.textLayer:CreateFontString(nil, "OVERLAY");
 	row.castTime:SetJustifyH("RIGHT");
-	row.castTime:Hide();   -- kein Platz in der schmalen Leiste
+	row.castTime:Hide();
 
 	f.rows[index] = row;
 
@@ -277,19 +420,21 @@ function SexyInterrupter:LayoutMarkRow(row, position)
 	local profile = self.db.profile.marks;
 	local ui = self.db.profile.ui;
 	local rowHeight = RowHeight(profile);
-	local barHeight = ui.bars.barheight;
+	local topHeight = HpHeight(profile);
+	local castHeight = CastBarHeight(profile);
 	local font = LSM:Fetch("font", ui.font);
 	local fontSize = ui.fontsize;
 	local texture = LSM:Fetch("statusbar", ui.bars.texture);
-	local barColor = ui.bars.barcolor;
 	local fontColor = ui.fontcolor;
-	local iconSize = math.min(barHeight - 2, 20);
 
 	-- Nur neu anordnen, wenn sich etwas geändert hat: ein Umlayout alle 0,15 s
 	-- (ClearAllPoints/SetPoint) lässt die Maus-Fokus-/Klick-Erkennung des
 	-- Secure-Buttons auf der Zeile immer wieder abreißen (Klick kommt nie an).
-	local key = table.concat({ position, profile.width, rowHeight, barHeight, tostring(font), fontSize, tostring(texture),
-		barColor.r, barColor.g, barColor.b, barColor.a, fontColor.r, fontColor.g, fontColor.b }, "|");
+	local slotY, slotHeight = SlotBox(self.markFrame, profile, position);
+	local key = table.concat({ position, slotY, slotHeight, profile.width, rowHeight, topHeight, castHeight, tostring(font), fontSize, tostring(texture),
+		fontColor.r, fontColor.g, fontColor.b, tostring(profile.hideHeader), Gap(profile), tostring(profile.showCast),
+		tostring(profile.showIcon), tostring(profile.showPct), tostring(profile.showCastName),
+		profile.hpColor.r, profile.hpColor.g, profile.hpColor.b, profile.glowColor.r, profile.glowColor.g, profile.glowColor.b, profile.glowAlpha }, "|");
 
 	if row.layoutKey == key then
 		return;
@@ -298,43 +443,65 @@ function SexyInterrupter:LayoutMarkRow(row, position)
 	row.layoutKey = key;
 
 	row:ClearAllPoints();
-	row:SetPoint("TOPLEFT", self.markFrame, "TOPLEFT", PADDING, -(HEADER_HEIGHT + (position - 1) * (rowHeight + ROW_GAP)));
-	row:SetSize(profile.width - 2 * PADDING, rowHeight);
+	row:SetPoint("TOPLEFT", self.markFrame, "TOPLEFT", PADDING, -(Head(profile) + slotY));
+	row:SetSize(profile.width - 2 * PADDING, slotHeight);
+	row.slotFull = slotHeight >= rowHeight - 0.5;
+	row.castMode = nil;   -- Zauberleiste und Höhe des Kartengrunds neu setzen (SetCastShown)
+	row.body:SetHeight(topHeight);
 
-	row.hp:SetStatusBarTexture(texture);
-	row.hp:SetStatusBarColor(0.353, 0.137, 0.125, 1);   -- Gesundheit: dunkles Rot (die Leistenfarbe gilt für die Interrupt-Zeilen)
-	row.hp:ClearAllPoints();
-	row.hp:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0);
-	row.hp:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0);
-	row.hp:SetHeight(barHeight);
+	row.glow:SetColorTexture(profile.glowColor.r, profile.glowColor.g, profile.glowColor.b, profile.glowAlpha or 0.12);
+
+	-- Kopfzeile: Symbol, Name, Prozent in einer Zeile von 16 px; darunter die Gesundheit
+	local iconTop = PAD_Y + (LINE_H - ICON_SIZE) / 2;
+	local lineY = PAD_Y + LINE_H / 2;
+	local hpTop = PAD_Y + LINE_H + GAP_HP;
+	row.hpTop = hpTop;
 
 	row.icon:ClearAllPoints();
-	row.icon:SetPoint("LEFT", row.hp, "LEFT", 2, 0);
-	row.icon:SetSize(iconSize, iconSize);
+	row.icon:SetPoint("TOPLEFT", row.textLayer, "TOPLEFT", 10, -iconTop);
+	row.icon:SetSize(ICON_SIZE, ICON_SIZE);
+	row.icon:SetShown(profile.showIcon ~= false);
+	row.pct:SetShown(profile.showPct ~= false);
 
-	self.Look.StyleText(row.name, font, fontSize);
+	local textFont = math.max(8, fontSize - 2);   -- Name und Prozent etwas kleiner als die Schrift der Interrupter-Liste
+
+	self.Look.StyleText(row.pct, font, textFont);
+	row.pct:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
+	row.pct:SetWidth(40);
+	row.pct:ClearAllPoints();
+	row.pct:SetPoint("RIGHT", row.textLayer, "TOPRIGHT", -8, -lineY);
+
+	self.Look.StyleText(row.name, font, textFont);
 	row.name:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
 	row.name:ClearAllPoints();
-	row.name:SetPoint("LEFT", row.hp, "LEFT", iconSize + 6, 0);
-	row.name:SetPoint("RIGHT", row.castName, "LEFT", -4, 0);
-	row.name:SetHeight(fontSize + 2);
+	row.name:SetPoint("LEFT", row.textLayer, "TOPLEFT", profile.showIcon ~= false and (10 + ICON_SIZE + 6) or 10, -lineY);
+	row.name:SetPoint("RIGHT", row.pct, "LEFT", -4, 0);
+	row.name:SetHeight(textFont + 2);
 
-	self.Look.StyleText(row.pct, font, fontSize);
-	row.pct:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
-	row.pct:ClearAllPoints();
-	row.pct:SetPoint("RIGHT", row.hp, "RIGHT", -4, 0);
+	row.hp:SetStatusBarTexture(texture);
+	row.hp:SetStatusBarColor(profile.hpColor.r, profile.hpColor.g, profile.hpColor.b, 1);
+	row.hp:ClearAllPoints();
+	row.hp:SetPoint("TOPLEFT", row, "TOPLEFT", 10, -hpTop);
+	row.hp:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -hpTop);
+	row.hp:SetHeight(HP_BAR_H);
 
+	-- Zauberleiste unten, Name links und Zeit ganz hinten in der Leiste
 	row.cast:SetStatusBarTexture(texture);
-	row.cast:ClearAllPoints();
-	row.cast:SetFrameLevel(row.hp:GetFrameLevel() + 2);
-	row.cast:SetPoint("BOTTOMLEFT", row.hp, "BOTTOMLEFT", 0, 0);
-	row.cast:SetPoint("BOTTOMRIGHT", row.hp, "BOTTOMRIGHT", 0, 0);
-	row.cast:SetHeight(CAST_HEIGHT);
-	self.Look.StyleText(row.castName, font, math.max(8, fontSize - 2));
-	row.castName:SetTextColor(fontColor.r, fontColor.g, fontColor.b, 1);
+	row.cast:SetHeight(castHeight);
+	row.cast:SetFrameLevel(row.hp:GetFrameLevel() + 1);
+	row.textLayer:SetFrameLevel(row.hp:GetFrameLevel() + 4);
+
+	local castFont = math.max(8, fontSize - 3);
+
+	self.Look.StyleText(row.castTime, font, castFont);
+	row.castTime:SetWidth(36);
+	row.castTime:ClearAllPoints();
+	row.castTime:SetPoint("RIGHT", row.cast, "RIGHT", -5, 0);
+	self.Look.StyleText(row.castName, font, castFont);
 	row.castName:ClearAllPoints();
-	row.castName:SetPoint("RIGHT", row.hp, "RIGHT", -40, 0);
-	self.Look.StyleText(row.castTime, font, 9);
+	row.castName:SetPoint("LEFT", row.cast, "LEFT", 5, 0);
+	row.castName:SetPoint("RIGHT", row.castTime, "LEFT", -4, 0);
+	row.castName:SetHeight(castFont + 2);
 end
 
 -- Alle angreifbaren Gegner mit Symbol einsammeln: ein Symbol existiert nur
@@ -527,6 +694,8 @@ local function UpdateCast(row, unit, profile)
 	local interruptible = not SafeBool(notInterruptible, false);
 
 	row.castName:SetText(name);
+	SetCastTextColor(row, interruptible);
+	SetCastShown(row, true, profile);
 
 	local ok = pcall(function()
 		local startTime, endTime = startMs / 1000, endMs / 1000;
@@ -543,11 +712,7 @@ local function UpdateCast(row, unit, profile)
 		row.castTime:SetText("");
 	end
 
-	if interruptible then
-		row.cast:SetStatusBarColor(0.91, 0.72, 0.23, 1);
-	else
-		row.cast:SetStatusBarColor(0.54, 0.54, 0.54, 1);
-	end
+	row.cast:SetStatusBarColor(CastColor(profile, interruptible));
 
 	return interruptible;
 end
@@ -586,6 +751,7 @@ end
 
 local function FillPreviewRow(row, entry, profile)
 	SetIcon(row.icon, entry.index);
+	SetStripe(row, entry.index);
 	row.name:SetText(entry.name);
 	row.pct:SetText(entry.pct .. "%");
 	row.hp:SetMinMaxValues(0, 100);
@@ -597,19 +763,20 @@ local function FillPreviewRow(row, entry, profile)
 		row.cast:SetMinMaxValues(0, 1);
 		row.cast:SetValue(entry.cast.progress);
 		row.castName:SetText(entry.cast.name);
+		SetCastTextColor(row, entry.cast.interruptible);
 		row.castTime:SetText(string.format("%.1f", (1 - entry.cast.progress) * 2));
 
+		row.cast:SetStatusBarColor(CastColor(profile, entry.cast.interruptible));
+
 		if entry.cast.interruptible then
-			row.cast:SetStatusBarColor(0.91, 0.72, 0.23, 1);
 			highlight = true;
-		else
-			row.cast:SetStatusBarColor(0.54, 0.54, 0.54, 1);
 		end
 
-		row.cast:Show();
+		SetCastShown(row, true, profile);
 	else
-		row.cast:Hide();
 		row.castName:SetText("");
+		row.castTime:SetText("");
+		SetCastShown(row, false, profile);
 	end
 
 	return highlight;
@@ -776,12 +943,55 @@ function SexyInterrupter:UpdateMarkFrame()
 
 	local rowHeight = RowHeight(profile);
 	local width = profile.width;
-	local height = HEADER_HEIGHT + profile.maxrows * (rowHeight + ROW_GAP) + PADDING;
 
-	-- Größe nur bei Änderung setzen (nicht während eines Edit-Mode-Drags anfassen).
-	if (f.lastWidth ~= width or f.lastHeight ~= height) and not InCombatLockdown() then
-		f:SetSize(width, height);
-		f.lastWidth, f.lastHeight = width, height;
+	-- Plätze der Karten: mit Zauber so hoch wie Kopfteil plus Zauberleiste, sonst nur der Kopfteil. Nur außerhalb des Kampfes neu
+	-- berechnet (die Klickflächen lassen sich im Kampf nicht verschieben); im Kampf gelten die zuletzt berechneten Plätze.
+	if not InCombatLockdown() or not f.slotY then
+		local slotY, slotH = {}, {};
+		local y = 0;
+
+		for position = 1, profile.maxrows do
+			local entry = slotEntries[position];
+			local casting = false;
+
+			if entry and profile.showCast then
+				if editing then
+					casting = entry.cast ~= nil;
+				else
+					casting = IsCasting(entry.unit) and true or false;
+				end
+			end
+
+			slotY[position] = y;
+			slotH[position] = casting and rowHeight or HpHeight(profile);
+			y = y + slotH[position] + Gap(profile);
+		end
+
+		f.slotY, f.slotH = slotY, slotH;
+	end
+
+	self:LayoutMarkClickButtons(editing);
+
+	-- Der Rahmen (und damit das Rechteck im Verschiebe-Modus) ist so hoch wie die sichtbaren Karten; die Oberkante bleibt stehen
+	-- (Position unten links mit Ausgleich, wie bei den anderen Fenstern). Nur bei Änderung, nicht im Kampf (die Klickflächen sind
+	-- Kinder des Rahmens) und nicht während eines Verschiebens.
+	local visibleHeight = Head(profile) + PADDING;
+
+	if last > 0 then
+		local lastY, lastH = SlotBox(f, profile, last);
+
+		visibleHeight = Head(profile) + lastY + lastH + PADDING;
+	end
+
+	if (f.lastWidth ~= width or f.lastHeight ~= visibleHeight) and not InCombatLockdown() and not SEM:IsMoving(f) then
+		local db = self.db.profile.ui.editModeMarksDB;
+
+		if db and db.x and db.y and f.lastHeight then
+			SEM:SetPosition(f, db.x, db.y - (visibleHeight - f.lastHeight));
+		end
+
+		f:SetSize(width, visibleHeight);
+		f.lastWidth, f.lastHeight = width, visibleHeight;
 	end
 
 	-- Sichtbarer Hintergrund passt sich der Zeilenzahl an; der Frame selbst
@@ -791,15 +1001,23 @@ function SexyInterrupter:UpdateMarkFrame()
 	-- behält seine feste Größe.
 	local ui = self.db.profile.ui;
 	local window = f.window;
-	local windowHeight = HEADER_HEIGHT + last * (rowHeight + ROW_GAP) + PADDING;
-	local windowKey = width .. "|" .. windowHeight;
+	window:SetHeaderShown(not profile.hideHeader);
+	local windowHeight = Head(profile) + PADDING;
+
+	if last > 0 then
+		local lastY, lastH = SlotBox(f, profile, last);
+
+		windowHeight = Head(profile) + lastY + lastH + PADDING;
+	end
+
+	local windowKey = width .. "|" .. windowHeight .. "|" .. tostring(profile.hideHeader) .. "|" .. (profile.opacity or 0.96);
 
 	if window.styleKey ~= windowKey then
 		window.styleKey = windowKey;
 		window:SetSize(width, windowHeight);
 
 		if window.SetBackdrop then
-			self.EditModeHelpers.ApplyBackdrop(window);
+			self.EditModeHelpers.ApplyBackdrop(window, profile.opacity or self.Look.WINDOW_BG[4]);
 		end
 	end
 
@@ -813,7 +1031,7 @@ function SexyInterrupter:UpdateMarkFrame()
 		end
 	end
 
-	window:SetBadge(shown > 0 and string.format(L["%d active"], shown) or "");
+	window:SetBadge((shown > 0 and profile.showBadge ~= false) and string.format(L["%d active"], shown) or "");
 
 	for position = 1, last do
 		local entry = slotEntries[position];
@@ -829,10 +1047,11 @@ function SexyInterrupter:UpdateMarkFrame()
 
 		if editing then
 			highlight = FillPreviewRow(row, entry, profile);
-			row.targetBorder:SetShown(position == 2);
+			row.targetBorder:SetShown(profile.showTarget ~= false and position == 2);
 		else
 			SetIcon(row.icon, entry.index, entry.unit);
-			row.targetBorder:SetShown(UnitExists("target") and IsSameUnit(entry.unit, "target"));
+			SetStripe(row, entry.index);
+			row.targetBorder:SetShown(profile.showTarget ~= false and UnitExists("target") and IsSameUnit(entry.unit, "target"));
 
 			if not InCombatLockdown() then
 				-- Namensplaketten-Tokens lassen sich auf diesem Client nicht per
@@ -867,11 +1086,12 @@ function SexyInterrupter:UpdateMarkFrame()
 			end
 
 			if ok and interruptible ~= nil then
-				row.cast:Show();
+				SetCastShown(row, true, profile);
 				highlight = interruptible;
 			else
-				row.cast:Hide();
 				row.castName:SetText("");
+				row.castTime:SetText("");
+				SetCastShown(row, false, profile);
 			end
 		end
 
@@ -880,6 +1100,8 @@ function SexyInterrupter:UpdateMarkFrame()
 		else
 			row.glow:Hide();
 		end
+
+		SetCardEdge(row, highlight and profile.highlightInterruptible);
 		end
 	end
 
@@ -902,7 +1124,7 @@ function SexyInterrupter:CreateMarkFrame(helpers)
 	f.clickButtons = {};
 	self.markFrame = f;
 
-	local height = HEADER_HEIGHT + profile.maxrows * (RowHeight(profile) + ROW_GAP) + PADDING;
+	local height = Head(profile) + profile.maxrows * (RowHeight(profile) + Gap(profile)) + PADDING;
 
 	f:SetSize(profile.width, height);
 	f.lastWidth, f.lastHeight = profile.width, height;
@@ -943,27 +1165,67 @@ function SexyInterrupter:CreateMarkFrame(helpers)
 
 	do
 		local H = helpers;
+		-- Gruppe 1 "Aussehen": alles, was die Vorschau verändert (die Symbole mit Trennlinie); Gruppe 2 "Verhalten"
 		local settings = {
-			H.Link(L["Interrupts"], function() return SexyInterrupterAnchor; end),
-			H.Header(L["Enemy marks"], "marks"),
-			H.Check(L["Show enemy marks"],
-				function() return P().enabled end,
-				function(value) P().enabled = value; end),
-			H.Check(L["Marks: show in combat only"],
-				function() return P().combatOnly end,
-				function(value) P().combatOnly = value; end),
-			H.Check(L["Show cast bars"],
-				function() return P().showCast end,
-				function(value) P().showCast = value; end),
-			H.Check(L["Highlight interruptible casts"],
-				function() return P().highlightInterruptible end,
-				function(value) P().highlightInterruptible = value; end),
-			H.Slider(L["Max rows of marks"], 1, 8, 1,
-				function() return P().maxrows end,
-				function(value) P().maxrows = value; end),
+			H.Header(L["Look"], "look"),
 			H.Slider(L["Width"], 150, 400, 1,
 				function() return P().width end,
 				function(value) P().width = value; end),
+			H.Slider(L["Max rows of marks"], 1, 8, 1,
+				function() return P().maxrows end,
+				function(value) P().maxrows = value; end),
+			H.Slider(L["Row height"], 12, 60, 1,
+				function() return P().rowHeight or 40 end,
+				function(value) P().rowHeight = value; end),
+			H.Slider(L["Row spacing"], 0, 10, 1,
+				function() return P().rowGap end,
+				function(value) P().rowGap = value; end),
+			H.Slider(L["Window opacity"], 30, 100, 2,
+				function() return math.floor((P().opacity or 0.96) * 100 + 0.5) end,
+				function(value) P().opacity = value / 100; end),
+			H.Check(L["Hide header"],
+				function() return P().hideHeader end,
+				function(value) P().hideHeader = value and true or false; end),
+			H.Check(L["Show active counter"],
+				function() return P().showBadge ~= false end,
+				function(value) P().showBadge = value and true or false; end),
+			H.Check(L["Show marker icon"],
+				function() return P().showIcon ~= false end,
+				function(value) P().showIcon = value and true or false; end),
+			H.Check(L["Show health percent"],
+				function() return P().showPct ~= false end,
+				function(value) P().showPct = value and true or false; end),
+			H.Check(L["Show target frame"],
+				function() return P().showTarget ~= false end,
+				function(value) P().showTarget = value and true or false; end),
+			H.Color(L["Health color"], false,
+				function() local c = P().hpColor; return c.r, c.g, c.b, 1; end,
+				function(r, g, b) local c = P().hpColor; c.r, c.g, c.b = r, g, b; end),
+			{ type = "divider", name = L["Cast bar"] },
+			H.Check(L["Show cast bars"],
+				function() return P().showCast end,
+				function(value) P().showCast = value; end),
+			H.Slider(L["Cast bar height"], 10, 24, 1,
+				function() return P().castBarHeight or 14 end,
+				function(value) P().castBarHeight = value; end),
+			H.Check(L["Show cast name"],
+				function() return P().showCastName ~= false end,
+				function(value) P().showCastName = value and true or false; end),
+			H.Color(L["Interruptible color"], false,
+				function() local c = P().castColor; return c.r, c.g, c.b, 1; end,
+				function(r, g, b) local c = P().castColor; c.r, c.g, c.b = r, g, b; end),
+			H.Color(L["Not interruptible color"], false,
+				function() local c = P().castColorLocked; return c.r, c.g, c.b, 1; end,
+				function(r, g, b) local c = P().castColorLocked; c.r, c.g, c.b = r, g, b; end),
+			H.Check(L["Highlight interruptible casts"],
+				function() return P().highlightInterruptible end,
+				function(value) P().highlightInterruptible = value; end),
+			H.Color(L["Highlight color"], false,
+				function() local c = P().glowColor; return c.r, c.g, c.b, 1; end,
+				function(r, g, b) local c = P().glowColor; c.r, c.g, c.b = r, g, b; end),
+			H.Slider(L["Highlight strength"], 10, 80, 5,
+				function() return math.floor((P().glowAlpha or 0.3) * 100 + 0.5) end,
+				function(value) P().glowAlpha = value / 100; end),
 			H.Select(L["Marks sort"],
 				{
 					{ value = 'symbol', label = L["By symbol"] },
@@ -971,8 +1233,7 @@ function SexyInterrupter:CreateMarkFrame(helpers)
 				},
 				function() return P().sort end,
 				function(value) P().sort = value; end),
-
-			H.Header(L["Symbols"], "symbols", true),
+			{ type = "divider", name = L["Symbols"] },
 		};
 
 		for index = 8, 1, -1 do
@@ -980,6 +1241,15 @@ function SexyInterrupter:CreateMarkFrame(helpers)
 				function() return P().symbols[index] end,
 				function(value) P().symbols[index] = value; end);
 		end
+
+		settings[#settings + 1] = H.Header(L["Behavior"], "behavior");
+		settings[#settings + 1] = H.Check(L["Show enemy marks"],
+			function() return P().enabled end,
+			function(value) P().enabled = value; end);
+		settings[#settings + 1] = H.Check(L["Marks: show in combat only"],
+			function() return P().combatOnly end,
+			function(value) P().combatOnly = value; end);
+		settings[#settings + 1] = H.Link(L["Interrupts"], function() return SexyInterrupterAnchor; end);
 
 		local behavior = { L["Show enemy marks"], L["Marks: show in combat only"], L["Marks sort"] };
 
@@ -995,6 +1265,7 @@ function SexyInterrupter:CreateMarkFrame(helpers)
 			description = (GetLocale() == "deDE" and "Gegner mit Raid-Symbol samt Lebens- und Zauberbalken; ein Klick wählt das Ziel." or "Enemies with a raid marker, with health and cast bars; a click targets them."),
 			db = db,
 			settings = settings,
+			sample = SexyInterrupterSamples and SexyInterrupterSamples.marks,   -- Vorschau im Einstellungsfenster: eigenes Fenster mit eigener Logik (samples.lua)
 			visibility = false, -- das Fenster steuert seine Transparenz selbst
 		});
 	end

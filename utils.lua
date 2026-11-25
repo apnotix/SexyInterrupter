@@ -447,9 +447,13 @@ function SexyInterrupter:GetCurrentInterrupters()
 			end
 
 			if not hasAbilities then
+				-- Noch kein Kick gesehen: das Symbol kommt aus der Klasse (assumed), der Cooldown ist unbekannt (bereit)
+				local assumed = interrupter.classEN and self.defaultInterrupt and self.defaultInterrupt[strlower(interrupter.classEN)];
+
 				tinsert(rows, {
 					interrupter = interrupter,
-					spellId = nil,
+					spellId = assumed or nil,
+					assumed = assumed and true or nil,
 					cooldown = interrupter.cooldown or 0,
 					readyTime = interrupter.readyTime or 0,
 				});
@@ -820,28 +824,18 @@ function SexyInterrupter:IsEditingUi()
 	-- Betreten/Verlassen auf, und dann muss die Abfrage bereits den neuen Zustand liefern.
 	local SEM = LibStub("SexyEditMode-1.0", true);
 
-	if SEM then
-		return SEM:IsEditing("SexyInterrupter");
+	-- hubPreview: Die Vorschau im Einstellungsfenster zeigt die echten Fenster mit den Beispieldaten des Edit Mode
+	if self.hubPreview then
+		return true;
 	end
 
-	return EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive() or false;
+	return SEM:IsEditing("SexyInterrupter");
 end
 
--- Opens Blizzard's real Edit Mode (bound to the "Lock window"/"Open Edit
--- Mode to reposition" option, the minimap icon left click, and `/si lock`).
--- Positioning itself is handled entirely by SexyEditMode-1.0 from here.
+-- Starts or ends the own move mode of SexyEditMode-1.0 (bound to the "Lock window"/"Open Edit
+-- Mode to reposition" option, the minimap icon and `/si lock`), only for the windows of this addon.
 function SexyInterrupter:LockFrame()
-	local SEM = LibStub("SexyEditMode-1.0", true);
-
-	-- mit SexyEditMode nur für die Fenster dieses Addons
-	if SEM and SEM.ToggleEditMode then
-		SEM:ToggleEditMode("SexyInterrupter");
-		return;
-	end
-
-	if EditModeManagerFrame then
-		ShowUIPanel(EditModeManagerFrame);
-	end
+	LibStub("SexyEditMode-1.0"):ToggleEditMode("SexyInterrupter");
 end
 
 -- Instanz, in der du gerade bist (Dungeon oder Raid): Id und Name, sonst nil
@@ -853,6 +847,36 @@ function SexyInterrupter:InstanceInfo()
 	end
 end
 
+-- Alle Zauberlisten pro Instanz: [Instanz-ID] = { name, spells }. Sie liegen im Account-Teil der Datenbank (db.global) und gelten für
+-- alle Charaktere und Profile. Listen, die noch im Profil stehen (frühere Fassung, auch aus einem gewechselten oder importierten
+-- Profil), werden hier übernommen: neue Zauber kommen hinzu, bestehende Einstellungen im Account bleiben.
+function SexyInterrupter:Kicklists()
+	local lists = self.db.global.kicklist;
+	local old = rawget(self.db.profile, "kicklist");
+
+	if type(old) == "table" then
+		for id, entry in pairs(old) do
+			if type(entry) == "table" then
+				local target = lists[id];
+
+				if not target then
+					lists[id] = entry;
+				else
+					target.spells = target.spells or {};
+
+					for spell, on in pairs(entry.spells or {}) do
+						if target.spells[spell] == nil then target.spells[spell] = on; end
+					end
+				end
+			end
+		end
+
+		self.db.profile.kicklist = nil;
+	end
+
+	return lists;
+end
+
 -- Liste der wichtigen Zauber dieser Instanz (create = true legt sie an)
 function SexyInterrupter:GetKicklist(create)
 	local id, name = self:InstanceInfo();
@@ -861,7 +885,7 @@ function SexyInterrupter:GetKicklist(create)
 		return nil;
 	end
 
-	local lists = self.db.profile.kicklist;
+	local lists = self:Kicklists();
 	local entry = lists[id];
 
 	if not entry and create then
@@ -891,6 +915,93 @@ end
 
 local function Say(text)
 	DEFAULT_CHAT_FRAME:AddMessage("SexyInterrupter: " .. text, 1, 0.5, 0);
+end
+
+-- Ist der Zauber ein Heilzauber? Liefert true / false, oder nil, wenn es sich nicht feststellen laesst (Zauber-ID
+-- geheim oder unbekannt, keine Beschreibung und keine passende Abfrage). Zweiter Rueckgabewert: die benutzte Methode
+-- ("Beschreibung" oder "freundlich"), fuer /si debug.
+-- 1. Beschreibungstext des Zaubers nach Heil-Woertern durchsuchen (deutsch und englisch).
+-- 2. Sonst C_Spell.IsSpellHelpful: zielt der Zauber auf Verbuendete, ist es bei Gegnern praktisch immer eine Heilung/Staerkung.
+local healCache = {};
+
+function SexyInterrupter:IsHealingSpell(spellId)
+	if spellId ~= nil and issecretvalue and issecretvalue(spellId) then
+		-- Geheime ID: lesen und rechnen geht nicht, aber manche Abfragen nehmen sie an und liefern einen offenen
+		-- Wahrheitswert. Probieren; sonst nicht feststellbar.
+		local helpful = (C_Spell and C_Spell.IsSpellHelpful) or IsHelpfulSpell;
+
+		if helpful then
+			local ok, value = pcall(helpful, spellId);
+
+			if ok and value ~= nil then
+				if not issecretvalue(value) then
+					return value and true or false, "freundlich (geheime ID)";
+				end
+
+				-- Geheimer Wahrheitswert: er laesst sich nicht abfragen, wohl aber an Anzeigen weiterreichen
+				-- (SetAlphaFromBoolean). Erst probieren, ob die Transparenz lesbar bleibt; sonst als dritter Wert zurueck.
+				SexyInterrupter.healProbe = SexyInterrupter.healProbe or CreateFrame("Frame");
+				local probe = SexyInterrupter.healProbe;
+
+				if probe.SetAlphaFromBoolean then
+					pcall(probe.SetAlphaFromBoolean, probe, value, 1, 0);
+					local a = probe:GetAlpha();
+
+					if type(a) == "number" and not issecretvalue(a) then
+						return a > 0.5, "freundlich (geheime ID, ueber Transparenz)";
+					end
+				end
+
+				return nil, "ID geheim (Wert nur fuer die Anzeige)", value;
+			end
+		end
+
+		return nil, "ID geheim";
+	end
+
+	if type(spellId) ~= "number" then
+		return nil;
+	end
+
+	local cached = healCache[spellId];
+
+	if cached then
+		return cached[1], cached[2];
+	end
+
+	local result, method;
+	local getDesc = (C_Spell and C_Spell.GetSpellDescription) or GetSpellDescription;
+
+	if getDesc then
+		local ok, desc = pcall(getDesc, spellId);
+
+		if ok and type(desc) == "string" and desc ~= "" and not (issecretvalue and issecretvalue(desc)) then
+			local lower = strlower(desc);
+
+			result = (strfind(lower, "heal", 1, true) or strfind(lower, "heil", 1, true) or (strfind(lower, "restore", 1, true) or strfind(lower, "stellt", 1, true)) and (strfind(lower, "health", 1, true) or strfind(lower, "gesundheit", 1, true))) and true or false;
+			method = "Beschreibung";
+		end
+	end
+
+	if result == nil then
+		local helpful = (C_Spell and C_Spell.IsSpellHelpful) or IsHelpfulSpell;
+
+		if helpful then
+			local ok, value = pcall(helpful, spellId);
+
+			if ok and value ~= nil and not (issecretvalue and issecretvalue(value)) then
+				result = value and true or false;
+				method = "freundlich";
+			end
+		end
+	end
+
+	-- Beschreibungen laden manchmal erst nach dem ersten Abruf: nur feste Ergebnisse merken
+	if result ~= nil then
+		healCache[spellId] = { result, method };
+	end
+
+	return result, method;
 end
 
 -- Zauber der Instanz stumm schalten (false) oder wieder melden (true)
@@ -1024,15 +1135,24 @@ function SexyInterrupter:Speak(castName, force)
 	end
 end
 
-function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, castName, castTexture)
+function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, castName, castTexture, castSpellId)
 	-- notInterruptible (from UnitCastingInfo/UnitChannelInfo) can come through
 	-- as a "secret" value under the same protected-info guard as spellID
 	-- elsewhere - can't be used in a boolean test. When we can't tell, assume
 	-- the cast IS interruptible (fail open) so the prompt still fires; the
 	-- worst case is one unnecessary "interrupt now" hint, not a missed one.
+	local lockedSecret, lockedValue = false, notInterruptible;
+
 	if issecretvalue and issecretvalue(notInterruptible) then
+		-- Geheimer Wert: lesen geht nicht. Karte und Blitz folgen ihm unten ueber SetAlphaFromBoolean (bei "nicht
+		-- unterbrechbar" bleiben sie unsichtbar); Ton und Sprache koennen ihm nicht folgen und bleiben aus.
+		lockedSecret = true;
 		notInterruptible = false;
 	end
+
+	-- Merken, dass dieser Zauber gesperrt war: wird er mitten im Wirken unterbrechbar, kommt der Hinweis nachtraeglich
+	-- (UNIT_SPELLCAST_INTERRUPTIBLE)
+	self.castLocked = (not lockedSecret) and notInterruptible and true or false;
 
 	-- Name, Symbol und Zeiten des Zaubers koennen im Kampf "geheime Werte" sein. Rechnen und Vergleichen geht
 	-- damit nicht, wohl aber das Weiterreichen an Anzeigefunktionen (SetText, SetTexture, SetMinMaxValues).
@@ -1063,14 +1183,22 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 			interrupter = SexyInterrupter:GetInterrupter(name .. '-' .. GetRealmName());
 		end
 
+		if self.debug then
+			-- zeigt, warum (k)ein Hinweis kommt: nur wer in der Liste oben steht und bereit ist, bekommt ihn
+			DEFAULT_CHAT_FRAME:AddMessage(string.format("SI debug: Zauber am Ziel: Platz=%s bereit=%s", interrupter and tostring(interrupter.sortpos) or "?",
+				tostring(interrupter ~= nil and (interrupter.readyTime == 0 or interrupter.readyTime == nil))), 0.6, 0.8, 1);
+		end
+
 		if interrupter and interrupter.sortpos == 1 and (interrupter.readyTime == 0 or interrupter.readyTime == nil) then
 			local timeVisible = 10;
+			local castLength;
 
 			-- Anzeigedauer = Zauberlänge in Sekunden (startTime/endTime sind Millisekunden); ist sie nicht lesbar,
 			-- bleibt es bei den 10 Sekunden
 			if startTime ~= nil and endTime ~= nil then
 				pcall(function()
 					local length = (endTime - startTime) / 1000;
+					castLength = length;
 
 					if length < 10 then
 						timeVisible = length;
@@ -1083,20 +1211,88 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 				return;
 			end
 
+			-- "Nur Heilzauber melden": ist sicher, dass es keine Heilung ist, bleibt es still; nicht feststellbar (geheime Werte,
+			-- keine Abfrage): wie bisher melden
+			local hideBySecret;
+
+			if self.db.profile.notification.healOnly then
+				local heal, method, secretHeal = self:IsHealingSpell(castSpellId);
+				hideBySecret = secretHeal;
+
+				if self.debug then
+					DEFAULT_CHAT_FRAME:AddMessage(string.format("SI debug: Heilzauber? spell=%s -> %s (%s)", readableName or "?",
+						tostring(heal), method or "nicht feststellbar"), 0.6, 0.8, 1);
+				end
+
+				if heal == false then
+					return;
+				end
+			end
+
+			-- Zu kurze Zauber lassen sich nicht rechtzeitig kicken; allein nervt ein Mob, der schnell hintereinander
+			-- zaubert, mit jedem Hinweis: dort gilt eine Pause zwischen zwei Hinweisen.
+			local cfg = self.db.profile.notification;
+			local now = GetTime();
+
+			if castLength and (cfg.minCast or 0) > 0 and castLength < cfg.minCast then
+				return;
+			end
+
+			local solo = not IsInGroup() and not IsInRaid() and not IsPartyLFG();
+
+			if solo and (cfg.soloGap or 0) > 0 and self.lastAlertAt and now - self.lastAlertAt < cfg.soloGap then
+				return;
+			end
+
+			self.lastAlertAt = now;
+
 			local tName = UnitName('target');
 
-			self:Speak(readableName);
+			-- "Nur Heilzauber" bei geheimer ID: ob es eine Heilung ist, wissen nur die Anzeigen (Karte, Blitz) - Ton und Sprache
+			-- koennen dem nicht folgen und bleiben deshalb aus
+			local silent = hideBySecret ~= nil or lockedSecret;
+
+			if not silent then
+				self:Speak(readableName);
+			end
 
 			if self.db.profile.notification.message then
 				SexyInterrupterInterruptNowText:ShowAlert(tName, castName, castTexture, endTime, timeVisible, startTime);
+
+				-- "Nur Heilzauber" bei geheimer Zauber-ID: die Karte wird ueber den geheimen Wert ein- oder ausgeblendet
+				local card = SexyInterrupterInterruptNowText;
+				card:SetAlpha(1);
+
+				-- Zauber nicht unterbrechbar (geheimer Wert): die ganze Karte bleibt unsichtbar
+				if lockedSecret and card.SetAlphaFromBoolean then
+					pcall(card.SetAlphaFromBoolean, card, lockedValue, 0, 1);
+				end
+
+				local panel = SexyInterrupterInterruptNowText.panel;
+
+				if panel then
+					panel:SetAlpha(1);
+
+					if hideBySecret ~= nil and panel.SetAlphaFromBoolean then
+						pcall(panel.SetAlphaFromBoolean, panel, hideBySecret, 1, 0);
+					end
+				end
 			end
 
-			if self.db.profile.notification.sound then
+			if self.db.profile.notification.sound and not silent then
 				SexyInterrupter:PlayAlertSound(self.db.profile.notification.soundFile);
 			end
 
 			if self.db.profile.notification.flash then
 				SexyInterrupterBlueWarningFrame:Show();
+				SexyInterrupterBlueWarningFrame:SetAlpha(1);
+
+				if lockedSecret and SexyInterrupterBlueWarningFrame.SetAlphaFromBoolean then
+					-- nicht unterbrechbar (geheim): kein Blitz; hat Vorrang vor "Nur Heilzauber"
+					pcall(SexyInterrupterBlueWarningFrame.SetAlphaFromBoolean, SexyInterrupterBlueWarningFrame, lockedValue, 0, 1);
+				elseif hideBySecret ~= nil and SexyInterrupterBlueWarningFrame.SetAlphaFromBoolean then
+					pcall(SexyInterrupterBlueWarningFrame.SetAlphaFromBoolean, SexyInterrupterBlueWarningFrame, hideBySecret, 1, 0);
+				end
 			end
 		end
 	end
