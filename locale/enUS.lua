@@ -42,6 +42,7 @@ L["Right click to open settings"] = "Right click to open settings";
 L["Show message"] = "Show message";
 L["Hide header"] = "Hide header";
 L["Only report healing spells"] = "Only report healing spells";
+L["Sound and speech even if the spell kind is unknown"] = "Sound and speech even if the spell kind is unknown";
 L["Pause between hints when solo (seconds)"] = "Pause between hints when solo (seconds)";
 L["Ignore casts shorter than (seconds)"] = "Ignore casts shorter than (seconds)";
 L["Show chat message"] = "Show chat message";

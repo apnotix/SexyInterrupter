@@ -42,6 +42,7 @@ L["Right click to open settings"] = "Rechtsklick: Öffnet die Einstellungen";
 L["Pause between hints when solo (seconds)"] = "Pause zwischen Hinweisen, wenn du allein bist (Sekunden)";
 L["Ignore casts shorter than (seconds)"] = "Zauber kürzer als (Sekunden) ignorieren";
 L["Only report healing spells"] = "Nur Heilzauber melden";
+L["Sound and speech even if the spell kind is unknown"] = "Ton und Sprache auch, wenn die Zauberart unbekannt ist";
 L["Hide header"] = "Kopfzeile ausblenden";
 L["Show message"] = "Nachricht anzeigen";
 L["Show chat message"] = "Chatmeldung ausgeben";

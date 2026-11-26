@@ -310,6 +310,7 @@ local defaults = {
 			ttsVolume = 100,        -- Lautstaerke 0 .. 100
 			kickListOnly = false,   -- in Instanzen nur Zauber der Liste melden
 			healOnly = false,       -- nur Heilzauber melden (wenn sich das feststellen laesst)
+			soundUnknown = false,   -- bei "nur Heilzauber" und geheimer Zauber-ID Ton/Sprache trotzdem fuer jeden Zauber
 			soloGap = 8,            -- allein: Sekunden Pause zwischen zwei Hinweisen (0 = aus)
 			minCast = 0,            -- Zauber kuerzer als diese Sekunden nicht melden (0 = aus)
 			flashcolor = { r = 0.3, g = 0.5, b = 1 },  -- Farbe des Bildschirm-Blitzes (Standard: Blau)

@@ -1250,7 +1250,8 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 
 			-- "Nur Heilzauber" bei geheimer ID: ob es eine Heilung ist, wissen nur die Anzeigen (Karte, Blitz) - Ton und Sprache
 			-- koennen dem nicht folgen und bleiben deshalb aus
-			local silent = hideBySecret ~= nil or lockedSecret;
+			-- (Option "Ton auch bei unbekannter Zauberart": Ton und Sprache kommen dann bei jedem Zauber, nur die Anzeigen bleiben gefiltert)
+			local silent = (hideBySecret ~= nil and not cfg.soundUnknown) or lockedSecret;
 
 			if not silent then
 				self:Speak(readableName);
