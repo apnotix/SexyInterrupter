@@ -1,5 +1,5 @@
 ## Interface: 120100, 16001
-## Version: 3.0.51
+## Version: 3.0.52
 ## Title: |cffb48cffSexy|r|cffbb96ffI|cffc2a1ffn|cffc8abfft|cffcfb6ffe|cffd6c0ffr|cffddcbffr|cffe4d5ffu|cffebe0ffp|cfff1eafft|cfff8f5ffe|cffffffffr|r
 ## Author: apnotix
 ## Notes: Easily interrupt rotations within a party
