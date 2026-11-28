@@ -440,24 +440,24 @@ end
 function SexyInterrupter:UNIT_SPELLCAST_CHANNEL_START(...) 
 	local event, unitTag, castGUID, spellID = ...;
 
-	if unitTag == "target" and SI_Globals.numInterrupters > 0 then
-		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID = UnitChannelInfo("target");
+	if (unitTag == "target" or self:IsPlateCaster(unitTag)) and SI_Globals.numInterrupters > 0 then
+		local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellID = UnitChannelInfo(unitTag);
 
-		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, name, texture, spellID);
+		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, name, texture, spellID, unitTag);
 	end
 end
 
 function SexyInterrupter:UNIT_SPELLCAST_START(...)
 	local event, unitTag, castGUID, spellID = ...;
 
-	if unitTag == "target" and SI_Globals.numInterrupters > 0 then
-		local name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible, spellId = UnitCastingInfo("target");
+	if (unitTag == "target" or self:IsPlateCaster(unitTag)) and SI_Globals.numInterrupters > 0 then
+		local name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible, spellId = UnitCastingInfo(unitTag);
 
 		-- Was passing the wrong locals (startTime/endTime, always nil - never
 		-- declared in this function) instead of the ones actually captured
 		-- above, so ShowInterruptWarning's timeVisible-from-cast-length logic
 		-- never triggered and silently always fell back to its 10s default.
-		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTimeMS, endTimeMS, name, texture, spellId);
+		SexyInterrupter:ShowInterruptWarning(notInterruptible, startTimeMS, endTimeMS, name, texture, spellId, unitTag);
 	end
 end
 
@@ -494,7 +494,7 @@ end
 function SexyInterrupter:UNIT_SPELLCAST_STOP(...)
 	local event, unitTag, castGUID, spellID = ...;
 
-    if unitTag == "target" then
+    if unitTag == "target" or (unitTag and unitTag == self.alertUnit) then
         self.castLocked = false;
 
         -- Flash unabhängig vom Text beenden: ist "Show message" aus, wird der Text

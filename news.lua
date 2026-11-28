@@ -6,6 +6,10 @@ if not (SEM and SEM.RegisterNews) then return end
 SEM:RegisterNews("SexyInterrupter", {
 	color = { 0.78, 0.48, 1 },
 	{ v = "3.0.49",
+		{ "Zauber anderer Gegner", "Neue Option „Auch Zauber anderer Gegner in der Nähe melden“ (an): Der Hinweis kommt jetzt auch für Gegner, die nicht dein Ziel sind (über ihre Namensschilder, wie LittleWigs bei Trash). Nur Feinde im Kampf, höchstens alle zwei Sekunden.",
+		  "Casts of other enemies", "New option \"Also report casts of other nearby enemies\" (on): the hint now also comes for enemies that are not your target (through their nameplates, like LittleWigs does for trash). Only enemies in combat, at most every two seconds." },
+		{ "Befehl /si add", "Mit „/si add Zaubername“ (auch als Makro) kommt ein Zauber auf die Liste der Instanz. Ohne Namen nimmt er den Zauber, den dein Ziel gerade wirkt; im Kampf ist der Name oft geheim, dann den Namen angeben.",
+		  "Command /si add", "\"/si add spell name\" (also usable in a macro) adds a spell to the list of the instance. Without a name it takes the spell your target is casting right now; in combat the name is often secret, then give the name." },
 		{ "Zauberliste", "Die Seite „Zauberliste pro Instanz“ hat links die Instanzen (deine aktuelle zuerst) und rechts die Zauber der gewählten: abhaken, entfernen, mit dem Feld suchen oder einen neuen Zauber hinzufügen.",
 		  "Spell list", "The page \"Spell list per instance\" has the instances on the left (your current one first) and the spells of the chosen one on the right: tick, remove, search with the field or add a new spell." },
 		{ "Nur Heilzauber", "Neue Option „Ton und Sprache auch, wenn die Zauberart unbekannt ist“ (an): Im Kampf ist die Zauber-ID oft geheim, dann bleiben Ton und Sprache bei „Nur Heilzauber melden“ stumm. Mit der Option kommen sie bei jedem Zauber, Karte und Blitz bleiben auf Heilzauber gefiltert.",

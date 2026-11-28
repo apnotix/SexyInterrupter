@@ -311,6 +311,7 @@ local defaults = {
 			kickListOnly = false,   -- in Instanzen nur Zauber der Liste melden
 			healOnly = false,       -- nur Heilzauber melden (wenn sich das feststellen laesst)
 			soundUnknown = true,    -- bei "nur Heilzauber" und geheimer Zauber-ID Ton/Sprache trotzdem fuer jeden Zauber
+			plateCasts = true,      -- auch Zauber anderer Gegner (Namensschilder) melden, nicht nur die des Ziels
 			soloGap = 8,            -- allein: Sekunden Pause zwischen zwei Hinweisen (0 = aus)
 			minCast = 0,            -- Zauber kuerzer als diese Sekunden nicht melden (0 = aus)
 			flashcolor = { r = 0.3, g = 0.5, b = 1 },  -- Farbe des Bildschirm-Blitzes (Standard: Blau)
@@ -593,6 +594,8 @@ function SexyInterrupter:InitOptions()
     SLASH_SEXYINTERRUPTER1, SLASH_SEXYINTERRUPTER2 = '/si', '/sexyinterrupter';
 
     local function handler(msg, editbox)
+        msg = strtrim(msg or '');
+
         if msg == 'lock' then
             SexyInterrupter:LockFrame();
         elseif msg == 'kicklist' then
@@ -637,6 +640,9 @@ function SexyInterrupter:InitOptions()
             end
         elseif msg == 'kick' then
             SexyInterrupter:MarkOwnInterrupt();
+        elseif msg == 'add' or msg:sub(1, 4) == 'add ' then
+            -- /si add Zaubername: Zauber zur Liste der Instanz; ohne Namen der Zauber, den dein Ziel gerade wirkt (als Makro nutzbar)
+            SexyInterrupter:AddKickSpellCommand(strtrim(msg:sub(4)));
         else
             LibStub("AceConfigDialog-3.0"):Open("SexyInterrupter");
         end

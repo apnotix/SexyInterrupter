@@ -1052,6 +1052,30 @@ function SexyInterrupter:AddKickSpell(castName)
 	Say(L["%s added to the list for %s."]:format(castName, name));
 end
 
+-- /si add [Name]: ohne Namen der Zauber, den Ziel (sonst Fokus, Maus-Ueber) gerade wirkt oder kanalisiert. Im Kampf ist der Name oft
+-- ein geheimer Wert und laesst sich nicht lesen: dann den Namen angeben.
+function SexyInterrupter:AddKickSpellCommand(castName)
+	if castName == "" then
+		for _, unit in ipairs({ "target", "focus", "mouseover" }) do
+			if UnitExists(unit) then
+				local name = UnitCastingInfo(unit) or UnitChannelInfo(unit);
+
+				if name and not (issecretvalue and issecretvalue(name)) and name ~= "" then
+					castName = name;
+					break;
+				end
+			end
+		end
+	end
+
+	if castName == "" then
+		Say(L["No readable spell on your target. Use /si add <spell name>."]);
+		return;
+	end
+
+	self:AddKickSpell(castName);
+end
+
 function SexyInterrupter:PrintKicklist()
 	local entry, name = self:GetKicklist(false);
 
@@ -1092,6 +1116,35 @@ function SexyInterrupter:ClearKicklist()
 	else
 		Say(L["Only possible inside an instance."]);
 	end
+end
+
+-- Zauber anderer Gegner (Namensschilder), wie LittleWigs/BigWigs es fuer Trash machen: UNIT_SPELLCAST_* kommt auch fuer "nameplateN".
+-- Nur Feinde (keine Spieler) im Kampf, die nicht dein Ziel sind (das Ziel meldet der Hinweis wie bisher), und hoechstens alle 2 Sekunden.
+local lastPlateAlert = 0;
+
+function SexyInterrupter:IsPlateCaster(unit)
+	if not unit or not self.db.profile.notification.plateCasts or not unit:find("^nameplate%d+$") then
+		return false;
+	end
+
+	local ok, result = pcall(function()
+		return UnitExists(unit) and UnitCanAttack('player', unit) and not UnitIsPlayer(unit) and UnitAffectingCombat(unit)
+			and not UnitIsUnit(unit, 'target');
+	end);
+
+	if not ok or not result then
+		return false;
+	end
+
+	local now = GetTime();
+
+	if now - lastPlateAlert < 2 then
+		return false;
+	end
+
+	lastPlateAlert = now;
+
+	return true;
 end
 
 -- Sprachausgabe (Text-zu-Sprache), nur wenn der Client sie kennt
@@ -1135,7 +1188,69 @@ function SexyInterrupter:Speak(castName, force)
 	end
 end
 
-function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, castName, castTexture, castSpellId)
+-- /si debug: stuft Blizzard diesen Zauber als geheim ein? C_Secrets.GetSpellCastSecrecy (Grundwert je Zauber: nie / immer / je nach
+-- Lage geheim) und C_Secrets.ShouldUnitSpellCastBeSecret (jetzt, fuer diese Einheit). Ist die ID selbst geheim, schlagen die Abfragen
+-- eventuell fehl: dann steht der Fehler da. Geheime Ergebnisse lassen sich nicht ausgeben ("geheim").
+local function SecrecyText(value)
+	if value == nil then
+		return "nil";
+	end
+
+	if issecretvalue and issecretvalue(value) then
+		return "geheim";
+	end
+
+	if Enum and Enum.SecrecyLevel and type(value) == "number" then
+		for key, level in pairs(Enum.SecrecyLevel) do
+			if level == value then
+				return key .. " (" .. value .. ")";
+			end
+		end
+	end
+
+	return tostring(value);
+end
+
+function SexyInterrupter:DebugSecrecy(unit, spellId, castName)
+	local secretId = issecretvalue and issecretvalue(spellId);
+	local parts = {};
+
+	-- Gemessen auf dem Forever-Client: mit einer geheimen ID lehnen beide Abfragen ab ("Secret values are only allowed during untainted
+	-- execution for this argument"). Dann gar nicht erst fragen, die Zeile sagt es kurz.
+	if secretId then
+		DEFAULT_CHAT_FRAME:AddMessage(string.format("SI debug: Zauber %s von %s (ID geheim) | Abfrage mit geheimer ID nicht erlaubt | Kampf=%s",
+			(issecretvalue and issecretvalue(castName)) and "geheim" or tostring(castName), unit, tostring(InCombatLockdown())), 0.6, 0.8, 1);
+
+		return;
+	end
+
+	if C_Secrets and C_Secrets.GetSpellCastSecrecy then
+		local ok, value = pcall(C_Secrets.GetSpellCastSecrecy, spellId);
+		parts[#parts + 1] = "Grundwert=" .. (ok and SecrecyText(value) or ("Fehler: " .. tostring(value)));
+	else
+		parts[#parts + 1] = "Grundwert=API fehlt";
+	end
+
+	if C_Secrets and C_Secrets.ShouldUnitSpellCastBeSecret then
+		local ok, value = pcall(C_Secrets.ShouldUnitSpellCastBeSecret, unit, spellId);
+		parts[#parts + 1] = "jetzt geheim=" .. (ok and SecrecyText(value) or ("Fehler: " .. tostring(value)));
+	else
+		parts[#parts + 1] = "jetzt geheim=API fehlt";
+	end
+
+	local readable = castName;
+
+	if issecretvalue and issecretvalue(readable) then
+		readable = "geheim";
+	end
+
+	DEFAULT_CHAT_FRAME:AddMessage(string.format("SI debug: Zauber %s von %s (ID %s) | %s | Kampf=%s", tostring(readable), unit,
+		secretId and "geheim" or tostring(spellId), table.concat(parts, " | "), tostring(InCombatLockdown())), 0.6, 0.8, 1);
+end
+
+-- unit: Einheit, die zaubert (Standard "target"; mit der Option "Zauber anderer Gegner melden" auch ein Namensschild "nameplateN")
+function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTime, castName, castTexture, castSpellId, unit)
+	unit = unit or 'target';
 	-- notInterruptible (from UnitCastingInfo/UnitChannelInfo) can come through
 	-- as a "secret" value under the same protected-info guard as spellID
 	-- elsewhere - can't be used in a boolean test. When we can't tell, assume
@@ -1152,7 +1267,9 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 
 	-- Merken, dass dieser Zauber gesperrt war: wird er mitten im Wirken unterbrechbar, kommt der Hinweis nachtraeglich
 	-- (UNIT_SPELLCAST_INTERRUPTIBLE)
-	self.castLocked = (not lockedSecret) and notInterruptible and true or false;
+	if unit == 'target' then
+		self.castLocked = (not lockedSecret) and notInterruptible and true or false;
+	end
 
 	-- Name, Symbol und Zeiten des Zaubers koennen im Kampf "geheime Werte" sein. Rechnen und Vergleichen geht
 	-- damit nicht, wohl aber das Weiterreichen an Anzeigefunktionen (SetText, SetTexture, SetMinMaxValues).
@@ -1164,7 +1281,11 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 		readableName = nil;
 	end
 
-	if not notInterruptible and UnitCanAttack('player', 'target') then
+	if self.debug then
+		self:DebugSecrecy(unit, castSpellId, castName);
+	end
+
+	if not notInterruptible and UnitCanAttack('player', unit) then
 		-- Zauber in der Instanz-Liste vermerken (Name nur, wenn lesbar)
 		self:LearnCast(readableName);
 
@@ -1246,7 +1367,8 @@ function SexyInterrupter:ShowInterruptWarning(notInterruptible, startTime, endTi
 
 			self.lastAlertAt = now;
 
-			local tName = UnitName('target');
+			local tName = UnitName(unit);
+			self.alertUnit = unit;
 
 			-- "Nur Heilzauber" bei geheimer ID: ob es eine Heilung ist, wissen nur die Anzeigen (Karte, Blitz) - Ton und Sprache
 			-- koennen dem nicht folgen und bleiben deshalb aus

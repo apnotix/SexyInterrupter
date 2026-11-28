@@ -850,7 +850,7 @@ function SexyInterrupter:CreateUi()
 		db = self.db.profile.ui.editModeMessageDB,
 		sample = SexyInterrupterSamples and SexyInterrupterSamples.card,   -- Vorschau im Einstellungsfenster: eigenes Fenster mit eigener Logik (samples.lua)
 		settings = SexyInterrupter.MarkBehavior(self:MessageSettings(), {
-			L["Show message"], L["Flash display"], L["Flash color"], L["Test flash"], L["Play sound"], L["Only report healing spells"], L["Sound and speech even if the spell kind is unknown"], L["Pause between hints when solo (seconds)"], L["Ignore casts shorter than (seconds)"], L["Sound file"], L["Show chat message"], L["Ouput channel"],
+			L["Show message"], L["Flash display"], L["Flash color"], L["Test flash"], L["Play sound"], L["Only report healing spells"], L["Sound and speech even if the spell kind is unknown"], L["Also report casts of other nearby enemies"], L["Pause between hints when solo (seconds)"], L["Ignore casts shorter than (seconds)"], L["Sound file"], L["Show chat message"], L["Ouput channel"],
 			L["Speak when it is your turn"], L["Spoken text"], L["Spoken phrase"], L["Voice"], L["Speech speed"], L["Speech volume"],
 			L["Test speech"], L["Respect the spell list in instances"], L["Add your own spell (current instance)"],
 		}),
@@ -1311,6 +1311,9 @@ function SexyInterrupter:MessageSettings()
 		Check(L["Sound and speech even if the spell kind is unknown"],
 			function() return profile.notification.soundUnknown end,
 			function(value) profile.notification.soundUnknown = value; end),
+		Check(L["Also report casts of other nearby enemies"],
+			function() return profile.notification.plateCasts end,
+			function(value) profile.notification.plateCasts = value; end),
 		Slider(L["Pause between hints when solo (seconds)"], 0, 30, 1,
 			function() return profile.notification.soloGap or 8 end,
 			function(value) profile.notification.soloGap = value; end),
